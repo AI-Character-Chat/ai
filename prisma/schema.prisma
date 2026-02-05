@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 작품 정보
+model Work {
+  id             String   @id @default(uuid())
+  title          String   // 제목 (최대 50자)
+  description    String   // 소개 (최대 500자)
+  thumbnail      String?  // 썸네일 이미지 URL
+  tags           String   @default("[]") // JSON array
+  targetAudience String   @default("all") // "all" | "male" | "female"
+  visibility     String   @default("private") // "public" | "private" | "unlisted"
+  isAdult        Boolean  @default(false)
+  worldSetting   String   @default("") // 세계관 설정 (최대 10000자)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  characters   Character[]
+  lorebook     LorebookEntry[]
+  openings     Opening[]
+  chatSessions ChatSession[]
+  images       GalleryImage[]
+}
+
+// 캐릭터 정보
+model Character {
+  id           String   @id @default(uuid())
+  workId       String
+  name         String   // 캐릭터 이름 (최대 35자)
+  profileImage String?  // 프로필 이미지 URL
+  prompt       String   // 캐릭터 프롬프트 (최대 16000자)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  work     Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([workId])
+}
+
+// 이미지 갤러리
+model GalleryImage {
+  id            String   @id @default(uuid())
+  workId        String
+  characterName String?  // null이면 배경/기타
+  keyword       String   // 키워드 (영문, 숫자, 언더바)
+  imageUrl      String   // 이미지 URL
+  description   String?  // 설명 (최대 100자)
+  createdAt     DateTime @default(now())
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([workId, characterName, keyword])
+  @@index([workId])
+}
+
+// 로어북 항목
+model LorebookEntry {
+  id                String   @id @default(uuid())
+  workId            String
+  name              String   // 로어 이름 (최대 80자)
+  keywords          String   // JSON array - 활성화 키워드
+  content           String   // 로어 내용 (최대 4500자)
+  priority          Int      @default(0) // 우선순위 (낮을수록 높음)
+  minIntimacy       Float?   // 최소 친밀도 조건
+  minTurns          Int?     // 최소 턴 수 조건
+  requiredCharacter String?  // 동석 필요 캐릭터
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId])
+}
+
+// 오프닝
+model Opening {
+  id                String   @id @default(uuid())
+  workId            String
+  title             String   // 제목 (최대 50자)
+  content           String   // 내용 (최대 5500자)
+  isDefault         Boolean  @default(false)
+  order             Int      @default(0)
+  initialLocation   String   @default("알 수 없는 장소") // 시작 장소
+  initialTime       String   @default("알 수 없는 시간") // 시작 시간
+  initialCharacters String   @default("[]") // JSON array - 오프닝 시작 시 등장하는 캐릭터 이름들
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId])
+}
+
+// 채팅 세션
+model ChatSession {
+  id                String   @id @default(uuid())
+  workId            String
+  userName          String   @default("유저")
+  intimacy          Float    @default(0) // 친밀도
+  turnCount         Int      @default(0) // 대화 턴 수
+  currentLocation   String   @default("알 수 없는 장소") // 현재 장소
+  currentTime       String   @default("알 수 없는 시간") // 현재 시간
+  presentCharacters String   @default("[]") // JSON array - 현재 장면에 있는 캐릭터들
+  recentEvents      String   @default("[]") // JSON array - 최근 사건들 (맥락 유지용)
+
+  // 🧠 장기 기억 시스템 (확장)
+  userProfile       String   @default("{}") // JSON - 유저 프로필 (선호도, 개인정보, 관계 등)
+  sessionSummary    String   @default("") // 세션 요약 (중요 이벤트, 관계 변화)
+  relationshipStage String   @default("stranger") // 관계 단계: stranger, acquaintance, friend, close_friend, intimate
+  characterMemories String   @default("{}") // JSON - 캐릭터별 유저에 대한 기억
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  work     Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([workId])
+}
+
+// 메시지
+model Message {
+  id          String   @id @default(uuid())
+  sessionId   String
+  characterId String?  // null이면 유저 메시지, 'narrator'면 나레이션
+  content     String
+  messageType String   @default("dialogue") // "dialogue" | "narrator" | "user" | "system"
+  imageUrl    String?  // AI 생성 상황 이미지 URL
+  createdAt   DateTime @default(now())
+
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  character Character?  @relation(fields: [characterId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([characterId])
+}
+
+// 생성된 이미지 캐시 (비용 절감용)
+model GeneratedImageCache {
+  id              String   @id @default(uuid())
+  characterId     String   // 캐릭터 ID
+  promptHash      String   // 이미지 프롬프트 해시 (중복 방지)
+  imageUrl        String   // 생성된 이미지 URL
+  imagePrompt     String   // 원본 이미지 프롬프트
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime // 캐시 만료 시간
+
+  @@unique([characterId, promptHash])
+  @@index([characterId])
+  @@index([promptHash])
+}
