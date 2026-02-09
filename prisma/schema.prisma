@@ -6,13 +6,127 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Vercel Postgres (with connection pooling)
+  directUrl = env("DATABASE_POSTGRES_URL_NON_POOLING") // Direct connection for migrations
 }
+
+// ============================================================
+// NextAuth.js 인증 시스템
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  bio           String?
+  birthDate     DateTime?
+  gender        String?   @default("private") // male, female, private
+  role          String    @default("user") // user, admin
+
+  accounts      Account[]
+  sessions      AuthSession[]
+  chatSessions  ChatSession[]
+  workLikes     WorkLike[]
+  workComments  WorkComment[]
+  commentLikes  CommentLike[]
+  notifications Notification[]
+  works         Work[]
+  followers     Follow[]  @relation("following") // 나를 팔로우하는 사람들
+  following     Follow[]  @relation("follower")  // 내가 팔로우하는 사람들
+  personas      Persona[] // 유저 페르소나 목록
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// 유저 페르소나 (대화 시 사용할 역할)
+model Persona {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String   // 닉네임 (최대 20자)
+  age         Int?     // 나이
+  gender      String   @default("private") // male, female, private
+  description String?  // 상세정보 (최대 1000자)
+  isDefault   Boolean  @default(false) // 기본 프로필 여부
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// 팔로우 관계
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   // 팔로우 하는 사람
+  followingId String   // 팔로우 당하는 사람
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model AuthSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================
+// 작품 및 콘텐츠
+// ============================================================
 
 // 작품 정보
 model Work {
   id             String   @id @default(uuid())
+  authorId       String?  // 작성자 ID (null이면 시스템 작품)
   title          String   // 제목 (최대 50자)
   description    String   // 소개 (최대 500자)
   thumbnail      String?  // 썸네일 이미지 URL
@@ -23,12 +137,88 @@ model Work {
   worldSetting   String   @default("") // 세계관 설정 (최대 10000자)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  publishedAt    DateTime? // 론칭일 (public으로 전환한 날짜)
 
+  author       User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
   characters   Character[]
   lorebook     LorebookEntry[]
   openings     Opening[]
   chatSessions ChatSession[]
   images       GalleryImage[]
+  likes        WorkLike[]
+  comments     WorkComment[]
+
+  @@index([authorId])
+}
+
+// 알림
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String?  // null이면 전체 공지
+  type      String   // "announcement" | "like" | "chat" | "follow" | "comment"
+  title     String
+  content   String
+  link      String?  // 클릭 시 이동할 경로
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([isRead])
+}
+
+// 작품 좋아요
+model WorkLike {
+  id        String   @id @default(uuid())
+  workId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workId, userId])
+  @@index([workId])
+  @@index([userId])
+}
+
+// 작품 댓글
+model WorkComment {
+  id        String   @id @default(uuid())
+  workId    String
+  userId    String
+  content   String   // 댓글 내용 (최대 500자)
+  parentId  String?  // 대댓글인 경우 부모 댓글 ID
+  isPinned  Boolean  @default(false) // 고정 댓글 여부
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  work    Work          @relation(fields: [workId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  WorkComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies WorkComment[] @relation("CommentReplies")
+  likes   CommentLike[]
+
+  @@index([workId])
+  @@index([userId])
+  @@index([parentId])
+}
+
+// 댓글 좋아요
+model CommentLike {
+  id        String   @id @default(uuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment WorkComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+  @@index([userId])
 }
 
 // 캐릭터 정보
@@ -41,8 +231,10 @@ model Character {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  work     Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
-  messages Message[]
+  work          Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  relationships UserCharacterRelationship[]
+  memories      CharacterMemory[]
 
   @@index([workId])
 }
@@ -105,6 +297,7 @@ model Opening {
 model ChatSession {
   id                String   @id @default(uuid())
   workId            String
+  userId            String?  // 로그인한 유저 ID (null이면 비로그인)
   userName          String   @default("유저")
   intimacy          Float    @default(0) // 친밀도
   turnCount         Int      @default(0) // 대화 턴 수
@@ -119,13 +312,18 @@ model ChatSession {
   relationshipStage String   @default("stranger") // 관계 단계: stranger, acquaintance, friend, close_friend, intimate
   characterMemories String   @default("{}") // JSON - 캐릭터별 유저에 대한 기억
 
+  // 👤 유저 페르소나 (캐릭터들이 인지할 유저 정보)
+  userPersona       String   @default("{}") // JSON - {name, age, gender, description}
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   work     Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   messages Message[]
 
   @@index([workId])
+  @@index([userId])
 }
 
 // 메시지
@@ -158,4 +356,250 @@ model GeneratedImageCache {
   @@unique([characterId, promptHash])
   @@index([characterId])
   @@index([promptHash])
+}
+
+// ============================================================
+// 🧠 서사 지속형 장기 기억 시스템 (Narrative Memory System)
+// ============================================================
+// 목표: 정보 기억이 아니라, 유저와 캐릭터 간의 서사적 관계 상태를
+// 지속적으로 업데이트하며, 캐릭터 성격에 따라 동일 사건을
+// 다르게 해석·기억하는 다중 시점 장기 메모리 구조
+// ============================================================
+
+// 원본 대화 기록 (모든 대화 원문 보관 - 데이터 소유권 확보)
+model ConversationLog {
+  id          String   @id @default(uuid())
+  sessionId   String   // 채팅 세션 ID
+
+  // 대화 참여자
+  speakerType String   // "user" | "character" | "narrator"
+  speakerId   String?  // 캐릭터 ID (user/narrator는 null)
+  speakerName String   // 표시 이름
+
+  // 대화 내용
+  content     String   // 원본 메시지 (완전한 원문)
+
+  // 메타데이터
+  sceneId     String?  // 연결된 Scene ID
+  emotionTag  String?  // 감정 태그 (JSON: {primary, intensity})
+
+  createdAt   DateTime @default(now())
+
+  scene       Scene?   @relation(fields: [sceneId], references: [id])
+
+  @@index([sessionId])
+  @@index([sceneId])
+  @@index([speakerId])
+}
+
+// 장면 (Scene) - 서사 단위 기억의 핵심
+// 기억의 단위는 "사실"이 아니라 "상황(Scene)"
+model Scene {
+  id          String   @id @default(uuid())
+  sessionId   String   // 채팅 세션 ID
+
+  // 장면 정보
+  location    String   // 장소 (예: "카페", "공원")
+  time        String   // 시간 (예: "오후", "밤")
+
+  // 참여자 (JSON array of character IDs)
+  participants String  @default("[]")
+
+  // 장면 요약 (AI가 생성)
+  summary     String?  // 이 장면에서 무슨 일이 있었는지 요약
+
+  // 장면의 감정 톤 (JSON)
+  // {mood: "따뜻함", intensity: 0.7, keywords: ["편안", "친밀"]}
+  emotionalTone String @default("{}")
+
+  // 주요 사건/토픽 (JSON array)
+  // ["강아지 이야기", "취미 공유", "농담"]
+  topics      String   @default("[]")
+
+  // 장면 시작/종료
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  isActive    Boolean  @default(true) // 현재 진행 중인 장면
+
+  // 관계 변화 (이 장면으로 인한)
+  relationshipChanges RelationshipChange[]
+  characterMemories   CharacterMemory[]
+  conversationLogs    ConversationLog[]
+
+  @@index([sessionId])
+  @@index([isActive])
+}
+
+// 유저-캐릭터 관계 상태 (User ↔ Character)
+// 동적 관계 그래프의 핵심 노드
+model UserCharacterRelationship {
+  id          String   @id @default(uuid())
+  sessionId   String   // 채팅 세션 ID
+  characterId String   // 캐릭터 ID
+
+  // === 관계 상태 ===
+  // 친밀도 레벨: stranger → acquaintance → friend → close_friend → intimate
+  intimacyLevel  String  @default("stranger")
+  intimacyScore  Float   @default(0)  // 0.0 ~ 100.0
+
+  // 관계 유형 (캐릭터가 유저를 어떻게 보는가)
+  // "동물 좋아하는 따뜻한 사람", "장난꾸러기", "신뢰할 수 있는 친구"
+  relationshipLabel String?
+
+  // === 상호작용 통계 ===
+  totalTurns      Int     @default(0)  // 총 대화 턴 수
+  totalScenes     Int     @default(0)  // 함께한 장면 수
+  lastInteraction DateTime?            // 마지막 상호작용
+
+  // === 대화 스타일 ===
+  speechStyle     String  @default("formal") // formal | casual | intimate
+  nicknameForUser String? // 캐릭터가 유저를 부르는 별명
+
+  // === 감정 기록 ===
+  // 캐릭터가 유저에게 느끼는 감정들 (JSON array)
+  // [{emotion: "호감", intensity: 0.6, since: "2025-01-01"}]
+  emotionalHistory String @default("[]")
+
+  // === 공유된 경험 ===
+  // 함께 겪은 중요한 사건들 (JSON array of scene summaries)
+  sharedExperiences String @default("[]")
+
+  // === 캐릭터가 아는 유저 정보 ===
+  // 이 캐릭터만 알고 있는 유저 정보 (다른 캐릭터는 모름)
+  knownFacts String @default("[]") // JSON array
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  changes     RelationshipChange[]
+
+  @@unique([sessionId, characterId])
+  @@index([sessionId])
+  @@index([characterId])
+}
+
+// 관계 변화 기록 (Scene으로 인한 변화)
+model RelationshipChange {
+  id             String   @id @default(uuid())
+  relationshipId String   // UserCharacterRelationship ID
+  sceneId        String   // 변화가 발생한 Scene ID
+
+  // 변화 내용
+  changeType     String   // "intimacy_up" | "intimacy_down" | "label_change" | "emotion_change"
+  previousValue  String?  // 이전 값
+  newValue       String?  // 새 값
+
+  // 변화 이유 (AI가 생성)
+  reason         String?  // "유저가 진심어린 위로를 해줌"
+
+  createdAt      DateTime @default(now())
+
+  relationship   UserCharacterRelationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  scene          Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@index([relationshipId])
+  @@index([sceneId])
+}
+
+// 캐릭터별 기억 (캐릭터 성격 필터로 해석된 기억)
+// 같은 사건을 캐릭터별로 다르게 기억
+model CharacterMemory {
+  id          String   @id @default(uuid())
+  sessionId   String   // 채팅 세션 ID
+  characterId String   // 기억하는 캐릭터
+  sceneId     String?  // 관련 장면 (선택)
+
+  // === 기억 내용 ===
+  // 원본 사건
+  originalEvent String  // "유저가 카페에서 강아지 이야기를 하며 웃음"
+
+  // 캐릭터 해석 (성격 필터 적용)
+  // A: "유저 나한테 편해졌네 😊"
+  // B: "나랑 있을 땐 잘 안 웃는데…"
+  interpretation String
+
+  // 감정 반응
+  emotionalResponse String? // JSON: {emotion: "기쁨", intensity: 0.7}
+
+  // === 기억 메타데이터 ===
+  memoryType  String   @default("episodic") // episodic(일화) | semantic(사실) | emotional(감정)
+  importance  Float    @default(0.5) // 0.0 ~ 1.0 (중요도)
+
+  // 기억 강도 (시간이 지나면 감소 가능)
+  strength    Float    @default(1.0) // 0.0 ~ 1.0
+
+  // 연관 키워드 (검색용)
+  keywords    String   @default("[]") // JSON array
+
+  // 이 기억을 언급했는지
+  mentionedCount Int   @default(0)
+  lastMentioned  DateTime?
+
+  createdAt   DateTime @default(now())
+
+  scene       Scene?   @relation(fields: [sceneId], references: [id])
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([characterId])
+  @@index([sceneId])
+  @@index([memoryType])
+}
+
+// ============================================================
+// 운영자 관리 시스템
+// ============================================================
+
+// 배너 관리
+model Banner {
+  id          String    @id @default(uuid())
+  title       String    // 배너 제목 (관리용)
+  imageUrl    String    // 배너 이미지 URL
+  linkUrl     String?   // 클릭 시 이동할 URL
+  order       Int       @default(0) // 노출 순서
+  isActive    Boolean   @default(true)
+  startDate   DateTime? // 노출 시작일
+  endDate     DateTime? // 노출 종료일
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// 공지사항
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String    // 공지 제목
+  content     String    // 공지 내용
+  type        String    @default("normal") // normal, important, maintenance
+  isPinned    Boolean   @default(false) // 상단 고정
+  isActive    Boolean   @default(true)
+  viewCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// 신고 관리
+model Report {
+  id          String    @id @default(uuid())
+  reporterId  String?   // 신고자 ID
+  targetType  String    // work, user, chat
+  targetId    String    // 신고 대상 ID
+  reason      String    // 신고 사유
+  description String?   // 상세 설명
+  status      String    @default("pending") // pending, reviewing, resolved, rejected
+  adminNote   String?   // 관리자 메모
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([targetType])
+  @@index([status])
+}
+
+// 사이트 설정
+model SiteSetting {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  value       String
+  description String?
+  updatedAt   DateTime  @updatedAt
 }

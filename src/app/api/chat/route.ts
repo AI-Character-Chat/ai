@@ -2,83 +2,66 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { generateStoryResponse } from '@/lib/gemini';
-
-// 대화 히스토리 포맷팅 (3단계 시퀀스 구조 반영)
-function formatConversationHistory(
-  messages: Array<{
-    content: string;
-    messageType: string;
-    character?: { name: string } | null;
-  }>,
-  userName: string,
-  maxMessages: number = 30
-): string {
-  const recentMessages = messages.slice(-maxMessages);
-
-  return recentMessages
-    .map((msg) => {
-      if (msg.messageType === 'narrator') {
-        // Step 1의 결과물임을 명시
-        return `[상황 묘사] ${msg.content}`;
-      } else if (msg.messageType === 'user') {
-        // 유저의 행동/대사
-        return `${userName}의 행동: ${msg.content}`;
-      } else if (msg.messageType === 'system') {
-        return `[오프닝] ${msg.content}`;
-      } else if (msg.character) {
-        // Step 2 + Step 3의 결과물 (캐릭터 대사와 행동)
-        return `${msg.character.name}의 반응: ${msg.content}`;
-      }
-      return `${userName}의 행동: ${msg.content}`;
-    })
-    .join('\n\n');
-}
-
-// 로어북 필터링
-function filterActiveLorebookEntries(
-  entries: Array<{
-    keywords: string;
-    content: string;
-    minIntimacy: number | null;
-    minTurns: number | null;
-    requiredCharacter: string | null;
-  }>,
-  recentText: string,
-  intimacy: number,
-  turnCount: number,
-  presentCharacters: string[]
-): string {
-  const activeContents: string[] = [];
-
-  for (const entry of entries) {
-    const keywords = JSON.parse(entry.keywords) as string[];
-
-    // 키워드 매칭 확인
-    const hasMatch = keywords.some((kw) =>
-      recentText.toLowerCase().includes(kw.toLowerCase())
-    );
-    if (!hasMatch) continue;
-
-    // 조건 확인
-    if (entry.minIntimacy !== null && intimacy < entry.minIntimacy) continue;
-    if (entry.minTurns !== null && turnCount < entry.minTurns) continue;
-    if (
-      entry.requiredCharacter !== null &&
-      !presentCharacters.includes(entry.requiredCharacter)
-    )
-      continue;
-
-    activeContents.push(entry.content);
-  }
-
-  return activeContents.slice(0, 5).join('\n\n');
-}
+import {
+  formatMemoriesForPrompt,
+  searchMemoriesForMultipleCharacters,
+  saveConversationsForMultipleCharacters,
+} from '@/lib/memory';
+import {
+  formatConversationHistory,
+  filterActiveLorebookEntries,
+  extractRecentText,
+  extractKeywords,
+} from '@/lib/prompt-builder';
+import narrativeMemory from '@/lib/narrative-memory';
+import { auth } from '@/lib/auth';
 
 // 새 채팅 세션 생성
 export async function POST(request: NextRequest) {
   try {
+    // 인증 세션 확인 (로그인 필수)
+    const authSession = await auth();
+
+    if (!authSession?.user?.id) {
+      return NextResponse.json(
+        { error: '로그인이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+
+    const userId = authSession.user.id;
     const body = await request.json();
-    const { workId, userName = '유저', openingId } = body;
+    const { workId, userName = '유저', openingId, personaId } = body;
+
+    // 유저 이름 설정
+    const finalUserName = authSession.user.name || userName;
+
+    // 페르소나 정보 조회 (선택된 경우)
+    let userPersona: {
+      name: string;
+      age: number | null;
+      gender: string;
+      description: string | null;
+    } = {
+      name: finalUserName,
+      age: null,
+      gender: 'private',
+      description: null,
+    };
+
+    if (personaId && userId) {
+      const persona = await prisma.persona.findUnique({
+        where: { id: personaId },
+      });
+      if (persona && persona.userId === userId) {
+        userPersona = {
+          name: persona.name,
+          age: persona.age,
+          gender: persona.gender,
+          description: persona.description,
+        };
+      }
+    }
 
     if (!workId) {
       return NextResponse.json(
@@ -118,16 +101,12 @@ export async function POST(request: NextRequest) {
     // 오프닝에 설정된 초기 캐릭터 사용, 없으면 모든 캐릭터
     let initialCharacters: string[] = [];
     try {
-      // initialCharacters가 이미 배열이면 그대로 사용, 문자열이면 파싱
       let parsedInitialChars: string[] = [];
       if (Array.isArray(opening.initialCharacters)) {
         parsedInitialChars = opening.initialCharacters;
       } else if (typeof opening.initialCharacters === 'string' && opening.initialCharacters) {
         parsedInitialChars = JSON.parse(opening.initialCharacters);
       }
-
-      console.log('오프닝 initialCharacters 원본:', opening.initialCharacters);
-      console.log('파싱된 initialCharacters:', parsedInitialChars);
 
       if (Array.isArray(parsedInitialChars) && parsedInitialChars.length > 0) {
         // 오프닝에 설정된 캐릭터만 사용 (실제 존재하는 캐릭터만 필터링)
@@ -143,32 +122,61 @@ export async function POST(request: NextRequest) {
       console.log('initialCharacters 파싱 실패:', e);
     }
 
-    // 초기 캐릭터가 설정되지 않았으면 모든 캐릭터 사용 (기존 동작 유지)
+    // 초기 캐릭터가 설정되지 않았으면 모든 캐릭터 사용
     if (initialCharacters.length === 0) {
       initialCharacters = allCharacterNames;
-      console.log('초기 캐릭터 미설정 → 모든 캐릭터 사용');
     }
 
-    console.log('=== 채팅 세션 생성 ===');
-    console.log('오프닝:', opening.title);
-    console.log('전체 캐릭터:', allCharacterNames);
-    console.log('초기 등장 캐릭터:', initialCharacters);
+    console.log(`[Session] 생성: ${opening.title} (캐릭터: ${initialCharacters.length}명)`);
 
-    // 새 세션 생성 (장면 상태 포함)
+    // === 세션 생성 시 장기 기억 초기 로드 (캐싱) ===
+    const memUserId = `user_${userId}`;
+    let initialMemoryCache: Record<string, any> = { lastUpdated: Date.now() };
+
+    // 초기 등장 캐릭터 전체의 기억 로드 (병렬 처리로 429 방지)
+    const initialChars = work.characters.filter(c => initialCharacters.includes(c.name));
+
+    if (initialChars.length > 0) {
+      try {
+        // 다중 캐릭터 병렬 검색 함수 사용 (공식 문서 패턴)
+        const characterIds = initialChars.map(c => c.id);
+        const memoriesMap = await searchMemoriesForMultipleCharacters(
+          "유저에 대한 정보와 선호도",
+          memUserId,
+          characterIds,
+          10
+        );
+
+        // Map을 캐시 객체로 변환
+        memoriesMap.forEach((memories, charId) => {
+          initialMemoryCache[charId] = memories;
+        });
+
+        const totalMemories = Array.from(memoriesMap.values()).reduce((sum, m) => sum + m.length, 0);
+        console.log(`[Memory] 초기 기억 로드: ${characterIds.length}개 캐릭터, 총 ${totalMemories}개 기억`);
+      } catch (error) {
+        console.log('[Memory] 초기 장기 기억 로드 스킵 (오류 발생)');
+      }
+    }
+
+    // 새 세션 생성 (캐시된 기억 + 페르소나 정보 포함)
     const session = await prisma.chatSession.create({
       data: {
         workId,
-        userName,
+        userId,
+        userName: userPersona.name,
         intimacy: 0,
         turnCount: 0,
         currentLocation: opening.initialLocation || '알 수 없는 장소',
         currentTime: opening.initialTime || '알 수 없는 시간',
-        presentCharacters: JSON.stringify(initialCharacters), // 오프닝에 설정된 캐릭터만 등장
+        presentCharacters: JSON.stringify(initialCharacters),
         recentEvents: JSON.stringify([]),
+        characterMemories: JSON.stringify(initialMemoryCache), // 캐시된 장기 기억
+        userPersona: JSON.stringify(userPersona), // 유저 페르소나 정보
       },
     });
 
-    // 오프닝 메시지 저장 (시스템 메시지)
+    // 오프닝 메시지 저장
     await prisma.message.create({
       data: {
         sessionId: session.id,
@@ -177,6 +185,34 @@ export async function POST(request: NextRequest) {
         messageType: 'system',
       },
     });
+
+    // === 서사 기억 시스템 초기화 ===
+    const initialCharacterIds = work.characters
+      .filter(c => initialCharacters.includes(c.name))
+      .map(c => c.id);
+
+    const sceneId = await narrativeMemory.startScene({
+      sessionId: session.id,
+      location: opening.initialLocation || '알 수 없는 장소',
+      time: opening.initialTime || '알 수 없는 시간',
+      participants: initialCharacterIds,
+    });
+
+    // 초기 등장 캐릭터들과의 관계 초기화
+    for (const char of work.characters.filter(c => initialCharacters.includes(c.name))) {
+      await narrativeMemory.getOrCreateRelationship(session.id, char.id, char.name);
+    }
+
+    // 오프닝 내용을 원본 대화 로그에 저장
+    await narrativeMemory.saveConversationLog({
+      sessionId: session.id,
+      speakerType: 'narrator',
+      speakerName: '시스템',
+      content: opening.content,
+      sceneId,
+    });
+
+    console.log(`[NarrativeMemory] 세션 ${session.id} 초기화 완료`);
 
     return NextResponse.json({
       session: {
@@ -266,19 +302,14 @@ export async function PUT(request: NextRequest) {
     });
     const previousPresentCharacters = Array.from(appearedCharactersInHistory);
 
-    // 대화 히스토리 포맷팅
+    // 대화 히스토리 포맷팅 (prompt-builder 사용)
     const conversationHistory = formatConversationHistory(
       session.messages,
-      session.userName,
-      30
+      session.userName
     );
 
-    // 로어북 컨텍스트 구성
-    const recentText = session.messages
-      .slice(-6)
-      .map((m) => m.content)
-      .join(' ') + ' ' + content;
-
+    // 로어북 컨텍스트 구성 (prompt-builder 사용)
+    const recentText = extractRecentText(session.messages, content);
     const lorebookContext = filterActiveLorebookEntries(
       session.work.lorebook,
       recentText,
@@ -290,11 +321,167 @@ export async function PUT(request: NextRequest) {
     // 세계관 설정
     const worldSetting = session.work.worldSetting || '';
 
-    // AI 응답 생성
+    // === 서사 기억 시스템 ===
+    let activeScene = await narrativeMemory.getActiveScene(sessionId);
+
+    // 장면이 없으면 새로 생성
+    if (!activeScene) {
+      const participantIds = characters
+        .filter(c => presentCharacters.includes(c.name))
+        .map(c => c.id);
+
+      const sceneId = await narrativeMemory.startScene({
+        sessionId,
+        location: session.currentLocation,
+        time: session.currentTime,
+        participants: participantIds,
+      });
+
+      activeScene = await narrativeMemory.getActiveScene(sessionId);
+    }
+
+    // 유저 메시지를 원본 대화 로그에 저장
+    await narrativeMemory.saveConversationLog({
+      sessionId,
+      speakerType: 'user',
+      speakerName: session.userName,
+      content,
+      sceneId: activeScene?.sceneId,
+    });
+
+    // === 현재 장면 캐릭터만 처리 (최적화) ===
+    // 모든 캐릭터가 아닌, 현재 장면에 있는 캐릭터만 처리
+    const presentCharacterSet = new Set(presentCharacters);
+    const activeCharacters = characters.filter(c =>
+      presentCharacterSet.has(c.name) ||
+      presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
+    );
+
+    // 활성 캐릭터 로그 (개발환경에서만)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🎭 활성 캐릭터: ${activeCharacters.length}/${characters.length}명`);
+    }
+
+    // === 장기 기억 시스템 (캐시 기반 최적화) ===
+    // 1. 세션 생성 시 Mem0에서 장기 기억 로드하여 캐시
+    // 2. 매 턴마다 캐시된 기억 사용 (API 호출 없음)
+    // 3. 10턴마다 캐시 갱신 (새로운 기억 반영)
+    const memUserId = `user_${session.userId}`;
+
+    // 캐시된 장기 기억 로드
+    let memoryCache: Record<string, any> = {};
+    try {
+      memoryCache = JSON.parse(session.characterMemories || '{}');
+    } catch {
+      memoryCache = { lastUpdated: Date.now() };
+    }
+    const cacheLastUpdated = memoryCache.lastUpdated || 0;
+
+    // 10턴마다 또는 5분마다 캐시 갱신
+    const shouldRefreshCache =
+      session.turnCount > 0 &&
+      (session.turnCount % 10 === 0 || Date.now() - cacheLastUpdated > 5 * 60 * 1000);
+
+    // 메모리 상태 로그 (개발환경에서만)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📊 턴 ${session.turnCount}: 메모리 캐시 ${shouldRefreshCache ? '갱신' : '사용'}`);
+    }
+
+    // 타임아웃 헬퍼 (500ms 제한)
+    const withTimeout = <T>(promise: Promise<T>, fallback: T, ms = 500): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))
+      ]);
+
+    // 캐시 갱신이 필요한 경우에만 API 호출 (현재 장면 캐릭터 전체)
+    if (shouldRefreshCache && activeCharacters.length > 0) {
+      try {
+        // 현재 장면의 모든 캐릭터 기억 병렬 로드 (공식 문서 패턴)
+        const characterIds = activeCharacters.map(c => c.id);
+        const memoriesMap = await withTimeout(
+          searchMemoriesForMultipleCharacters(content, memUserId, characterIds, 5),
+          new Map<string, string[]>(),
+          3000  // 다중 캐릭터는 타임아웃 늘림
+        );
+
+        // Map을 캐시 객체로 변환
+        memoriesMap.forEach((memories, charId) => {
+          memoryCache[charId] = memories;
+        });
+
+        memoryCache.lastUpdated = Date.now();
+        const totalMemories = Array.from(memoriesMap.values()).reduce((sum, m) => sum + m.length, 0);
+        console.log(`[Memory] 캐시 갱신: ${characterIds.length}개 캐릭터, 총 ${totalMemories}개 기억`);
+
+        // 비동기로 세션 업데이트 (응답 지연 방지)
+        prisma.chatSession.update({
+          where: { id: sessionId },
+          data: { characterMemories: JSON.stringify(memoryCache) }
+        }).catch(() => {});
+      } catch (error) {
+        console.log('[Memory] 캐시 갱신 실패 - 기존 캐시 사용');
+      }
+    }
+
+    // 서사 컨텍스트 로드 (현재 장면 모든 캐릭터)
+    const narrativeResults = await Promise.all(
+      activeCharacters.map(async (char) => {
+        return withTimeout(
+          narrativeMemory.buildNarrativeContext(sessionId, char.id, char.name)
+            .then(ctx => ({ charId: char.id, prompt: ctx.narrativePrompt || '' }))
+            .catch(() => ({ charId: char.id, prompt: '' })),
+          { charId: char.id, prompt: '' },
+          1000  // 캐릭터당 1초 타임아웃
+        );
+      })
+    );
+
+    // 결과를 Map으로 변환
+    const narrativeContexts = new Map(
+      narrativeResults.map(r => [r.charId, r.prompt])
+    );
+
+    // 서사 컨텍스트 + 캐시된 Mem0 기억을 캐릭터 프롬프트에 주입
+    const charactersWithMemory = activeCharacters.map((c) => {
+      const narrativeContext = narrativeContexts.get(c.id) || '';
+      // 캐시된 기억 사용 (API 호출 없음)
+      const cachedMemories = memoryCache[c.id] || [];
+      const mem0Context = formatMemoriesForPrompt(cachedMemories, c.name);
+
+      let fullContext = '';
+      if (narrativeContext) fullContext += '\n\n' + narrativeContext;
+      if (mem0Context) fullContext += '\n\n' + mem0Context;
+
+      return {
+        id: c.id,
+        name: c.name,
+        prompt: c.prompt + fullContext,
+      };
+    });
+
+    // 유저 페르소나 파싱
+    let userPersona: {
+      name: string;
+      age: number | null;
+      gender: string;
+      description: string | null;
+    } | undefined;
+
+    try {
+      const parsedPersona = JSON.parse(session.userPersona || '{}');
+      if (parsedPersona.name) {
+        userPersona = parsedPersona;
+      }
+    } catch {
+      // 페르소나 파싱 실패 시 무시
+    }
+
+    // AI 응답 생성 (페르소나 포함)
     let storyResponse;
     try {
       storyResponse = await generateStoryResponse(
-        characters.map((c) => ({ id: c.id, name: c.name, prompt: c.prompt })),
+        charactersWithMemory,
         conversationHistory,
         content,
         session.userName,
@@ -306,20 +493,15 @@ export async function PUT(request: NextRequest) {
         },
         lorebookContext,
         worldSetting,
-        previousPresentCharacters
+        previousPresentCharacters,
+        userPersona
       );
     } catch (aiError) {
-      console.error('=== AI 응답 생성 실패 ===');
-      console.error('에러:', aiError);
-      console.error('세션 ID:', sessionId);
-      console.error('유저 메시지:', content);
-      console.error('캐릭터 수:', characters.length);
-
-      // AI 에러는 generateStoryResponse 내부에서 처리되므로 여기까지 오면 심각한 에러
-      throw new Error(`AI 응답 생성 중 예상치 못한 오류: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
+      console.error('AI 응답 생성 실패:', aiError);
+      throw new Error(`AI 응답 생성 오류: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
     }
 
-    // 나레이션 저장 (있는 경우)
+    // 나레이션 저장
     if (storyResponse.narratorNote) {
       await prisma.message.create({
         data: {
@@ -345,31 +527,95 @@ export async function PUT(request: NextRequest) {
             character: true,
           },
         });
-
         return message;
       })
     );
 
-    // 최근 사건 구성 (3단계 시퀀스 요약)
-    const newEvents: string[] = [];
+    // === 서사 기억 저장 ===
+    try {
+      // 나레이션 저장
+      if (storyResponse.narratorNote) {
+        await narrativeMemory.saveConversationLog({
+          sessionId,
+          speakerType: 'narrator',
+          speakerName: '나레이터',
+          content: storyResponse.narratorNote,
+          sceneId: activeScene?.sceneId,
+        });
+      }
 
-    // 유저의 행동
+      // 캐릭터 응답 저장 + 관계 업데이트
+      for (const response of storyResponse.responses) {
+        await narrativeMemory.saveConversationLog({
+          sessionId,
+          speakerType: 'character',
+          speakerId: response.characterId,
+          speakerName: response.characterName,
+          content: response.content,
+          sceneId: activeScene?.sceneId,
+          emotionTag: response.emotion,
+        });
+
+        await narrativeMemory.updateRelationship(
+          sessionId,
+          response.characterId,
+          activeScene?.sceneId,
+          { intimacyDelta: 0.5 }
+        );
+      }
+
+      // 장면 토픽 업데이트
+      if (activeScene) {
+        const keywords = extractKeywords(content);
+        if (keywords.length > 0) {
+          await narrativeMemory.updateScene(activeScene.sceneId, { topics: keywords });
+        }
+      }
+    } catch (narrativeError) {
+      console.error('[NarrativeMemory] 저장 실패:', narrativeError);
+    }
+
+    // === Mem0 장기 기억 저장 (10턴마다만 - API 호출 최소화) ===
+    // 단기 기억은 대화 히스토리로 처리됨
+    const shouldSaveMemory = session.turnCount > 0 && session.turnCount % 10 === 0;
+
+    if (shouldSaveMemory && storyResponse.responses.length > 0) {
+      try {
+        // 응답한 모든 캐릭터의 대화를 병렬 저장 (공식 문서 패턴)
+        const conversations = storyResponse.responses.map(response => ({
+          characterId: response.characterId,
+          messages: [
+            { role: 'user', content: `${session.userName}: ${content}` },
+            { role: 'assistant', content: `${response.characterName}: ${response.content}` },
+          ],
+        }));
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`📝 턴 ${session.turnCount}: ${conversations.length}개 캐릭터 장기 기억 저장`);
+        }
+
+        // 비동기 병렬 저장 (응답 지연 방지)
+        saveConversationsForMultipleCharacters(conversations, memUserId)
+          .catch(err => console.error('[Mem0] 다중 저장 실패:', err));
+      } catch (memSaveError) {
+        console.error('[Mem0] 대화 저장 실패:', memSaveError);
+      }
+    }
+
+    // 최근 사건 구성
+    const newEvents: string[] = [];
     newEvents.push(`${session.userName}: ${content.substring(0, 50)}`);
 
-    // 나레이션 요약 (있는 경우)
     if (storyResponse.narratorNote) {
-      const narratorSummary = storyResponse.narratorNote.substring(0, 60);
-      newEvents.push(`[상황] ${narratorSummary}...`);
+      newEvents.push(`[상황] ${storyResponse.narratorNote.substring(0, 60)}...`);
     }
 
-    // 캐릭터 반응 요약
     if (storyResponse.responses.length > 0) {
       const firstResponse = storyResponse.responses[0];
-      const responseSummary = firstResponse.content.substring(0, 40);
-      newEvents.push(`${firstResponse.characterName}: ${responseSummary}...`);
+      newEvents.push(`${firstResponse.characterName}: ${firstResponse.content.substring(0, 40)}...`);
     }
 
-    // 세션 업데이트 (장면 상태 포함)
+    // 세션 업데이트
     const updatedSession = await prisma.chatSession.update({
       where: { id: sessionId },
       data: {
@@ -378,54 +624,36 @@ export async function PUT(request: NextRequest) {
         currentLocation: storyResponse.updatedScene.location,
         currentTime: storyResponse.updatedScene.time,
         presentCharacters: JSON.stringify(storyResponse.updatedScene.presentCharacters),
-        // 최근 사건 업데이트 (최대 10개 유지) - 3단계 시퀀스 요약 포함
-        recentEvents: JSON.stringify(
-          [...recentEvents, ...newEvents].slice(-10)
-        ),
+        recentEvents: JSON.stringify([...recentEvents, ...newEvents].slice(-10)),
       },
     });
 
     // 현재 장면에 등장하는 캐릭터 정보 (이미지 생성용)
-    // 디버깅: 캐릭터 이름 매칭 확인
-    console.log('=== 이미지 생성용 캐릭터 정보 ===');
-    console.log('DB 캐릭터들:', characters.map(c => ({ name: c.name, hasProfile: !!c.profileImage })));
-    console.log('장면 캐릭터들:', storyResponse.updatedScene.presentCharacters);
-
     const presentCharacterProfiles = characters
       .filter(c => {
-        // 정확한 매칭 또는 부분 매칭 시도
-        const isPresent = storyResponse.updatedScene.presentCharacters.some(
+        return storyResponse.updatedScene.presentCharacters.some(
           presentName =>
             presentName === c.name ||
             presentName.includes(c.name) ||
             c.name.includes(presentName) ||
-            // 괄호 안의 이름으로도 매칭 (예: "아셀 (Acel)" -> "아셀")
             c.name.split(' ')[0] === presentName ||
             presentName.split(' ')[0] === c.name.split(' ')[0]
         );
-        return isPresent;
       })
       .map(c => ({ name: c.name, profileImage: c.profileImage }));
 
-    console.log('매칭된 캐릭터:', presentCharacterProfiles.map(c => ({ name: c.name, hasProfile: !!c.profileImage })));
-
-    // 캐릭터별 대사 및 감정 정보 (이미지 생성시 사용)
+    // 캐릭터별 대사 및 감정 정보
     const characterDialogues = storyResponse.responses.map(r => ({
       name: r.characterName,
       dialogue: r.content,
-      emotion: r.emotion,  // AI가 분석한 감정 태그 포함
+      emotion: r.emotion,
     }));
-
-    console.log('📤 이미지 생성용 감정 정보:');
-    characterDialogues.forEach(d => {
-      console.log(`   - ${d.name}: ${d.emotion.primary} (강도: ${d.emotion.intensity})`);
-    });
 
     return NextResponse.json({
       userMessage,
       narratorNote: storyResponse.narratorNote,
-      presentCharacters: presentCharacterProfiles,  // 이미지 생성용 캐릭터 프로필
-      characterDialogues,  // 이미지 생성용 캐릭터 대사 + 감정
+      presentCharacters: presentCharacterProfiles,
+      characterDialogues,
       characterResponses: savedResponses,
       session: {
         ...updatedSession,
@@ -435,56 +663,30 @@ export async function PUT(request: NextRequest) {
       sceneUpdate: storyResponse.updatedScene,
     });
   } catch (error) {
-    console.error('=== 메시지 전송 에러 ===');
-    console.error('에러 타입:', error instanceof Error ? error.constructor.name : typeof error);
-    console.error('에러 메시지:', error instanceof Error ? error.message : String(error));
+    console.error('메시지 전송 에러:', error);
 
-    // Prisma 에러 처리 (공식 문서 기반)
-    // 참고: https://www.prisma.io/docs/orm/prisma-client/debugging-and-troubleshooting/handling-exceptions-and-errors
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      console.error('Prisma 에러 코드:', error.code);
-
-      // P2002: Unique constraint violation
       if (error.code === 'P2002') {
-        return NextResponse.json(
-          { error: '중복된 데이터가 있습니다. 다시 시도해주세요.' },
-          { status: 409 }
-        );
+        return NextResponse.json({ error: '중복된 데이터가 있습니다.' }, { status: 409 });
       }
-
-      // P2025: Record not found
       if (error.code === 'P2025') {
-        return NextResponse.json(
-          { error: '요청한 데이터를 찾을 수 없습니다.' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: '데이터를 찾을 수 없습니다.' }, { status: 404 });
       }
-
-      // 기타 Prisma 에러
-      return NextResponse.json(
-        { error: '데이터베이스 오류가 발생했습니다.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: '데이터베이스 오류가 발생했습니다.' }, { status: 500 });
     }
 
-    // Prisma 연결 에러
     if (error instanceof Prisma.PrismaClientInitializationError) {
-      console.error('Prisma 초기화 에러:', error.message);
-      return NextResponse.json(
-        { error: '데이터베이스 연결에 실패했습니다.' },
-        { status: 503 }
-      );
+      return NextResponse.json({ error: '데이터베이스 연결에 실패했습니다.' }, { status: 503 });
     }
 
-    // 일반 에러 처리
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const userMessage = errorMessage.includes('API') || errorMessage.includes('인증')
-      ? 'AI 서비스 연결에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
-      : '메시지 전송에 실패했습니다. 잠시 후 다시 시도해주세요.';
+    const userErrorMessage = errorMessage.includes('API') || errorMessage.includes('인증')
+      ? 'AI 서비스 연결에 문제가 발생했습니다.'
+      : '메시지 전송에 실패했습니다.';
 
     return NextResponse.json(
       {
-        error: userMessage,
+        error: userErrorMessage,
         details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
       },
       { status: 500 }
@@ -499,10 +701,7 @@ export async function GET(request: NextRequest) {
     const sessionId = searchParams.get('sessionId');
 
     if (!sessionId) {
-      return NextResponse.json(
-        { error: '세션 ID가 필요합니다.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '세션 ID가 필요합니다.' }, { status: 400 });
     }
 
     const session = await prisma.chatSession.findUnique({
@@ -523,10 +722,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!session) {
-      return NextResponse.json(
-        { error: '세션을 찾을 수 없습니다.' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -537,19 +733,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching session:', error);
 
-    // Prisma 에러 처리 (공식 문서 기반)
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') {
-        return NextResponse.json(
-          { error: '세션을 찾을 수 없습니다.' },
-          { status: 404 }
-        );
-      }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    return NextResponse.json(
-      { error: '세션을 불러오는데 실패했습니다.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '세션을 불러오는데 실패했습니다.' }, { status: 500 });
   }
 }

@@ -2,7 +2,22 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import ChatHistorySidebar from '@/components/ChatHistorySidebar';
+import MainHeader from '@/components/MainHeader';
+import PersonaModal from '@/components/PersonaModal';
+import PersonaDropdown from '@/components/PersonaDropdown';
+import { useLayout } from '@/contexts/LayoutContext';
+
+interface Persona {
+  id: string;
+  name: string;
+  age: number | null;
+  gender: string;
+  description: string | null;
+  isDefault: boolean;
+}
 
 interface Character {
   id: string;
@@ -49,7 +64,11 @@ interface Session {
 
 export default function ChatPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const { data: authSession } = useSession();
+  const { sidebarOpen, sidebarCollapsed, refreshSidebar } = useLayout();
   const workId = params.workId as string;
+  const existingSessionId = searchParams.get('session');
 
   const [work, setWork] = useState<Work | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -61,14 +80,74 @@ export default function ChatPage() {
   const [selectedOpening, setSelectedOpening] = useState<string | null>(null);
   const [userName, setUserName] = useState('유저');
   const [generatingImages, setGeneratingImages] = useState<Set<string>>(new Set());  // 이미지 생성 중인 메시지 ID
-  const [showDebugPanel, setShowDebugPanel] = useState(false);  // 디버그 패널 표시
+
+  // 페르소나 관련 상태
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
+  const [personaModalOpen, setPersonaModalOpen] = useState(false);
+
+  // 점3개 메뉴 상태
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     fetchWork();
-  }, [workId]);
+    if (authSession?.user) {
+      fetchPersonas();
+    }
+  }, [workId, authSession]);
+
+  // 페르소나 목록 불러오기
+  const fetchPersonas = async () => {
+    try {
+      const response = await fetch('/api/personas');
+      const data = await response.json();
+      const personaList = data.personas || [];
+      setPersonas(personaList);
+
+      // 기본 페르소나 선택
+      const defaultPersona = personaList.find((p: Persona) => p.isDefault);
+      if (defaultPersona) {
+        setSelectedPersona(defaultPersona);
+        setUserName(defaultPersona.name);
+      }
+    } catch (error) {
+      console.error('Failed to fetch personas:', error);
+    }
+  };
+
+  // 페르소나 선택 시
+  const handlePersonaSelect = async (persona: Persona) => {
+    setSelectedPersona(persona);
+    setUserName(persona.name);
+
+    // 이미 세션이 있는 경우 서버에도 페르소나 변경 반영
+    if (session) {
+      try {
+        await fetch(`/api/chat/session/${session.id}/persona`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userName: persona.name,
+            personaId: persona.id,  // 페르소나 ID도 전달 (전체 정보 업데이트용)
+          }),
+        });
+        // 로컬 세션 상태도 업데이트
+        setSession(prev => prev ? { ...prev, userName: persona.name } : prev);
+      } catch (error) {
+        console.error('Failed to update persona:', error);
+      }
+    }
+  };
+
+  // 기존 세션 불러오기
+  useEffect(() => {
+    if (existingSessionId && work) {
+      loadExistingSession(existingSessionId);
+    }
+  }, [existingSessionId, work]);
 
   useEffect(() => {
     scrollToBottom();
@@ -164,6 +243,12 @@ export default function ChatPage() {
       const data = await response.json();
       setWork(data);
 
+      // 기존 세션이 있으면 오프닝 선택 스킵
+      if (existingSessionId) {
+        // loadExistingSession에서 처리
+        return;
+      }
+
       // 오프닝이 2개 이상이면 선택 모달 표시
       if (data.openings.length > 1) {
         setShowOpeningSelect(true);
@@ -173,6 +258,64 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error('Failed to fetch work:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 기존 세션 불러오기
+  const loadExistingSession = async (sessionId: string) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/chat/session/${sessionId}`);
+
+      if (!response.ok) {
+        console.error('Failed to load session');
+        // 세션 로드 실패 시 새 세션 시작하도록
+        if (work?.openings.length === 1) {
+          setSelectedOpening(work.openings[0].id);
+        } else if (work?.openings.length && work.openings.length > 1) {
+          setShowOpeningSelect(true);
+        }
+        return;
+      }
+
+      const data = await response.json();
+
+      // 세션 설정
+      const normalizedSession = {
+        ...data.session,
+        presentCharacters: Array.isArray(data.session.presentCharacters)
+          ? data.session.presentCharacters
+          : (typeof data.session.presentCharacters === 'string'
+            ? JSON.parse(data.session.presentCharacters)
+            : []),
+        recentEvents: Array.isArray(data.session.recentEvents)
+          ? data.session.recentEvents
+          : (typeof data.session.recentEvents === 'string'
+            ? JSON.parse(data.session.recentEvents)
+            : []),
+      };
+      setSession(normalizedSession);
+      setUserName(data.session.userName || '유저');
+
+      // 메시지 설정
+      if (data.messages && Array.isArray(data.messages)) {
+        const formattedMessages: Message[] = data.messages.map((msg: any) => ({
+          id: msg.id,
+          characterId: msg.characterId,
+          content: msg.content,
+          messageType: msg.messageType as 'dialogue' | 'narrator' | 'user' | 'system',
+          createdAt: msg.createdAt,
+          character: msg.character || null,
+          generatedImageUrl: msg.generatedImageUrl || null,
+        }));
+        setMessages(formattedMessages);
+      }
+
+      setShowOpeningSelect(false);
+    } catch (error) {
+      console.error('Failed to load existing session:', error);
     } finally {
       setLoading(false);
     }
@@ -189,6 +332,7 @@ export default function ChatPage() {
           workId,
           userName,
           openingId: selectedOpening,
+          personaId: selectedPersona?.id,  // 선택된 페르소나 ID 전달
         }),
       });
 
@@ -225,7 +369,10 @@ export default function ChatPage() {
         character: null,
       };
       setMessages([openingMessage]);
-      
+
+      // 사이드바 채팅 목록 새로고침
+      refreshSidebar();
+
       // 채팅 시작 후 입력란에 자동 포커스
       setTimeout(() => {
         inputRef.current?.focus();
@@ -466,10 +613,10 @@ export default function ChatPage() {
   // 현재 장면에 있는 캐릭터만 필터링
   const getPresentCharacters = () => {
     if (!work || !session) return [];
-    
+
     // presentCharacters가 배열인지 확인하고 안전하게 처리
     let presentCharacterNames: string[] = [];
-    
+
     if (Array.isArray(session.presentCharacters)) {
       presentCharacterNames = session.presentCharacters;
     } else if (typeof session.presentCharacters === 'string') {
@@ -482,9 +629,20 @@ export default function ChatPage() {
         presentCharacterNames = [];
       }
     }
-    
-    // 캐릭터 이름으로 필터링 (정확한 매칭만 사용)
-    return work.characters.filter((c) => presentCharacterNames.includes(c.name));
+
+    // 캐릭터 이름으로 필터링 (부분 매칭 지원)
+    // AI가 "미카엘"로 응답해도 "미카엘 팽송 (Michael Pinson)"과 매칭되도록
+    return work.characters.filter((c) =>
+      presentCharacterNames.some(presentName =>
+        c.name === presentName ||
+        c.name.includes(presentName) ||
+        presentName.includes(c.name) ||
+        c.name.split(' ')[0] === presentName.split(' ')[0] ||
+        // 괄호 앞 이름으로 매칭 (예: "미카엘 팽송 (Michael)" -> "미카엘 팽송")
+        c.name.split('(')[0].trim().includes(presentName) ||
+        presentName.includes(c.name.split('(')[0].trim())
+      )
+    );
   };
 
   if (loading) {
@@ -510,31 +668,112 @@ export default function ChatPage() {
 
   // 오프닝 선택 화면
   if (showOpeningSelect || !session) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-900 to-gray-800">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="p-6 bg-gradient-to-r from-primary-600 to-primary-700 text-white">
-            <h1 className="text-2xl font-bold">{work.title}</h1>
-            <p className="text-primary-100 mt-1">
-              {work.characters.length}명의 캐릭터와 대화하기
-            </p>
+    // 비로그인 유저는 로그인 유도
+    if (!authSession?.user) {
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800">
+          <MainHeader />
+          <ChatHistorySidebar />
+          <div className={`
+            min-h-screen flex flex-col items-center justify-center p-4 pt-20
+            transition-all duration-300
+            ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}
+          `}>
+            <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-6 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-center">
+                <h1 className="text-2xl font-bold">{work.title}</h1>
+                <p className="text-violet-100 mt-1">
+                  {work.characters.length}명의 캐릭터와 대화하기
+                </p>
+              </div>
+              <div className="p-8 text-center space-y-6">
+                <div className="w-20 h-20 mx-auto bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center">
+                  <svg className="w-10 h-10 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    로그인이 필요합니다
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    캐릭터와의 대화를 시작하려면 로그인해주세요.<br/>
+                    대화 내용은 저장되어 언제든 이어갈 수 있습니다.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <Link
+                    href="/login"
+                    className="block w-full py-3 bg-violet-600 text-white rounded-lg font-semibold hover:bg-violet-700 transition-colors"
+                  >
+                    로그인하기
+                  </Link>
+                  <Link
+                    href="/register"
+                    className="block w-full py-3 border border-violet-600 text-violet-600 dark:text-violet-400 rounded-lg font-semibold hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                  >
+                    회원가입하기
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <Link
+              href="/"
+              className="mt-4 text-gray-400 hover:text-white transition-colors"
+            >
+              ← 목록으로 돌아가기
+            </Link>
           </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800">
+        {/* 헤더 - 공통 컴포넌트 */}
+        <MainHeader />
+
+        {/* 사이드바 - 공통 컴포넌트 */}
+        <ChatHistorySidebar />
+
+        {/* 오프닝 선택 콘텐츠 */}
+        <div className={`
+          min-h-screen flex flex-col items-center justify-center p-4 pt-20
+          transition-all duration-300
+          ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}
+        `}>
+          <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-violet-600 to-purple-600 text-white">
+              <h1 className="text-2xl font-bold">{work.title}</h1>
+              <p className="text-violet-100 mt-1">
+                {work.characters.length}명의 캐릭터와 대화하기
+              </p>
+            </div>
 
           <div className="p-6 space-y-6">
-            {/* 유저 이름 입력 */}
+            {/* 페르소나 선택 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                닉네임
+                페르소나
               </label>
-              <input
-                type="text"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                maxLength={20}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                placeholder="닉네임을 입력하세요"
-              />
+              <div className="space-y-2">
+                {/* 드롭다운 형식 페르소나 선택 */}
+                <PersonaDropdown
+                  personas={personas}
+                  selectedPersona={selectedPersona}
+                  onSelect={handlePersonaSelect}
+                  onManageClick={() => setPersonaModalOpen(true)}
+                />
+                {personas.length === 0 && (
+                  <button
+                    onClick={() => setPersonaModalOpen(true)}
+                    className="text-sm text-violet-500 hover:text-violet-400"
+                  >
+                    + 페르소나 추가하기
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 캐릭터 미리보기 */}
@@ -580,7 +819,7 @@ export default function ChatPage() {
                       key={opening.id}
                       className={`block p-3 border rounded-lg cursor-pointer transition-colors ${
                         selectedOpening === opening.id
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                          ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'
                           : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
@@ -598,7 +837,7 @@ export default function ChatPage() {
                             {opening.title}
                           </span>
                           {opening.isDefault && (
-                            <span className="ml-2 text-xs text-primary-600">
+                            <span className="ml-2 text-xs text-violet-600">
                               (기본)
                             </span>
                           )}
@@ -614,19 +853,32 @@ export default function ChatPage() {
             <button
               onClick={startChat}
               disabled={!selectedOpening && work.openings.length > 0}
-              className="w-full py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-violet-600 text-white rounded-lg font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               대화 시작하기
             </button>
           </div>
         </div>
 
-        <Link
-          href="/"
-          className="mt-4 text-gray-400 hover:text-white transition-colors"
-        >
-          ← 목록으로 돌아가기
-        </Link>
+          <Link
+            href="/"
+            className="mt-4 text-gray-400 hover:text-white transition-colors"
+          >
+            ← 목록으로 돌아가기
+          </Link>
+        </div>
+
+        {/* 페르소나 모달 */}
+        <PersonaModal
+          isOpen={personaModalOpen}
+          onClose={() => {
+            setPersonaModalOpen(false);
+            fetchPersonas();
+          }}
+          onSelect={handlePersonaSelect}
+          selectedPersonaId={selectedPersona?.id}
+          showSelectMode={true}
+        />
       </div>
     );
   }
@@ -635,21 +887,32 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3">
+      {/* 헤더 - 공통 컴포넌트 */}
+      <MainHeader />
+
+      {/* 사이드바 - 공통 컴포넌트 */}
+      <ChatHistorySidebar />
+
+      {/* 채팅 정보 서브헤더 */}
+      <div className={`
+        bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700
+        fixed top-[64px] right-0 z-40
+        transition-all duration-300
+        ${sidebarOpen && !sidebarCollapsed ? 'lg:left-80' : sidebarOpen && sidebarCollapsed ? 'lg:left-16' : 'left-0'}
+      `}>
+        <div className="max-w-3xl mx-auto px-4 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Link
                 href="/"
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
               </Link>
               <div>
-                <h1 className="font-semibold text-gray-900 dark:text-white">
+                <h1 className="font-semibold text-gray-900 dark:text-white text-sm">
                   {work.title}
                 </h1>
                 <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -662,196 +925,132 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* 현재 장면에 있는 캐릭터들 */}
-            <div className="flex items-center gap-2">
-              {/* 디버그 버튼 */}
-              <button
-                onClick={() => setShowDebugPanel(!showDebugPanel)}
-                className={`p-2 rounded-lg transition-colors ${
-                  showDebugPanel
-                    ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                    : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                title="기억력 테스트 패널"
-              >
-                🧠
-              </button>
-              <span className="text-xs text-gray-400 hidden sm:block">함께하는 캐릭터:</span>
-              <div className="flex -space-x-2">
-                {presentCharacters.map((char) => (
-                  <div
-                    key={char.id}
-                    className={`w-8 h-8 rounded-full ${getCharacterColor(char.id)} border-2 border-white dark:border-gray-800 flex items-center justify-center overflow-hidden`}
-                    title={char.name}
-                  >
-                    {char.profileImage ? (
-                      <img
-                        src={char.profileImage}
-                        alt={char.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-xs font-bold text-white">
-                        {char.name[0]}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* 디버그 패널 - 기억력 테스트 */}
-      {showDebugPanel && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
-                🧠 기억력 테스트 패널
-              </h3>
-              <button
-                onClick={() => setShowDebugPanel(false)}
-                className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-800"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* 대화 통계 */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
-                <div className="text-2xl font-bold text-primary-600">{session?.turnCount || 0}</div>
-                <div className="text-xs text-gray-500">총 턴 수</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
-                <div className="text-2xl font-bold text-green-600">{messages.length}</div>
-                <div className="text-xs text-gray-500">메시지 수</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
-                <div className="text-2xl font-bold text-orange-600">
-                  {messages.filter(m => m.messageType === 'user').length}
+            {/* 현재 장면에 있는 캐릭터들 + 메뉴 */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 hidden sm:block">함께하는 캐릭터:</span>
+                <div className="flex -space-x-2">
+                  {presentCharacters.map((char) => (
+                    <div
+                      key={char.id}
+                      className={`w-7 h-7 rounded-full ${getCharacterColor(char.id)} border-2 border-white dark:border-gray-800 flex items-center justify-center overflow-hidden`}
+                      title={char.name}
+                    >
+                      {char.profileImage ? (
+                        <img
+                          src={char.profileImage}
+                          alt={char.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-white">
+                          {char.name[0]}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div className="text-xs text-gray-500">유저 발화</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {Math.min(30, messages.length)}
-                </div>
-                <div className="text-xs text-gray-500">기억 범위 (최근 30턴)</div>
-              </div>
-            </div>
 
-            {/* 기억 테스트 버튼들 */}
-            <div className="mb-3">
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
-                📌 아래 버튼을 눌러 캐릭터의 기억력을 테스트하세요:
-              </p>
-              <div className="flex flex-wrap gap-2">
+              {/* 점3개 메뉴 */}
+              <div className="relative">
                 <button
-                  onClick={() => setInputMessage('내 이름이 뭐야?')}
-                  className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                  onClick={() => setChatMenuOpen(!chatMenuOpen)}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  이름 기억?
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="6" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="12" cy="18" r="2" />
+                  </svg>
                 </button>
-                <button
-                  onClick={() => setInputMessage('우리가 처음 만났을 때 어땠어?')}
-                  className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full text-sm hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
-                >
-                  첫 만남 기억?
-                </button>
-                <button
-                  onClick={() => setInputMessage('내가 좋아한다고 했던 거 기억해?')}
-                  className="px-3 py-1 bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300 rounded-full text-sm hover:bg-pink-200 dark:hover:bg-pink-800 transition-colors"
-                >
-                  선호도 기억?
-                </button>
-                <button
-                  onClick={() => setInputMessage('아까 네가 뭐라고 했었지?')}
-                  className="px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-sm hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
-                >
-                  최근 대화?
-                </button>
-                <button
-                  onClick={() => setInputMessage('우리가 함께 했던 일 중에 기억나는 거 있어?')}
-                  className="px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full text-sm hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors"
-                >
-                  주요 이벤트?
-                </button>
-              </div>
-            </div>
 
-            {/* 정보 입력 테스트 */}
-            <div className="mb-3">
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
-                💡 먼저 정보를 알려주고, 나중에 기억하는지 테스트하세요:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setInputMessage('참고로 나는 고양이를 정말 좋아해')}
-                  className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  선호도 알려주기
-                </button>
-                <button
-                  onClick={() => setInputMessage('내 직업은 프로그래머야')}
-                  className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  직업 알려주기
-                </button>
-                <button
-                  onClick={() => setInputMessage('어제가 내 생일이었어')}
-                  className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  생일 알려주기
-                </button>
-                <button
-                  onClick={() => setInputMessage('나는 매운 음식을 잘 못 먹어')}
-                  className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  음식 취향 알려주기
-                </button>
-              </div>
-            </div>
-
-            {/* AI 컨텍스트 미리보기 */}
-            <details className="text-xs">
-              <summary className="cursor-pointer text-yellow-700 dark:text-yellow-300 hover:text-yellow-800 dark:hover:text-yellow-200">
-                🔍 AI에게 전달되는 대화 히스토리 미리보기 (최근 5개)
-              </summary>
-              <div className="mt-2 bg-white dark:bg-gray-800 rounded-lg p-3 max-h-40 overflow-y-auto">
-                {messages.slice(-5).map((msg, idx) => (
-                  <div key={idx} className="mb-1 text-gray-600 dark:text-gray-400">
-                    <span className="font-semibold">
-                      {msg.messageType === 'user'
-                        ? session?.userName
-                        : msg.character?.name || '나레이터'}:
-                    </span>{' '}
-                    <span className="truncate">
-                      {msg.content.substring(0, 100)}
-                      {msg.content.length > 100 ? '...' : ''}
-                    </span>
-                  </div>
-                ))}
-                {messages.length === 0 && (
-                  <p className="text-gray-400">아직 대화가 없습니다.</p>
+                {chatMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setChatMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 min-w-[240px] overflow-hidden">
+                      {/* 페르소나 변경 (로그인 유저만) */}
+                      {authSession?.user && (
+                        <div className="p-3">
+                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            페르소나 선택
+                          </div>
+                          {/* 페르소나 목록 */}
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {personas.map((persona) => (
+                              <button
+                                key={persona.id}
+                                onClick={() => {
+                                  handlePersonaSelect(persona);
+                                  setChatMenuOpen(false);
+                                }}
+                                className={`w-full px-3 py-2 text-left rounded-lg transition-colors ${
+                                  selectedPersona?.id === persona.id
+                                    ? 'bg-violet-100 dark:bg-violet-900/30'
+                                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-sm font-medium ${
+                                      selectedPersona?.id === persona.id
+                                        ? 'text-violet-600 dark:text-violet-400'
+                                        : 'text-gray-900 dark:text-white'
+                                    }`}>
+                                      {persona.name}
+                                    </span>
+                                    {persona.isDefault && (
+                                      <span className="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-500 dark:text-blue-400 rounded-full">
+                                        기본
+                                      </span>
+                                    )}
+                                  </div>
+                                  {selectedPersona?.id === persona.id && (
+                                    <svg className="w-4 h-4 text-violet-500" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          {/* 페르소나 관리 버튼 */}
+                          <button
+                            onClick={() => {
+                              setChatMenuOpen(false);
+                              setPersonaModalOpen(true);
+                            }}
+                            className="w-full mt-2 px-3 py-2 text-left text-sm text-violet-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            페르소나 관리
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
-            </details>
-
-            {/* 경고 메시지 */}
-            {messages.length > 25 && (
-              <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-xs text-red-700 dark:text-red-300">
-                ⚠️ 대화가 30턴에 가까워지고 있습니다. 30턴 이전의 대화는 AI가 기억하지 못할 수 있습니다.
-              </div>
-            )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Messages */}
-      <main className="flex-1 overflow-y-auto">
+      <main className={`
+        flex-1 overflow-y-auto pt-[120px]
+        transition-all duration-300
+        ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}
+      `}>
         <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
           {messages.map((message) => {
             const { messageType } = message;
@@ -1012,7 +1211,11 @@ export default function ChatPage() {
       </main>
 
       {/* Input Area */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <div className={`
+        bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700
+        transition-all duration-300
+        ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}
+      `}>
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="flex items-end gap-2">
             {/* 상황묘사 버튼 */}
@@ -1068,6 +1271,25 @@ export default function ChatPage() {
           </p>
         </div>
       </div>
+
+      {/* 페르소나 모달 */}
+      <PersonaModal
+        isOpen={personaModalOpen}
+        onClose={() => {
+          console.log('Chat page: PersonaModal onClose called');
+          setPersonaModalOpen(false);
+          // 모달 닫힌 후에 페르소나 목록 새로고침
+          setTimeout(() => {
+            fetchPersonas();
+          }, 100);
+        }}
+        onSelect={(persona) => {
+          console.log('Chat page: onSelect called with', persona.name);
+          handlePersonaSelect(persona);
+        }}
+        selectedPersonaId={selectedPersona?.id}
+        showSelectMode={true}
+      />
     </div>
   );
 }
