@@ -48,34 +48,34 @@ function getRateLimitConfig(
 ): { limit: number; windowMs: number } | null {
   const MINUTE = 60_000;
 
-  // 채팅 메시지 전송 - 분당 10회
+  // 채팅 메시지 전송 - 분당 30회
   if (pathname === '/api/chat' && method === 'PUT') {
-    return { limit: 10, windowMs: MINUTE };
-  }
-
-  // 채팅 세션 생성 - 분당 5회
-  if (pathname === '/api/chat' && method === 'POST') {
-    return { limit: 5, windowMs: MINUTE };
-  }
-
-  // 이미지 생성 - 분당 5회 (비용 높음)
-  if (pathname.startsWith('/api/generate-image')) {
-    return { limit: 5, windowMs: MINUTE };
-  }
-
-  // 파일 업로드 - 분당 10회
-  if (pathname.startsWith('/api/upload')) {
-    return { limit: 10, windowMs: MINUTE };
-  }
-
-  // 기타 쓰기 API - 분당 30회
-  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method) && pathname.startsWith('/api/')) {
     return { limit: 30, windowMs: MINUTE };
   }
 
-  // 읽기 API - 분당 60회
-  if (method === 'GET' && pathname.startsWith('/api/')) {
+  // 채팅 세션 생성 - 분당 15회
+  if (pathname === '/api/chat' && method === 'POST') {
+    return { limit: 15, windowMs: MINUTE };
+  }
+
+  // 이미지 생성 - 분당 10회 (비용 높음)
+  if (pathname.startsWith('/api/generate-image')) {
+    return { limit: 10, windowMs: MINUTE };
+  }
+
+  // 파일 업로드 - 분당 20회
+  if (pathname.startsWith('/api/upload')) {
+    return { limit: 20, windowMs: MINUTE };
+  }
+
+  // 기타 쓰기 API - 분당 60회
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method) && pathname.startsWith('/api/')) {
     return { limit: 60, windowMs: MINUTE };
+  }
+
+  // 읽기 API - 분당 120회
+  if (method === 'GET' && pathname.startsWith('/api/')) {
+    return { limit: 120, windowMs: MINUTE };
   }
 
   return null;
