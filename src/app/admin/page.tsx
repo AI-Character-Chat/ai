@@ -62,7 +62,27 @@ interface User {
   _count: { works: number; chatSessions: number };
 }
 
-type Tab = 'dashboard' | 'banners' | 'announcements' | 'users';
+interface Report {
+  id: string;
+  reporterId: string | null;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  description: string | null;
+  status: string;
+  adminNote: string | null;
+  createdAt: string;
+}
+
+interface SiteSetting {
+  id: string;
+  key: string;
+  value: string;
+  description: string | null;
+  updatedAt: string;
+}
+
+type Tab = 'dashboard' | 'banners' | 'announcements' | 'users' | 'reports' | 'settings';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -111,6 +131,21 @@ export default function AdminPage() {
   const [usersPage, setUsersPage] = useState(1);
   const [usersTotalPages, setUsersTotalPages] = useState(1);
 
+  // Reports
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsFilter, setReportsFilter] = useState('');
+  const [reportsPage, setReportsPage] = useState(1);
+  const [reportsTotalPages, setReportsTotalPages] = useState(1);
+  const [editingReport, setEditingReport] = useState<Report | null>(null);
+  const [reportAdminNote, setReportAdminNote] = useState('');
+
+  // Settings
+  const [siteSettings, setSiteSettings] = useState<SiteSetting[]>([]);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingForm, setSettingForm] = useState({ key: '', value: '', description: '' });
+  const [settingEditing, setSettingEditing] = useState(false);
+
   // 관리자 권한 체크
   useEffect(() => {
     const checkAdminRole = async () => {
@@ -143,6 +178,8 @@ export default function AdminPage() {
       if (activeTab === 'banners') fetchBanners();
       if (activeTab === 'announcements') fetchAnnouncements();
       if (activeTab === 'users') fetchUsers();
+      if (activeTab === 'reports') fetchReports();
+      if (activeTab === 'settings') fetchSettings();
     }
   }, [isAdmin, activeTab]);
 
@@ -196,6 +233,95 @@ export default function AdminPage() {
       console.error('Failed to fetch users:', error);
     } finally {
       setUsersLoading(false);
+    }
+  };
+
+  const fetchReports = async () => {
+    setReportsLoading(true);
+    try {
+      const statusParam = reportsFilter ? `&status=${reportsFilter}` : '';
+      const response = await fetch(`/api/admin/reports?page=${reportsPage}${statusParam}`);
+      const data = await response.json();
+      setReports(data.reports);
+      setReportsTotalPages(data.pagination.totalPages);
+    } catch (error) {
+      console.error('Failed to fetch reports:', error);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const handleUpdateReport = async (id: string, newStatus: string) => {
+    try {
+      const response = await fetch('/api/admin/reports', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: newStatus, adminNote: reportAdminNote || undefined }),
+      });
+      if (response.ok) {
+        fetchReports();
+        setEditingReport(null);
+        setReportAdminNote('');
+      }
+    } catch (error) {
+      console.error('Failed to update report:', error);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      reviewing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      resolved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      rejected: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+    };
+    const labels: Record<string, string> = {
+      pending: '대기중', reviewing: '검토중', resolved: '처리완료', rejected: '반려',
+    };
+    return <span className={`px-2 py-1 text-xs rounded-full ${styles[status] || styles.pending}`}>{labels[status] || status}</span>;
+  };
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const response = await fetch('/api/admin/settings');
+      const data = await response.json();
+      setSiteSettings(data.settings || []);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleSaveSetting = async () => {
+    if (!settingForm.key.trim() || !settingForm.value.trim()) {
+      alert('키와 값을 입력해주세요.');
+      return;
+    }
+    try {
+      const response = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settingForm),
+      });
+      if (response.ok) {
+        fetchSettings();
+        setSettingForm({ key: '', value: '', description: '' });
+        setSettingEditing(false);
+      }
+    } catch (error) {
+      console.error('Failed to save setting:', error);
+    }
+  };
+
+  const handleDeleteSetting = async (key: string) => {
+    if (!confirm(`"${key}" 설정을 삭제하시겠습니까?`)) return;
+    try {
+      const response = await fetch(`/api/admin/settings?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+      if (response.ok) fetchSettings();
+    } catch (error) {
+      console.error('Failed to delete setting:', error);
     }
   };
 
@@ -420,7 +546,9 @@ export default function AdminPage() {
             { id: 'dashboard', label: '대시보드', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
             { id: 'banners', label: '배너 관리', icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
             { id: 'announcements', label: '공지사항', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
-            { id: 'users', label: '사용자 관리', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' }
+            { id: 'users', label: '사용자 관리', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+            { id: 'reports', label: '신고 관리', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z' },
+            { id: 'settings', label: '사이트 설정', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -847,6 +975,242 @@ export default function AdminPage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+        )}
+
+        {/* Reports Tab */}
+        {activeTab === 'reports' && (
+          <div className="space-y-4">
+            {/* 필터 */}
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: '', label: '전체' },
+                { value: 'pending', label: '대기중' },
+                { value: 'reviewing', label: '검토중' },
+                { value: 'resolved', label: '처리완료' },
+                { value: 'rejected', label: '반려' },
+              ].map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => { setReportsFilter(f.value); setReportsPage(1); }}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    reportsFilter === f.value
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {reportsLoading ? (
+              <div className="text-center py-12 text-gray-500">로딩 중...</div>
+            ) : reports.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">신고가 없습니다.</div>
+            ) : (
+              <div className="space-y-3">
+                {reports.map((report) => (
+                  <div key={report.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {getStatusBadge(report.status)}
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {report.targetType} | {new Date(report.createdAt).toLocaleDateString('ko-KR')}
+                          </span>
+                        </div>
+                        <p className="font-medium text-gray-900 dark:text-white">{report.reason}</p>
+                        {report.description && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{report.description}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">대상 ID: {report.targetId}</p>
+                        {report.adminNote && (
+                          <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">관리자 메모: {report.adminNote}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        {report.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateReport(report.id, 'reviewing')}
+                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                            >
+                              검토
+                            </button>
+                            <button
+                              onClick={() => handleUpdateReport(report.id, 'rejected')}
+                              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                            >
+                              반려
+                            </button>
+                          </>
+                        )}
+                        {report.status === 'reviewing' && (
+                          <button
+                            onClick={() => handleUpdateReport(report.id, 'resolved')}
+                            className="px-2 py-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50"
+                          >
+                            처리완료
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setEditingReport(report); setReportAdminNote(report.adminNote || ''); }}
+                          className="px-2 py-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                        >
+                          메모
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Pagination */}
+                {reportsTotalPages > 1 && (
+                  <div className="flex justify-center gap-2 mt-4">
+                    <button
+                      onClick={() => setReportsPage(Math.max(1, reportsPage - 1))}
+                      disabled={reportsPage === 1}
+                      className="px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-50"
+                    >
+                      이전
+                    </button>
+                    <span className="px-3 py-1 text-gray-600 dark:text-gray-400">{reportsPage} / {reportsTotalPages}</span>
+                    <button
+                      onClick={() => setReportsPage(Math.min(reportsTotalPages, reportsPage + 1))}
+                      disabled={reportsPage === reportsTotalPages}
+                      className="px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-50"
+                    >
+                      다음
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 관리자 메모 모달 */}
+            {editingReport && (
+              <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setEditingReport(null)}>
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">관리자 메모</h3>
+                  <textarea
+                    value={reportAdminNote}
+                    onChange={(e) => setReportAdminNote(e.target.value)}
+                    placeholder="처리 내용을 기록하세요..."
+                    rows={4}
+                    className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 resize-none"
+                  />
+                  <div className="flex gap-2 mt-4">
+                    <button onClick={() => setEditingReport(null)} className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg">취소</button>
+                    <button
+                      onClick={() => handleUpdateReport(editingReport.id, editingReport.status)}
+                      className="flex-1 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                    >
+                      저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-4">
+            {/* 설정 추가/수정 폼 */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+              <h3 className="font-medium text-gray-900 dark:text-white mb-3">
+                {settingEditing ? '설정 수정' : '새 설정 추가'}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  value={settingForm.key}
+                  onChange={(e) => setSettingForm({ ...settingForm, key: e.target.value })}
+                  placeholder="키 (예: maintenance_mode)"
+                  disabled={settingEditing}
+                  className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 disabled:opacity-50"
+                />
+                <input
+                  type="text"
+                  value={settingForm.value}
+                  onChange={(e) => setSettingForm({ ...settingForm, value: e.target.value })}
+                  placeholder="값"
+                  className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                />
+                <input
+                  type="text"
+                  value={settingForm.description}
+                  onChange={(e) => setSettingForm({ ...settingForm, description: e.target.value })}
+                  placeholder="설명 (선택)"
+                  className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={handleSaveSetting}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
+                >
+                  {settingEditing ? '수정' : '추가'}
+                </button>
+                {settingEditing && (
+                  <button
+                    onClick={() => { setSettingForm({ key: '', value: '', description: '' }); setSettingEditing(false); }}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
+                  >
+                    취소
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 설정 목록 */}
+            {settingsLoading ? (
+              <div className="text-center py-12 text-gray-500">로딩 중...</div>
+            ) : siteSettings.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">설정이 없습니다. 위에서 추가해주세요.</div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">키</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">값</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">설명</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">관리</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {siteSettings.map((setting) => (
+                      <tr key={setting.id}>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">{setting.key}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{setting.value}</td>
+                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">{setting.description || '-'}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex gap-1 justify-end">
+                            <button
+                              onClick={() => {
+                                setSettingForm({ key: setting.key, value: setting.value, description: setting.description || '' });
+                                setSettingEditing(true);
+                              }}
+                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded hover:bg-blue-200"
+                            >
+                              수정
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSetting(setting.key)}
+                              className="px-2 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded hover:bg-red-200"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}

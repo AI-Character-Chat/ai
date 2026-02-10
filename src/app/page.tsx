@@ -8,6 +8,9 @@ import ChatHistorySidebar from '@/components/ChatHistorySidebar';
 import MainHeader from '@/components/MainHeader';
 import PersonaModal from '@/components/PersonaModal';
 import PersonaManager from '@/components/PersonaManager';
+import SearchModal from '@/components/HomePage/SearchModal';
+import NotificationsModal from '@/components/HomePage/NotificationsModal';
+import ProfileEditModal from '@/components/HomePage/ProfileEditModal';
 import { useLayout } from '@/contexts/LayoutContext';
 
 interface Banner {
@@ -2267,455 +2270,40 @@ export default function HomePage() {
 
         {/* Search Modal */}
         {searchOpen && (
-          <div
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-            onClick={() => {
-              setSearchOpen(false);
-              setSearchQuery('');
-              setSearchResults([]);
-            }}
-          >
-            <div
-              className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Search Header */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="relative">
-                  <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="작품, 캐릭터, 태그 검색..."
-                    className="w-full pl-12 pr-10 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-pink-500 text-lg"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Search Results */}
-              <div className="flex-1 overflow-y-auto">
-                {searchQuery === '' ? (
-                  // 검색어가 없을 때
-                  <div className="text-center py-16">
-                    <svg className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <p className="text-gray-500 dark:text-gray-400">
-                      작품명, 캐릭터명, 태그로 검색해보세요
-                    </p>
-                  </div>
-                ) : searchResults.length === 0 ? (
-                  // 검색 결과가 없을 때
-                  <div className="text-center py-16">
-                    <svg className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-gray-500 dark:text-gray-400">
-                      &apos;{searchQuery}&apos;에 대한 검색 결과가 없습니다
-                    </p>
-                  </div>
-                ) : (
-                  // 검색 결과 표시
-                  <div className="p-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                      검색 결과 {searchResults.length}개
-                    </p>
-                    <div className="space-y-2">
-                      {searchResults.map((work) => (
-                        <div
-                          key={work.id}
-                          onClick={() => {
-                            setSearchOpen(false);
-                            setSearchQuery('');
-                            setSearchResults([]);
-                            setSelectedWork(work);
-                          }}
-                          className="flex gap-3 p-3 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                        >
-                          {/* Thumbnail */}
-                          <div className="w-14 h-14 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden">
-                            {work.thumbnail ? (
-                              <img
-                                src={work.thumbnail}
-                                alt={work.title}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                              {work.title}
-                            </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                              {work.description}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                              <span className="flex items-center gap-1">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                </svg>
-                                {work._count.characters}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                </svg>
-                                {work._count.chatSessions}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <svg className="w-3.5 h-3.5 text-red-400" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                </svg>
-                                {work._count.likes}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Arrow */}
-                          <div className="flex items-center">
-                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer hint */}
-              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 text-center">
-                <p className="text-xs text-gray-400">
-                  ESC를 누르거나 바깥을 클릭하여 닫기
-                </p>
-              </div>
-            </div>
-          </div>
+          <SearchModal
+            searchQuery={searchQuery}
+            searchResults={searchResults}
+            searchInputRef={searchInputRef}
+            onClose={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults([]); }}
+            onQueryChange={setSearchQuery}
+            onSelectWork={(work) => { setSearchOpen(false); setSearchQuery(''); setSearchResults([]); setSelectedWork(work); }}
+          />
         )}
 
         {/* Notification Modal */}
         {notificationOpen && (
-          <div
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-            onClick={() => setNotificationOpen(false)}
-          >
-            <div
-              className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[80vh] overflow-hidden shadow-2xl flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">알림</h2>
-                <button
-                  onClick={() => setNotificationOpen(false)}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Notification List */}
-              <div className="flex-1 overflow-y-auto">
-                {notifications.length === 0 ? (
-                  <div className="text-center py-16">
-                    <svg className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                    <p className="text-gray-500 dark:text-gray-400">알림이 없습니다</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer ${
-                          !notification.isRead ? 'bg-pink-50/50 dark:bg-pink-900/10' : ''
-                        }`}
-                        onClick={() => {
-                          if (notification.link) {
-                            setNotificationOpen(false);
-                            router.push(notification.link);
-                          }
-                        }}
-                      >
-                        <div className="flex gap-3">
-                          {/* Icon */}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            notification.type === 'announcement'
-                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-500'
-                              : notification.type === 'like'
-                              ? 'bg-red-100 dark:bg-red-900/30 text-red-500'
-                              : notification.type === 'chat'
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-500'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
-                          }`}>
-                            {notification.type === 'announcement' ? (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                              </svg>
-                            ) : notification.type === 'like' ? (
-                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                              </svg>
-                            ) : notification.type === 'chat' ? (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                              </svg>
-                            ) : (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                              </svg>
-                            )}
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <h3 className="font-medium text-gray-900 dark:text-white text-sm">
-                                {notification.title}
-                              </h3>
-                              {!notification.isRead && (
-                                <span className="w-2 h-2 bg-pink-500 rounded-full flex-shrink-0 mt-1.5"></span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
-                              {notification.content}
-                            </p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                              {getTimeAgo(notification.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <NotificationsModal
+            notifications={notifications}
+            onClose={() => setNotificationOpen(false)}
+            onNavigate={(path) => router.push(path)}
+            getTimeAgo={getTimeAgo}
+          />
         )}
 
         {/* Profile Edit Modal */}
         {profileEditOpen && (
-          <div
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-            onClick={() => setProfileEditOpen(false)}
-          >
-            <div
-              className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-                <div className="w-8" />
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">프로필 수정</h2>
-                <button
-                  onClick={() => setProfileEditOpen(false)}
-                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-6">
-                {/* Profile Image */}
-                <div className="flex justify-center mb-8">
-                  <div className="relative">
-                    {/* Hidden file input */}
-                    <input
-                      type="file"
-                      ref={profileImageInputRef}
-                      onChange={handleProfileImageChange}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    {profileImage ? (
-                      <img
-                        src={profileImage}
-                        alt={profileForm.nickname || session?.user?.name || ''}
-                        className="w-24 h-24 rounded-2xl object-cover"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                        <span className="text-3xl font-bold text-white">
-                          {profileForm.nickname?.[0] || session?.user?.name?.[0] || '?'}
-                        </span>
-                      </div>
-                    )}
-                    {/* Camera Button */}
-                    <button
-                      onClick={() => profileImageInputRef.current?.click()}
-                      disabled={profileImageUploading}
-                      className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-8 h-8 bg-violet-600 rounded-full flex items-center justify-center border-2 border-white dark:border-gray-900 hover:bg-violet-700 transition-colors disabled:opacity-50"
-                    >
-                      {profileImageUploading ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form Fields */}
-                <div className="space-y-6">
-                  {/* Nickname */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      필명
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={profileForm.nickname}
-                        onChange={(e) => setProfileForm({ ...profileForm, nickname: e.target.value.slice(0, 20) })}
-                        placeholder="필명을 입력하세요"
-                        maxLength={20}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-gray-500">
-                        {profileForm.nickname.length}/20
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bio */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      작가소개
-                    </label>
-                    <div className="relative">
-                      <textarea
-                        value={profileForm.bio}
-                        onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value.slice(0, 500) })}
-                        placeholder="작가소개를 입력하세요"
-                        maxLength={500}
-                        rows={3}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
-                      />
-                      <span className="absolute right-3 bottom-3 text-xs text-gray-400 dark:text-gray-500">
-                        {profileForm.bio.length}/500
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Birth Date */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      생년월일
-                    </label>
-                    <input
-                      type="date"
-                      value={profileForm.birthDate}
-                      onChange={(e) => setProfileForm({ ...profileForm, birthDate: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Gender */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      성별
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setProfileForm({ ...profileForm, gender: 'female' })}
-                        className={`py-3 rounded-xl font-medium transition-colors ${
-                          profileForm.gender === 'female'
-                            ? 'bg-violet-600 text-white'
-                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        여성
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProfileForm({ ...profileForm, gender: 'male' })}
-                        className={`py-3 rounded-xl font-medium transition-colors ${
-                          profileForm.gender === 'male'
-                            ? 'bg-violet-600 text-white'
-                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        남성
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProfileForm({ ...profileForm, gender: 'private' })}
-                        className={`py-3 rounded-xl font-medium transition-colors ${
-                          profileForm.gender === 'private'
-                            ? 'bg-violet-600 text-white'
-                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        비공개
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Email (읽기 전용) */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      이메일
-                    </label>
-                    <div className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 dark:text-gray-400">
-                      {session?.user?.email || '이메일 없음'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-                <button
-                  onClick={handleSaveProfile}
-                  disabled={profileSaving || profileImageUploading}
-                  className="w-full py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold rounded-xl hover:from-violet-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {profileSaving ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      저장 중...
-                    </>
-                  ) : (
-                    '저장하기'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ProfileEditModal
+            profileForm={profileForm}
+            profileImage={profileImage}
+            profileImageInputRef={profileImageInputRef}
+            profileSaving={profileSaving}
+            profileImageUploading={profileImageUploading}
+            userEmail={session?.user?.email}
+            onFormChange={setProfileForm}
+            onImageChange={handleProfileImageChange}
+            onSave={handleSaveProfile}
+            onClose={() => setProfileEditOpen(false)}
+          />
         )}
 
         {/* 페르소나 관리 모달 */}
