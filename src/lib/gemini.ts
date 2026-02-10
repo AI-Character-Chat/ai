@@ -86,34 +86,13 @@ interface StoryResponse {
 }
 
 // ============================================================
-// Rate Limit 관리 (최적화: 빠른 응답 우선)
+// 재시도 설정 (rate limit 제거 - 불필요한 딜레이 없음)
 // ============================================================
 
-let lastRequestTime = 0;
-
-const MIN_REQUEST_INTERVAL = 100;  // 100ms (burst 방지만)
-const BASE_DELAY = 1000;           // 1초
-const MAX_DELAY = 15000;           // 15초
-const MAX_RETRIES = 3;             // 최대 3회 재시도
+const MAX_RETRIES = 2;  // 최대 2회 재시도
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function getBackoffDelay(attempt: number): number {
-  const exponentialDelay = BASE_DELAY * Math.pow(2, attempt - 1);
-  const cappedDelay = Math.min(exponentialDelay, MAX_DELAY);
-  const jitter = cappedDelay * 0.25 * (Math.random() * 2 - 1);
-  return Math.round(cappedDelay + jitter);
-}
-
-async function waitForRateLimit(): Promise<void> {
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await delay(MIN_REQUEST_INTERVAL - timeSinceLastRequest);
-  }
-  lastRequestTime = Date.now();
 }
 
 // ============================================================
@@ -306,7 +285,6 @@ export async function generateStoryResponse(
   userPersona?: UserPersona,
   sessionSummary?: string
 ): Promise<StoryResponse> {
-  await waitForRateLimit();
   const startTime = Date.now();
 
   const characterSection = buildCharacterSection(characters, userName);
@@ -346,8 +324,6 @@ ${RESPONSE_FORMAT_GUIDE}`;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      await waitForRateLimit();
-
       const result = await geminiModel.generateContent(prompt);
       const response = await result.response;
       const candidates = response.candidates;
@@ -423,27 +399,16 @@ ${RESPONSE_FORMAT_GUIDE}`;
       console.error(`❌ 시도 ${attempt}/${MAX_RETRIES}:`, lastError.message);
 
       const errorMessage = lastError.message.toLowerCase();
-      const httpStatus = (lastError as any)?.status || (lastError as any)?.statusCode;
 
-      // Rate Limit → 백오프 후 재시도
-      if (httpStatus === 429 || errorMessage.includes('429') || errorMessage.includes('resource exhausted')) {
-        if (attempt < MAX_RETRIES) {
-          const waitTime = getBackoffDelay(attempt);
-          console.log(`⏳ Rate Limit - ${(waitTime / 1000).toFixed(1)}초 대기...`);
-          await delay(waitTime);
-          continue;
-        }
-      }
-
-      // 콘텐츠 차단 → 즉시 폴백
+      // 콘텐츠 차단 → 즉시 폴백 (재시도 무의미)
       if (errorMessage.includes('blocked') || errorMessage.includes('prohibited')) {
         console.warn('⚠️ 콘텐츠 필터 차단 - 폴백 응답');
         break;
       }
 
-      // 그 외 에러 → 한 번만 재시도
-      if (attempt === 1) {
-        await delay(300);
+      // 429 포함 모든 에러 → 짧은 대기 후 재시도
+      if (attempt < MAX_RETRIES) {
+        await delay(200);
         continue;
       }
 
@@ -483,8 +448,6 @@ export async function generateSessionSummary(
   messages: Array<{ role: string; content: string; characterName?: string }>,
   existingSummary?: string
 ): Promise<string> {
-  await waitForRateLimit();
-
   const messagesText = messages
     .map((m) => {
       if (m.characterName) return `${m.characterName}: ${m.content}`;
