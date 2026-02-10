@@ -462,14 +462,16 @@ export default function ChatContainer() {
 
   const sidebarMargin = sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : '';
 
-  // 로딩 중
-  if (state.phase === 'loading' && !state.work) {
+  // 로딩 중 (초기 로딩 또는 세션 로딩)
+  if (state.phase === 'loading' || state.phase === 'session-loading') {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <div className={`flex items-center justify-center min-h-screen transition-all duration-300 ${sidebarMargin}`}>
           <div className="flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
-            <div className="text-sm text-gray-500 dark:text-gray-400">로딩 중...</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {state.work ? '대화 불러오는 중...' : '로딩 중...'}
+            </div>
           </div>
         </div>
       </div>
@@ -486,8 +488,8 @@ export default function ChatContainer() {
     );
   }
 
-  // 세션 로딩 중 (세션 전환 시)
-  if (state.phase === 'session-loading' || (!state.session && existingSessionId)) {
+  // 세션 대기 중 (phase는 다르지만 세션이 아직 미로드)
+  if (!state.session && existingSessionId) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <div className={`flex items-center justify-center min-h-screen transition-all duration-300 ${sidebarMargin}`}>

@@ -123,8 +123,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, phase: action.phase };
 
     case 'LOAD_WORK':
-      // session-loading 중이면 phase 유지 (opening 깜빡임 방지)
-      return { ...state, work: action.work, phase: state.phase === 'session-loading' ? 'session-loading' : 'opening' };
+      // 'loading'에서만 'opening'으로 전환, 나머지(session-loading, chat 등)는 유지
+      return { ...state, work: action.work, phase: state.phase === 'loading' ? 'opening' : state.phase };
 
     case 'LOAD_SESSION':
       return {
