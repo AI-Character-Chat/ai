@@ -4,8 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import ChatHistorySidebar from '@/components/ChatHistorySidebar';
-import MainHeader from '@/components/MainHeader';
 import PersonaModal from '@/components/PersonaModal';
 import PersonaDropdown from '@/components/PersonaDropdown';
 import { useLayout } from '@/contexts/LayoutContext';
@@ -660,8 +658,7 @@ export default function ChatPage() {
   if (loading && !work) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-        <MainHeader />
-        <ChatHistorySidebar />
+
         <div className={`
           flex items-center justify-center min-h-screen
           transition-all duration-300
@@ -695,8 +692,7 @@ export default function ChatPage() {
     if (!authSession?.user) {
       return (
         <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800">
-          <MainHeader />
-          <ChatHistorySidebar />
+
           <div className={`
             min-h-screen flex flex-col items-center justify-center p-4 pt-20
             transition-all duration-300
@@ -753,12 +749,6 @@ export default function ChatPage() {
 
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800">
-        {/* 헤더 - 공통 컴포넌트 */}
-        <MainHeader />
-
-        {/* 사이드바 - 공통 컴포넌트 */}
-        <ChatHistorySidebar />
-
         {/* 오프닝 선택 콘텐츠 */}
         <div className={`
           min-h-screen flex flex-col items-center justify-center p-4 pt-20
@@ -910,12 +900,6 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
-      {/* 헤더 - 공통 컴포넌트 */}
-      <MainHeader />
-
-      {/* 사이드바 - 공통 컴포넌트 */}
-      <ChatHistorySidebar />
-
       {/* 채팅 정보 서브헤더 */}
       <div className={`
         bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700
