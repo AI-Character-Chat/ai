@@ -12,52 +12,57 @@ import { auth } from '@/lib/auth';
 // 새 채팅 세션 생성
 export async function POST(request: NextRequest) {
   try {
-    const authSession = await auth();
+    // auth + body 파싱을 병렬로
+    const [authSession, body] = await Promise.all([
+      auth(),
+      request.json(),
+    ]);
+
     if (!authSession?.user?.id) {
       return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
     }
 
     const userId = authSession.user.id;
-    const body = await request.json();
     const { workId, userName = '유저', openingId, personaId } = body;
-
-    const finalUserName = authSession.user.name || userName;
-
-    // 페르소나 조회 (선택)
-    let userPersona = {
-      name: finalUserName,
-      age: null as number | null,
-      gender: 'private',
-      description: null as string | null,
-    };
-
-    if (personaId) {
-      const persona = await prisma.persona.findUnique({ where: { id: personaId } });
-      if (persona && persona.userId === userId) {
-        userPersona = { name: persona.name, age: persona.age, gender: persona.gender, description: persona.description };
-      }
-    }
 
     if (!workId) {
       return NextResponse.json({ error: '작품 ID가 필요합니다.' }, { status: 400 });
     }
 
-    // 작품 + 캐릭터 + 오프닝 조회
-    const work = await prisma.work.findUnique({
-      where: { id: workId },
-      include: {
-        characters: true,
-        openings: openingId
-          ? { where: { id: openingId } }
-          : { where: { isDefault: true } },
-      },
-    });
+    const finalUserName = authSession.user.name || userName;
+
+    // 페르소나 + 작품 조회를 병렬로 (2개 순차 → 1개 병렬)
+    const [persona, work] = await Promise.all([
+      personaId
+        ? prisma.persona.findUnique({ where: { id: personaId } })
+        : Promise.resolve(null),
+      prisma.work.findUnique({
+        where: { id: workId },
+        include: {
+          characters: true,
+          openings: openingId
+            ? { where: { id: openingId } }
+            : { where: { isDefault: true } },
+        },
+      }),
+    ]);
 
     if (!work) {
       return NextResponse.json({ error: '작품을 찾을 수 없습니다.' }, { status: 404 });
     }
     if (work.openings.length === 0) {
       return NextResponse.json({ error: '오프닝이 설정되지 않았습니다.' }, { status: 400 });
+    }
+
+    // 페르소나 결정
+    let userPersona = {
+      name: finalUserName,
+      age: null as number | null,
+      gender: 'private',
+      description: null as string | null,
+    };
+    if (persona && persona.userId === userId) {
+      userPersona = { name: persona.name, age: persona.age, gender: persona.gender, description: persona.description };
     }
 
     const opening = work.openings[0];
@@ -82,26 +87,28 @@ export async function POST(request: NextRequest) {
       initialCharacters = allCharacterNames;
     }
 
-    // 세션 생성
-    const session = await prisma.chatSession.create({
-      data: {
-        workId,
-        userId,
-        userName: userPersona.name,
-        intimacy: 0,
-        turnCount: 0,
-        currentLocation: opening.initialLocation || '알 수 없는 장소',
-        currentTime: opening.initialTime || '알 수 없는 시간',
-        presentCharacters: JSON.stringify(initialCharacters),
-        recentEvents: JSON.stringify([]),
-        userPersona: JSON.stringify(userPersona),
-      },
-    });
+    // 세션 + 오프닝 메시지를 트랜잭션으로 (2번 DB 호출 → 1번)
+    const [session] = await prisma.$transaction([
+      prisma.chatSession.create({
+        data: {
+          workId,
+          userId,
+          userName: userPersona.name,
+          intimacy: 0,
+          turnCount: 0,
+          currentLocation: opening.initialLocation || '알 수 없는 장소',
+          currentTime: opening.initialTime || '알 수 없는 시간',
+          presentCharacters: JSON.stringify(initialCharacters),
+          recentEvents: JSON.stringify([]),
+          userPersona: JSON.stringify(userPersona),
+        },
+      }),
+    ]);
 
-    // 오프닝 메시지 저장
-    await prisma.message.create({
+    // 오프닝 메시지는 세션 ID가 필요하므로 별도 (하지만 응답 대기 안 함)
+    prisma.message.create({
       data: { sessionId: session.id, characterId: null, content: opening.content, messageType: 'system' },
-    });
+    }).catch(e => console.error('Opening message save error:', e));
 
     return NextResponse.json({
       session: {
