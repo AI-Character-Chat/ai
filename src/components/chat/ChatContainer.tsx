@@ -34,6 +34,8 @@ export default function ChatContainer() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeWorkIdRef = useRef(workId);
   const activeSessionIdRef = useRef(existingSessionId);
+  const pendingRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef = useRef(0);
 
   // ─── 스크롤 ───
   useEffect(() => {
@@ -84,6 +86,12 @@ export default function ChatContainer() {
   // ─── 기존 세션 불러오기 ───
   const loadExistingSession = useCallback(async (sessionId: string, currentWork: ChatWork | null) => {
     try {
+      // 이전 재시도 타이머 정리
+      if (pendingRetryRef.current) {
+        clearTimeout(pendingRetryRef.current);
+        pendingRetryRef.current = null;
+      }
+
       const response = await fetch(`/api/chat/session/${sessionId}`);
       if (activeWorkIdRef.current !== workId || activeSessionIdRef.current !== sessionId) return;
 
@@ -111,6 +119,22 @@ export default function ChatContainer() {
       // 캐시 저장
       if (currentWork) {
         chatCache.setCache(sessionId, { work: currentWork, session, messages });
+      }
+
+      // AI 응답 대기 감지: 마지막 메시지가 user이면 백엔드가 아직 처리 중일 수 있음
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.messageType === 'user' && retryCountRef.current < 3) {
+        retryCountRef.current++;
+        dispatch({ type: 'SET_SENDING', sending: true });
+        pendingRetryRef.current = setTimeout(() => {
+          pendingRetryRef.current = null;
+          if (activeSessionIdRef.current === sessionId) {
+            loadExistingSession(sessionId, currentWork);
+          }
+        }, 2500);
+      } else if (lastMsg && lastMsg.messageType === 'user' && retryCountRef.current >= 3) {
+        // 재시도 한도 초과 → 응답 생성 실패로 간주
+        dispatch({ type: 'SET_SENDING', sending: false });
       }
     } catch (error) {
       console.error('Failed to load existing session:', error);
@@ -151,6 +175,16 @@ export default function ChatContainer() {
     }
 
     dispatch({ type: 'RESET' });
+    retryCountRef.current = 0;
+    if (pendingRetryRef.current) {
+      clearTimeout(pendingRetryRef.current);
+      pendingRetryRef.current = null;
+    }
+
+    // existingSessionId가 있으면 opening 깜빡임 방지를 위해 session-loading 설정
+    if (existingSessionId) {
+      dispatch({ type: 'SET_PHASE', phase: 'session-loading' });
+    }
 
     // 캐시 체크
     const cached = existingSessionId ? chatCache.getCache(existingSessionId) : null;
@@ -172,6 +206,11 @@ export default function ChatContainer() {
 
     abortControllerRef.current?.abort();
     activeSessionIdRef.current = existingSessionId;
+    retryCountRef.current = 0;
+    if (pendingRetryRef.current) {
+      clearTimeout(pendingRetryRef.current);
+      pendingRetryRef.current = null;
+    }
 
     // 상태 리셋
     dispatch({ type: 'SET_SENDING', sending: false });
@@ -191,6 +230,17 @@ export default function ChatContainer() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingSessionId, state.work]);
+
+  // ─── Cleanup: 언마운트 시 타이머 정리 ───
+  useEffect(() => {
+    return () => {
+      if (pendingRetryRef.current) {
+        clearTimeout(pendingRetryRef.current);
+        pendingRetryRef.current = null;
+      }
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // ─── Effect 3: authSession 변경 시 페르소나 로드 ───
   useEffect(() => {
