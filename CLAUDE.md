@@ -20,7 +20,8 @@ npm run db:seed      # Seed database (npx tsx prisma/seed.ts)
 ## Architecture
 
 - **Framework:** Next.js 14 App Router with TypeScript (strict mode)
-- **Database:** PostgreSQL (production/Vercel), SQLite (local dev) via Prisma ORM
+- **Database:** PostgreSQL (Neon) via Prisma ORM
+- **Storage:** Vercel Blob Storage (이미지 업로드/생성)
 - **Auth:** NextAuth v5 beta with Kakao + Google OAuth, custom `AuthSession` table (not default Session)
 - **AI:** Google Gemini (`gemini-2.5-flash` primary, `gemini-2.5-pro-preview-06-05` fallback) with exponential backoff retry
 - **Styling:** Tailwind CSS with custom sky-blue theme
@@ -29,7 +30,8 @@ npm run db:seed      # Seed database (npx tsx prisma/seed.ts)
 ### Key Directories
 
 - `src/app/api/` — REST API routes (chat, characters, works, lorebook, personas, admin, social)
-- `src/lib/` — Core services: `gemini.ts` (AI), `memory.ts` (Mem0 vector search), `narrative-memory.ts` (scene-based memory), `prompt-builder.ts` (prompt formatting), `auth.ts` (NextAuth config), `prisma.ts` (DB singleton)
+- `src/lib/` — Core services: `gemini.ts` (AI), `memory.ts` (Mem0 vector search), `narrative-memory.ts` (scene-based memory), `prompt-builder.ts` (prompt formatting), `auth.ts` (NextAuth config), `prisma.ts` (DB singleton), `imageGeneration.ts` (Gemini image gen → Vercel Blob)
+- `src/middleware.ts` — Rate Limiting (IP 기반, 엔드포인트별 차등 제한)
 - `src/components/` — React components (AuthProvider, Header, ChatHistorySidebar, Persona*)
 - `src/contexts/` — LayoutContext (sidebar state)
 - `src/types/index.ts` — Shared TypeScript interfaces

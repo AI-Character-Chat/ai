@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
-import { existsSync } from 'fs';
+import { put } from '@vercel/blob';
 import { auth } from '@/lib/auth';
 
-// 이미지 업로드 API
+// 이미지 업로드 API (Vercel Blob Storage)
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -32,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 파일 크기 검증 (5MB 제한)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       return NextResponse.json(
         { error: '파일 크기는 5MB 이하여야 합니다.' },
@@ -44,27 +42,18 @@ export async function POST(request: NextRequest) {
     const timestamp = Date.now();
     const randomStr = Math.random().toString(36).substring(2, 8);
     const extension = file.name.split('.').pop() || 'png';
-    const fileName = `${timestamp}-${randomStr}.${extension}`;
+    const fileName = `uploads/${timestamp}-${randomStr}.${extension}`;
 
-    // 업로드 디렉토리 확인 및 생성
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
-
-    // 파일 저장
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const filePath = path.join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
-
-    // 접근 가능한 URL 반환
-    const fileUrl = `/uploads/${fileName}`;
+    // Vercel Blob Storage에 업로드
+    const blob = await put(fileName, file, {
+      access: 'public',
+      addRandomSuffix: false,
+    });
 
     return NextResponse.json({
       success: true,
-      url: fileUrl,
-      fileName
+      url: blob.url,
+      fileName: blob.pathname,
     });
   } catch (error) {
     console.error('Error uploading file:', error);

@@ -11,6 +11,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { put } from '@vercel/blob';
 import fs from 'fs';
 import path from 'path';
 
@@ -72,10 +73,25 @@ const EMOTION_TO_VISUAL: Record<string, string> = {
 // ============================================
 
 /**
- * 로컬 이미지 파일을 Base64로 변환
+ * 이미지를 Base64로 변환 (원격 URL 및 로컬 파일 모두 지원)
  */
-function imageToBase64(imagePath: string): { base64: string; mimeType: string } | null {
+async function imageToBase64(imagePath: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
+    // 원격 URL (Vercel Blob Storage 등)
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      const response = await fetch(imagePath);
+      if (!response.ok) {
+        console.error('이미지 다운로드 실패:', imagePath, response.status);
+        return null;
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      const mimeType = contentType.includes('png') ? 'image/png' : 'image/jpeg';
+      return { base64: buffer.toString('base64'), mimeType };
+    }
+
+    // 로컬 파일 (개발 환경 / 레거시)
     const fullPath = imagePath.startsWith('/')
       ? path.join(process.cwd(), 'public', imagePath)
       : imagePath;
@@ -89,10 +105,7 @@ function imageToBase64(imagePath: string): { base64: string; mimeType: string } 
     const ext = path.extname(fullPath).toLowerCase();
     const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
-    return {
-      base64: buffer.toString('base64'),
-      mimeType,
-    };
+    return { base64: buffer.toString('base64'), mimeType };
   } catch (error) {
     console.error('이미지 변환 실패:', error);
     return null;
@@ -100,22 +113,32 @@ function imageToBase64(imagePath: string): { base64: string; mimeType: string } 
 }
 
 /**
- * Base64 이미지를 로컬 파일로 저장
+ * Base64 이미지를 Vercel Blob Storage에 저장
  */
-function saveBase64Image(base64Data: string, mimeType: string): string {
+async function saveBase64Image(base64Data: string, mimeType: string): Promise<string> {
+  const ext = mimeType.includes('png') ? 'png' : 'jpg';
+  const fileName = `uploads/generated-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // Vercel Blob Storage 사용 가능 시
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(fileName, buffer, {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: mimeType,
+    });
+    return blob.url;
+  }
+
+  // 폴백: 로컬 파일시스템 (개발 환경)
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-
-  const ext = mimeType.includes('png') ? 'png' : 'jpg';
-  const fileName = `generated-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-  const filePath = path.join(uploadsDir, fileName);
-
-  const buffer = Buffer.from(base64Data, 'base64');
+  const filePath = path.join(uploadsDir, fileName.replace('uploads/', ''));
   fs.writeFileSync(filePath, buffer);
-
-  return `/uploads/${fileName}`;
+  return `/${fileName}`;
 }
 
 // ============================================
@@ -163,7 +186,7 @@ export async function generateSceneImage(
     for (let i = 0; i < charsWithProfile.length; i++) {
       const char = charsWithProfile[i];
       if (char.profileImage) {
-        const imageData = imageToBase64(char.profileImage);
+        const imageData = await imageToBase64(char.profileImage);
         if (imageData) {
           referenceImages.push({
             inlineData: {
@@ -243,7 +266,7 @@ export async function generateSceneImage(
     for (const part of responseParts) {
       const inlineData = (part as { inlineData?: { data: string; mimeType: string } }).inlineData;
       if (inlineData) {
-        const imageUrl = saveBase64Image(inlineData.data, inlineData.mimeType);
+        const imageUrl = await saveBase64Image(inlineData.data, inlineData.mimeType);
 
         console.log('');
         console.log('✅ ========================================');
