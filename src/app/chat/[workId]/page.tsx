@@ -74,7 +74,8 @@ export default function ChatPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);        // 초기 작품 로딩
+  const [sessionLoading, setSessionLoading] = useState(false); // 세션 전환 로딩
   const [sending, setSending] = useState(false);
   const [showOpeningSelect, setShowOpeningSelect] = useState(false);
   const [selectedOpening, setSelectedOpening] = useState<string | null>(null);
@@ -266,7 +267,7 @@ export default function ChatPage() {
   // 기존 세션 불러오기
   const loadExistingSession = async (sessionId: string) => {
     try {
-      setLoading(true);
+      setSessionLoading(true);
       const response = await fetch(`/api/chat/session/${sessionId}`);
 
       if (!response.ok) {
@@ -317,6 +318,7 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Failed to load existing session:', error);
     } finally {
+      setSessionLoading(false);
       setLoading(false);
     }
   };
@@ -655,10 +657,21 @@ export default function ChatPage() {
     );
   }, [work, session]);
 
-  if (loading) {
+  if (loading && !work) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600 dark:text-gray-400">로딩 중...</div>
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+        <MainHeader />
+        <ChatHistorySidebar />
+        <div className={`
+          flex items-center justify-center min-h-screen
+          transition-all duration-300
+          ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}
+        `}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+            <div className="text-sm text-gray-500 dark:text-gray-400">로딩 중...</div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1062,7 +1075,16 @@ export default function ChatPage() {
         ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}
       `}>
         <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
-          {messages.map((message) => {
+          {/* 세션 전환 중 오버레이 */}
+          {sessionLoading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+                <span className="text-sm text-gray-500 dark:text-gray-400">대화 불러오는 중...</span>
+              </div>
+            </div>
+          )}
+          {!sessionLoading && messages.map((message) => {
             const { messageType } = message;
             const character = message.character;
 
