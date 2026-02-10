@@ -2,8 +2,18 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+const AUTHOR_EMAIL = 'kjh1471417@gmail.com';
+
 async function main() {
   console.log('시드 데이터 생성 시작...');
+
+  // 작성자 조회
+  const author = await prisma.user.findUnique({ where: { email: AUTHOR_EMAIL } });
+  if (!author) {
+    console.error(`작성자를 찾을 수 없습니다: ${AUTHOR_EMAIL}`);
+    process.exit(1);
+  }
+  console.log(`작성자: ${author.name} (${author.email})`);
 
   // 기존 데이터 삭제
   await prisma.message.deleteMany();
@@ -21,6 +31,7 @@ async function main() {
   // ============================================================
   const work1 = await prisma.work.create({
     data: {
+      authorId: author.id,
       title: '빌런과의 일상',
       description:
         '명월 아카데미 빌런과에 배정된 당신. 히어로가 되고 싶었지만, 현실은 빌런과의 문제아들 사이에서 살아남아야 하는 처지. 과연 당신은 이곳에서 살아남을 수 있을까?',
@@ -205,6 +216,7 @@ async function main() {
   // ============================================================
   const work2 = await prisma.work.create({
     data: {
+      authorId: author.id,
       title: '별빛 카페의 비밀',
       description:
         '도심 골목 속 숨겨진 카페 "별빛". 이곳의 바리스타들은 저마다 비밀을 품고 있다. 우연히 이 카페의 아르바이트생이 된 당신은, 그들의 이야기 속으로 빠져든다.',
@@ -402,6 +414,7 @@ async function main() {
   // ============================================================
   const work3 = await prisma.work.create({
     data: {
+      authorId: author.id,
       title: '자정의 저택',
       description:
         '초대장 한 장을 받고 찾아간 산속 저택. 문이 닫히고, 전화도 되지 않는다. 저택 안의 인물들은 모두 무언가를 숨기고 있다. 자정이 되면 한 명이 사라진다.',
@@ -597,6 +610,7 @@ async function main() {
   // ============================================================
   const work4 = await prisma.work.create({
     data: {
+      authorId: author.id,
       title: '천년의 약속',
       description:
         '고대 신전에서 깨어난 당신. 천년 전의 기억은 없지만, 당신을 기다렸다는 존재들이 있다. 신과 인간 사이에서, 잊어버린 약속을 되찾아야 한다.',
@@ -792,6 +806,7 @@ async function main() {
   // ============================================================
   const work5 = await prisma.work.create({
     data: {
+      authorId: author.id,
       title: '네온 시티 2087',
       description:
         '2087년, AI가 모든 것을 지배하는 도시. 당신은 기억이 조작된 채 깨어난다. 지하 해커 조직과 함께 진실을 파헤치는 사이버펑크 어드벤처.',
@@ -995,6 +1010,7 @@ async function main() {
   // ============================================================
   const work6 = await prisma.work.create({
     data: {
+      authorId: author.id,
       title: '우리 사이의 계절',
       description:
         '대학교 동아리방에서 시작된 이야기. 밴드 동아리 "시즌"의 멤버들과 함께하는 캠퍼스 라이프. 음악과 우정, 그리고 설레는 감정 사이에서.',
