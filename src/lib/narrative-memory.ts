@@ -492,6 +492,73 @@ export async function decayMemoryStrength(sessionId: string) {
   }
 }
 
+/**
+ * 약한 기억 정리 (Pruning)
+ *
+ * 1. strength가 임계값 이하이고 한번도 언급되지 않은 기억 삭제
+ * 2. 세션당 최대 기억 수 초과 시 중요도/강도 낮은 것부터 삭제
+ */
+export async function pruneWeakMemories(
+  sessionId: string,
+  options: {
+    minStrength?: number;
+    maxPerSession?: number;
+  } = {}
+): Promise<number> {
+  const { minStrength = 0.15, maxPerSession = 100 } = options;
+
+  // 1. 약한 기억 삭제 (strength < 임계값 + 한번도 언급 안됨)
+  const deletedWeak = await prisma.characterMemory.deleteMany({
+    where: {
+      sessionId,
+      strength: { lt: minStrength },
+      mentionedCount: 0,
+    },
+  });
+
+  // 2. 세션당 최대 수 초과 시 오래된 것 삭제
+  const totalCount = await prisma.characterMemory.count({ where: { sessionId } });
+  let deletedOverflow = 0;
+
+  if (totalCount > maxPerSession) {
+    const oldMemories = await prisma.characterMemory.findMany({
+      where: { sessionId },
+      orderBy: [{ importance: 'asc' }, { strength: 'asc' }, { createdAt: 'asc' }],
+      take: totalCount - maxPerSession,
+      select: { id: true },
+    });
+
+    if (oldMemories.length > 0) {
+      const result = await prisma.characterMemory.deleteMany({
+        where: { id: { in: oldMemories.map((m) => m.id) } },
+      });
+      deletedOverflow = result.count;
+    }
+  }
+
+  const totalDeleted = deletedWeak.count + deletedOverflow;
+  if (totalDeleted > 0) {
+    console.log(
+      `[NarrativeMemory] Pruned ${totalDeleted} memories (weak: ${deletedWeak.count}, overflow: ${deletedOverflow})`
+    );
+  }
+
+  return totalDeleted;
+}
+
+/**
+ * 만료된 이미지 캐시 정리
+ */
+export async function cleanExpiredImageCache(): Promise<number> {
+  const result = await prisma.generatedImageCache.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+  if (result.count > 0) {
+    console.log(`[ImageCache] Cleaned ${result.count} expired entries`);
+  }
+  return result.count;
+}
+
 // ============================================================
 // 서사 컨텍스트 생성 (Gemini 프롬프트용)
 // ============================================================
@@ -704,6 +771,10 @@ export default {
   saveCharacterMemory,
   searchCharacterMemories,
   markMemoryMentioned,
+  pruneWeakMemories,
+
+  // 캐시 관리
+  cleanExpiredImageCache,
 
   // 컨텍스트 생성
   buildNarrativeContext,

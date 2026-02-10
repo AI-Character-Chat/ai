@@ -12,8 +12,10 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { put } from '@vercel/blob';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import prisma from './prisma';
 
 // Gemini API 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -142,6 +144,73 @@ async function saveBase64Image(base64Data: string, mimeType: string): Promise<st
 }
 
 // ============================================
+// 이미지 캐시 함수
+// ============================================
+
+/**
+ * 프롬프트 해시 생성 (SHA-256, 32자)
+ */
+function generatePromptHash(narratorText: string, characterNames: string[]): string {
+  const content = `${narratorText.trim()}|${characterNames.sort().join(',')}`;
+  return crypto.createHash('sha256').update(content).digest('hex').substring(0, 32);
+}
+
+/**
+ * 캐시된 이미지 조회
+ */
+async function getCachedImage(characterKey: string, promptHash: string): Promise<string | null> {
+  try {
+    const cached = await prisma.generatedImageCache.findUnique({
+      where: { characterId_promptHash: { characterId: characterKey, promptHash } },
+    });
+
+    if (cached && cached.expiresAt > new Date()) {
+      return cached.imageUrl;
+    }
+
+    // 만료된 캐시 삭제
+    if (cached) {
+      await prisma.generatedImageCache.delete({ where: { id: cached.id } }).catch(() => {});
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 생성된 이미지를 캐시에 저장 (7일 TTL)
+ */
+async function cacheGeneratedImage(
+  characterKey: string,
+  promptHash: string,
+  imageUrl: string,
+  imagePrompt: string
+): Promise<void> {
+  try {
+    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7일
+    await prisma.generatedImageCache.upsert({
+      where: { characterId_promptHash: { characterId: characterKey, promptHash } },
+      create: {
+        characterId: characterKey,
+        promptHash,
+        imageUrl,
+        imagePrompt: imagePrompt.substring(0, 2000),
+        expiresAt: new Date(Date.now() + CACHE_TTL),
+      },
+      update: {
+        imageUrl,
+        imagePrompt: imagePrompt.substring(0, 2000),
+        expiresAt: new Date(Date.now() + CACHE_TTL),
+      },
+    });
+  } catch (error) {
+    console.error('[ImageCache] 저장 실패:', error);
+  }
+}
+
+// ============================================
 // 메인 이미지 생성 함수
 // ============================================
 
@@ -165,6 +234,17 @@ export async function generateSceneImage(
   characterDialogues?: CharacterInfo[]
 ): Promise<ImageGenerationResult> {
   try {
+    // 캐시 확인
+    const characterNames = characterProfiles.map(c => c.name);
+    const promptHash = generatePromptHash(narratorText, characterNames);
+    const characterKey = characterNames.sort().join('-').substring(0, 50) || 'scene';
+
+    const cachedUrl = await getCachedImage(characterKey, promptHash);
+    if (cachedUrl) {
+      console.log('🎨 [캐시 히트] 기존 이미지 사용:', cachedUrl);
+      return { success: true, imageUrl: cachedUrl };
+    }
+
     console.log('');
     console.log('🎨 ========================================');
     console.log(`🎨 Gemini 이미지 생성 (${IMAGE_MODEL})`);
@@ -273,6 +353,9 @@ export async function generateSceneImage(
         console.log('✅ 이미지 생성 완료!');
         console.log('✅ ========================================');
         console.log('🖼️ URL:', imageUrl);
+
+        // 캐시에 저장 (비동기, 실패해도 무시)
+        cacheGeneratedImage(characterKey, promptHash, imageUrl, prompt).catch(() => {});
 
         return { success: true, imageUrl };
       }

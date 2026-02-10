@@ -293,3 +293,63 @@ export async function saveConversationsForMultipleCharacters(
     console.error('[Memory] 다중 저장 실패:', error?.message || error);
   }
 }
+
+/**
+ * Mem0 메모리 Pruning (오래된 기억 정리)
+ *
+ * 캐릭터당 최대 기억 수를 초과하면 오래된 기억을 삭제하여
+ * 벡터 검색 품질 유지 및 비용 절감
+ *
+ * @param userId - 유저 ID
+ * @param characterId - 캐릭터 ID
+ * @param maxMemories - 캐릭터당 최대 기억 수 (기본: 50)
+ * @returns 삭제된 기억 수
+ */
+export async function pruneMemories(
+  userId: string,
+  characterId: string,
+  maxMemories: number = 50
+): Promise<number> {
+  if (checkRateLimit()) return 0;
+
+  try {
+    const memory = getMemory();
+    const allMemories = await memory.getAll({
+      userId,
+      agentId: characterId,
+    });
+
+    const memories = allMemories.results || [];
+    if (memories.length <= maxMemories) return 0;
+
+    // 오래된 것부터 삭제
+    const sorted = [...memories].sort(
+      (a: any, b: any) =>
+        new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+    );
+
+    const toDelete = sorted.slice(0, memories.length - maxMemories);
+    let deleted = 0;
+
+    for (const mem of toDelete) {
+      try {
+        await memory.delete(mem.id);
+        deleted++;
+      } catch {
+        // 개별 삭제 실패는 무시
+      }
+    }
+
+    if (deleted > 0) {
+      console.log(`[Memory] Pruned ${deleted}/${memories.length} memories for character ${characterId}`);
+    }
+
+    return deleted;
+  } catch (error: any) {
+    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('Resource exhausted')) {
+      setRateLimited();
+    }
+    console.error('[Memory] Pruning 실패:', error?.message || error);
+    return 0;
+  }
+}

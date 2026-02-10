@@ -6,6 +6,7 @@ import {
   formatMemoriesForPrompt,
   searchMemoriesForMultipleCharacters,
   saveConversationsForMultipleCharacters,
+  pruneMemories,
 } from '@/lib/memory';
 import {
   formatConversationHistory,
@@ -13,7 +14,7 @@ import {
   extractRecentText,
   extractKeywords,
 } from '@/lib/prompt-builder';
-import narrativeMemory, { decayMemoryStrength } from '@/lib/narrative-memory';
+import narrativeMemory, { decayMemoryStrength, pruneWeakMemories, cleanExpiredImageCache } from '@/lib/narrative-memory';
 import { auth } from '@/lib/auth';
 
 // 새 채팅 세션 생성
@@ -444,6 +445,12 @@ export async function PUT(request: NextRequest) {
           decayMemoryStrength(sessionId).catch(() => {});
         }
 
+        // [7-1] 약한 기억 정리 (25턴마다)
+        if (session.turnCount > 0 && session.turnCount % 25 === 0) {
+          pruneWeakMemories(sessionId).catch(() => {});
+          cleanExpiredImageCache().catch(() => {});
+        }
+
         // [8] Mem0 장기 기억 저장 (10턴마다)
         if (session.turnCount > 0 && session.turnCount % 10 === 0 && storyResponse.responses.length > 0) {
           const conversations = storyResponse.responses.map(r => ({
@@ -454,6 +461,14 @@ export async function PUT(request: NextRequest) {
             ],
           }));
           saveConversationsForMultipleCharacters(conversations, memUserId).catch(() => {});
+
+          // [8-1] Mem0 Pruning (50턴마다, 캐릭터당 최대 50개 유지)
+          if (session.turnCount % 50 === 0) {
+            const characterIds = storyResponse.responses.map(r => r.characterId);
+            for (const charId of characterIds) {
+              pruneMemories(memUserId, charId, 50).catch(() => {});
+            }
+          }
         }
 
         // [9] 세션 업데이트
