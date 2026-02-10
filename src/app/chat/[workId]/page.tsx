@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -581,7 +581,7 @@ export default function ChatPage() {
   };
 
   // 텍스트에서 *행동* 형식을 이탤릭으로 변환
-  const formatMessage = (text: string) => {
+  const formatMessage = useCallback((text: string) => {
     // *행동* 형식을 span으로 변환
     const parts = text.split(/(\*[^*]+\*)/g);
     return parts.map((part, index) => {
@@ -594,9 +594,9 @@ export default function ChatPage() {
       }
       return <span key={index}>{part}</span>;
     });
-  };
+  }, []);
 
-  const getCharacterColor = (characterId: string | null) => {
+  const getCharacterColor = useCallback((characterId: string | null) => {
     if (!characterId || !work) return 'bg-gray-200 dark:bg-gray-700';
     const index = work.characters.findIndex((c) => c.id === characterId);
     const colors = [
@@ -608,10 +608,10 @@ export default function ChatPage() {
       'bg-indigo-500',
     ];
     return colors[index % colors.length];
-  };
+  }, [work]);
 
   // 현재 장면에 있는 캐릭터만 필터링
-  const getPresentCharacters = () => {
+  const getPresentCharacters = useCallback(() => {
     if (!work || !session) return [];
 
     // presentCharacters가 배열인지 확인하고 안전하게 처리
@@ -643,7 +643,7 @@ export default function ChatPage() {
         presentName.includes(c.name.split('(')[0].trim())
       )
     );
-  };
+  }, [work, session]);
 
   if (loading) {
     return (

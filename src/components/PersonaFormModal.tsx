@@ -25,6 +25,9 @@ export default function PersonaFormModal({
     >
       <div
         className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEditing ? '페르소나 수정' : '페르소나 추가'}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -32,7 +35,7 @@ export default function PersonaFormModal({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {isEditing ? '페르소나 수정' : '페르소나 추가'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+          <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>

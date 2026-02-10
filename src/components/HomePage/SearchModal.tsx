@@ -1,6 +1,7 @@
 'use client';
 
 import { RefObject } from 'react';
+import Image from 'next/image';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface SearchModalProps {
@@ -23,6 +24,9 @@ export default function SearchModal({
     >
       <div
         className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-label="작품 검색"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Header */}
@@ -85,12 +89,13 @@ export default function SearchModal({
                     className="flex gap-3 p-3 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     {/* Thumbnail */}
-                    <div className="w-14 h-14 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden">
+                    <div className="relative w-14 h-14 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden">
                       {work.thumbnail ? (
-                        <img
+                        <Image
                           src={work.thumbnail}
                           alt={work.title}
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">

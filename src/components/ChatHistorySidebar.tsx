@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useLayout } from '@/contexts/LayoutContext';
@@ -80,7 +81,7 @@ export default function ChatHistorySidebar() {
   // 축소 모드일 때 (아이콘만 표시)
   if (sidebarCollapsed) {
     return (
-      <aside className="fixed top-0 left-0 h-full w-16 bg-white dark:bg-gray-800 shadow-md z-30 pt-16">
+      <aside className="fixed top-0 left-0 h-full w-16 bg-white dark:bg-gray-800 shadow-md z-30 pt-16" role="navigation" aria-label="채팅 기록">
         <div className="flex flex-col items-center py-4 space-y-3 overflow-y-auto h-full">
           {/* 작품 만들기 버튼 */}
           <Link
@@ -103,14 +104,15 @@ export default function ChatHistorySidebar() {
                 <Link
                   key={chat.id}
                   href={`/chat/${chat.workId}?session=${chat.id}`}
-                  className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden hover:ring-2 hover:ring-primary-500 transition-all flex-shrink-0"
+                  className="relative w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden hover:ring-2 hover:ring-primary-500 transition-all flex-shrink-0"
                   title={chat.work.title}
                 >
                   {chat.work.thumbnail ? (
-                    <img
+                    <Image
                       src={chat.work.thumbnail}
                       alt={chat.work.title}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -216,12 +218,13 @@ export default function ChatHistorySidebar() {
                     >
                       <div className="flex gap-3">
                         {/* Thumbnail */}
-                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                        <div className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden">
                           {chat.work.thumbnail ? (
-                            <img
+                            <Image
                               src={chat.work.thumbnail}
                               alt={chat.work.title}
-                              className="w-full h-full object-cover"
+                              fill
+                              className="object-cover"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">

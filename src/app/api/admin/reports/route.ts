@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import createLogger from '@/lib/logger';
+
+const log = createLogger('admin/reports');
 
 /**
  * 신고 목록 조회 (관리자 전용)
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
-    console.error('Admin reports fetch error:', error);
+    log.error('신고 목록 조회 실패', error);
     return NextResponse.json({ error: '신고 목록 조회에 실패했습니다.' }, { status: 500 });
   }
 }
@@ -85,7 +88,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true, report });
   } catch (error) {
-    console.error('Admin report update error:', error);
+    log.error('신고 상태 업데이트 실패', error);
     return NextResponse.json({ error: '신고 상태 업데이트에 실패했습니다.' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { RefObject } from 'react';
+import Image from 'next/image';
 
 interface ProfileForm {
   nickname: string;
@@ -34,6 +35,9 @@ export default function ProfileEditModal({
     >
       <div
         className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-label="프로필 수정"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -63,10 +67,12 @@ export default function ProfileEditModal({
                 className="hidden"
               />
               {profileImage ? (
-                <img
+                <Image
                   src={profileImage}
                   alt={profileForm.nickname || ''}
-                  className="w-24 h-24 rounded-2xl object-cover"
+                  width={96}
+                  height={96}
+                  className="rounded-2xl object-cover"
                 />
               ) : (
                 <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">

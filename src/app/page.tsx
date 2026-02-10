@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -253,7 +253,7 @@ export default function HomePage() {
   }, [session]);
 
   // 프로필 이미지 업로드 핸들러
-  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -289,10 +289,10 @@ export default function HomePage() {
     } finally {
       setProfileImageUploading(false);
     }
-  };
+  }, []);
 
   // 프로필 저장 핸들러
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = useCallback(async () => {
     setProfileSaving(true);
     try {
       const response = await fetch('/api/user/profile', {
@@ -337,7 +337,7 @@ export default function HomePage() {
     } finally {
       setProfileSaving(false);
     }
-  };
+  }, [profileForm, profileImage]);
 
   const fetchNotifications = async () => {
     try {
@@ -361,7 +361,7 @@ export default function HomePage() {
     }
   };
 
-  const getTimeAgo = (dateString: string) => {
+  const getTimeAgo = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -374,7 +374,7 @@ export default function HomePage() {
     if (hours < 24) return `${hours}시간 전`;
     if (days < 7) return `${days}일 전`;
     return date.toLocaleDateString('ko-KR');
-  };
+  }, []);
 
   // 선택된 작품의 좋아요 상태 가져오기
   useEffect(() => {
@@ -733,7 +733,7 @@ export default function HomePage() {
     }
   };
 
-  const sortedMyWorks = [...myWorks].sort((a, b) => {
+  const sortedMyWorks = useMemo(() => [...myWorks].sort((a, b) => {
     switch (myWorksSortBy) {
       case 'chatSessions':
         return b._count.chatSessions - a._count.chatSessions;
@@ -746,7 +746,7 @@ export default function HomePage() {
       default:
         return 0;
     }
-  });
+  }), [myWorks, myWorksSortBy]);
 
   const fetchLikeStatus = async (workId: string) => {
     try {

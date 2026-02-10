@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -166,9 +167,9 @@ export default function MainHeader({
               <button
                 onClick={toggleSidebar}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                title="메뉴"
+                aria-label="사이드바 메뉴 열기"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
@@ -187,7 +188,7 @@ export default function MainHeader({
               <button
                 onClick={() => setSearchOpen(true)}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                title="검색"
+                aria-label="검색"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -201,7 +202,7 @@ export default function MainHeader({
                   markNotificationsAsRead();
                 }}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative"
-                title="알림"
+                aria-label={unreadCount > 0 ? `알림 ${unreadCount}개 읽지 않음` : '알림'}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -221,13 +222,17 @@ export default function MainHeader({
                         ? 'bg-violet-100 dark:bg-violet-900/30 ring-2 ring-violet-500'
                         : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
-                    title="메뉴"
+                    aria-label="프로필 메뉴"
+                    aria-expanded={profileDropdownOpen}
+                    aria-haspopup="true"
                   >
                     {displayImage ? (
-                      <img
+                      <Image
                         src={displayImage}
                         alt={displayName || ''}
-                        className="w-8 h-8 rounded-full object-cover"
+                        width={32}
+                        height={32}
+                        className="rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
@@ -350,9 +355,9 @@ export default function MainHeader({
                       className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                       onClick={() => setSearchOpen(false)}
                     >
-                      <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
+                      <div className="relative w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
                         {work.thumbnail ? (
-                          <img src={work.thumbnail} alt="" className="w-full h-full object-cover" />
+                          <Image src={work.thumbnail} alt="" fill className="object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

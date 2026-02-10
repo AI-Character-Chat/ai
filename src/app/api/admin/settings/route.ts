@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import createLogger from '@/lib/logger';
+
+const log = createLogger('admin/settings');
 
 /**
  * 사이트 설정 조회 (관리자 전용)
@@ -24,7 +27,7 @@ export async function GET() {
 
     return NextResponse.json({ settings });
   } catch (error) {
-    console.error('Settings fetch error:', error);
+    log.error('설정 조회 실패', error);
     return NextResponse.json({ error: '설정 조회에 실패했습니다.' }, { status: 500 });
   }
 }
@@ -61,7 +64,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true, setting });
   } catch (error) {
-    console.error('Setting update error:', error);
+    log.error('설정 저장 실패', error);
     return NextResponse.json({ error: '설정 저장에 실패했습니다.' }, { status: 500 });
   }
 }
@@ -92,7 +95,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.siteSetting.delete({ where: { key } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Setting delete error:', error);
+    log.error('설정 삭제 실패', error);
     return NextResponse.json({ error: '설정 삭제에 실패했습니다.' }, { status: 500 });
   }
 }

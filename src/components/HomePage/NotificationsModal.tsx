@@ -27,6 +27,9 @@ export default function NotificationsModal({
     >
       <div
         className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[80vh] overflow-hidden shadow-2xl flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-label="알림"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
