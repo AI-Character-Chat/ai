@@ -53,3 +53,4 @@ coverage/
 *.log
 *.tmp
 *.temp
+.env*.local

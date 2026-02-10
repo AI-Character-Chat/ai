@@ -466,6 +466,32 @@ export async function markMemoryMentioned(memoryId: string) {
   });
 }
 
+/**
+ * 기억 강도 자연 감소 (Memory Decay)
+ *
+ * 매 턴마다 호출하여 기억 강도를 자연스럽게 감소시킴
+ * - episodic (일화적): factor 0.95 (빠르게 감소)
+ * - semantic (의미적): factor 0.98 (느리게 감소)
+ * - emotional (감정적): factor 0.97 (중간)
+ * - strength가 0.1 이하이면 감소하지 않음 (최소값 보장)
+ */
+export async function decayMemoryStrength(sessionId: string) {
+  const decayFactors: Record<string, number> = {
+    episodic: 0.95,
+    semantic: 0.98,
+    emotional: 0.97,
+  };
+
+  for (const [memoryType, factor] of Object.entries(decayFactors)) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "CharacterMemory" SET strength = strength * $1 WHERE "sessionId" = $2 AND "memoryType" = $3 AND strength > 0.1`,
+      factor,
+      sessionId,
+      memoryType
+    );
+  }
+}
+
 // ============================================================
 // 서사 컨텍스트 생성 (Gemini 프롬프트용)
 // ============================================================

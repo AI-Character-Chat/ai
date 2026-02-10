@@ -389,13 +389,13 @@ export default function ChatPage() {
     const userMessage = inputMessage.trim();
     setInputMessage('');
     setSending(true);
-    
+
     // 메시지 전송 직후에도 입력란에 포커스 유지
     setTimeout(() => {
       inputRef.current?.focus();
     }, 50);
 
-    // 즉시 유저 메시지 표시
+    // 즉시 유저 메시지 표시 (임시)
     const tempUserMessage: Message = {
       id: `temp-${Date.now()}`,
       characterId: null,
@@ -410,97 +410,104 @@ export default function ChatPage() {
       const response = await fetch('/api/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: session.id,
-          content: userMessage,
-        }),
+        body: JSON.stringify({ sessionId: session.id, content: userMessage }),
       });
 
-      // HTTP 에러 상태 확인
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: '알 수 없는 오류가 발생했습니다.' }));
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      // SSE 스트림 처리
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('스트림을 읽을 수 없습니다.');
 
-      // API 응답에 에러가 있는지 확인
-      if (data.error) {
-        throw new Error(data.error);
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let userMessageReplaced = false;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          const lines = part.split('\n');
+          let eventType = '';
+          let data = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7);
+            if (line.startsWith('data: ')) data = line.slice(6);
+          }
+
+          if (!eventType || !data) continue;
+
+          try {
+            const parsed = JSON.parse(data);
+
+            switch (eventType) {
+              case 'user_message':
+                // 임시 메시지를 실제 메시지로 교체
+                if (!userMessageReplaced) {
+                  setMessages((prev) => [
+                    ...prev.filter((m) => m.id !== tempUserMessage.id),
+                    { ...parsed, messageType: 'user' },
+                  ]);
+                  userMessageReplaced = true;
+                }
+                break;
+
+              case 'narrator':
+                setMessages((prev) => [...prev, {
+                  id: parsed.id || `narrator-${Date.now()}`,
+                  characterId: null,
+                  content: parsed.content,
+                  messageType: 'narrator',
+                  createdAt: new Date().toISOString(),
+                  character: null,
+                }]);
+                break;
+
+              case 'character_response':
+                setMessages((prev) => [...prev, {
+                  ...parsed,
+                  messageType: 'dialogue' as const,
+                }]);
+                break;
+
+              case 'session_update':
+                if (parsed.session) {
+                  const s = parsed.session;
+                  setSession({
+                    ...s,
+                    presentCharacters: Array.isArray(s.presentCharacters)
+                      ? s.presentCharacters
+                      : (typeof s.presentCharacters === 'string' ? JSON.parse(s.presentCharacters) : []),
+                    recentEvents: Array.isArray(s.recentEvents)
+                      ? s.recentEvents
+                      : (typeof s.recentEvents === 'string' ? JSON.parse(s.recentEvents) : []),
+                  });
+                }
+                break;
+
+              case 'error':
+                throw new Error(parsed.error || '메시지 전송에 실패했습니다.');
+
+              case 'done':
+                break;
+            }
+          } catch (parseError) {
+            if (eventType === 'error') {
+              throw parseError;
+            }
+          }
+        }
       }
 
-      // 새 메시지들 구성
-      const newMessages: Message[] = [];
-
-      // 유저 메시지
-      if (data.userMessage) {
-        newMessages.push({
-          ...data.userMessage,
-          messageType: 'user',
-        });
-      }
-
-      // 나레이터 메시지 (있는 경우)
-      let narratorMessageId: string | null = null;
-      let narratorText: string | null = null;
-      if (data.narratorNote) {
-        narratorMessageId = `narrator-${Date.now()}`;
-        narratorText = data.narratorNote;
-        newMessages.push({
-          id: narratorMessageId,
-          characterId: null,
-          content: data.narratorNote,
-          messageType: 'narrator',
-          createdAt: new Date().toISOString(),
-          character: null,
-        });
-      }
-
-      // 캐릭터 응답들
-      if (data.characterResponses && Array.isArray(data.characterResponses)) {
-        data.characterResponses.forEach((r: Message) => {
-          const msg: Message = {
-            ...r,
-            messageType: 'dialogue' as const,
-          };
-          newMessages.push(msg);
-        });
-      }
-
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== tempUserMessage.id),
-        ...newMessages,
-      ]);
-
-      // [임시 비활성화] 상황 이미지 생성 요청
-      // TODO: 스프라이트 시스템 구축 후 재활성화
-      // if (narratorMessageId && narratorText && data.presentCharacters) {
-      //   generateSceneImage(
-      //     narratorMessageId,
-      //     narratorText,
-      //     data.presentCharacters,
-      //     data.characterDialogues
-      //   );
-      // }
-
-      if (data.session) {
-        // presentCharacters가 배열인지 확인하고 정규화
-        const normalizedSession = {
-          ...data.session,
-          presentCharacters: Array.isArray(data.session.presentCharacters) 
-            ? data.session.presentCharacters 
-            : (typeof data.session.presentCharacters === 'string' 
-                ? JSON.parse(data.session.presentCharacters) 
-                : []),
-          recentEvents: Array.isArray(data.session.recentEvents)
-            ? data.session.recentEvents
-            : (typeof data.session.recentEvents === 'string'
-                ? JSON.parse(data.session.recentEvents)
-                : []),
-        };
-        setSession(normalizedSession);
-      }
-      
       // 응답 받은 후 입력란에 자동 포커스
       setTimeout(() => {
         inputRef.current?.focus();
@@ -508,28 +515,21 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Failed to send message:', error);
       const errorMessage = error instanceof Error ? error.message : '메시지 전송에 실패했습니다.';
-      
-      // 에러 메시지를 나레이터 메시지로 표시
-      const errorNarratorMessage: Message = {
-        id: `error-${Date.now()}`,
-        characterId: null,
-        content: `[시스템 오류] ${errorMessage}`,
-        messageType: 'narrator',
-        createdAt: new Date().toISOString(),
-        character: null,
-      };
-      
+
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMessage.id),
-        errorNarratorMessage,
+        {
+          id: `error-${Date.now()}`,
+          characterId: null,
+          content: `[시스템 오류] ${errorMessage}`,
+          messageType: 'narrator',
+          createdAt: new Date().toISOString(),
+          character: null,
+        },
       ]);
-      
-      // 실패 시 임시 메시지 제거
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
       setInputMessage(userMessage);
     } finally {
       setSending(false);
-      // 에러 발생 후에도 입력란에 포커스
       setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
