@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
 
 // 캐릭터 상세 조회
 export async function GET(
@@ -39,7 +40,25 @@ export async function PUT(
   { params }: { params: { characterId: string } }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const characterId = params.characterId;
+
+    // 캐릭터 + 작품 조회로 소유자 확인
+    const existing = await prisma.character.findUnique({
+      where: { id: characterId },
+      include: { work: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: '캐릭터를 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (existing.work.authorId !== session.user.id) {
+      return NextResponse.json({ error: '수정 권한이 없습니다.' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { name, profileImage, prompt } = body;
 
@@ -69,7 +88,24 @@ export async function DELETE(
   { params }: { params: { characterId: string } }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const characterId = params.characterId;
+
+    // 소유자 확인
+    const existing = await prisma.character.findUnique({
+      where: { id: characterId },
+      include: { work: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: '캐릭터를 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (existing.work.authorId !== session.user.id) {
+      return NextResponse.json({ error: '삭제 권한이 없습니다.' }, { status: 403 });
+    }
 
     await prisma.character.delete({
       where: { id: characterId },

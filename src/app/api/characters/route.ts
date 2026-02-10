@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { prismaErrorToResponse } from '@/lib/prismaErrorHandler';
+import { auth } from '@/lib/auth';
 
 // 캐릭터 생성
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { workId, name, profileImage, prompt } = body;
 
@@ -15,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 작품 존재 확인
+    // 작품 존재 및 소유자 확인
     const work = await prisma.work.findUnique({
       where: { id: workId },
     });
@@ -24,6 +30,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: '작품을 찾을 수 없습니다.' },
         { status: 404 }
+      );
+    }
+
+    if (work.authorId !== session.user.id) {
+      return NextResponse.json(
+        { error: '이 작품에 캐릭터를 추가할 권한이 없습니다.' },
+        { status: 403 }
       );
     }
 
@@ -39,7 +52,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(character);
   } catch (error) {
     console.error('Error creating character:', error);
-    // Prisma 에러 처리 (공식 문서 기반)
     if (error instanceof Error && error.constructor.name.includes('Prisma')) {
       return prismaErrorToResponse(error);
     }
@@ -71,7 +83,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(characters);
   } catch (error) {
     console.error('Error fetching characters:', error);
-    // Prisma 에러 처리 (공식 문서 기반)
     if (error instanceof Error && error.constructor.name.includes('Prisma')) {
       return prismaErrorToResponse(error);
     }

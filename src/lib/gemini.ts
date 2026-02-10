@@ -18,6 +18,9 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import { replaceVariables } from './prompt-builder';
 
 // Gemini API 클라이언트 초기화
+if (!process.env.GEMINI_API_KEY) {
+  console.error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
+}
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Safety Settings - 창작 콘텐츠용 설정

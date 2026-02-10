@@ -339,6 +339,7 @@ model Message {
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   character Character?  @relation(fields: [characterId], references: [id], onDelete: SetNull)
 
+  @@index([sessionId, createdAt])
   @@index([sessionId])
   @@index([characterId])
 }
@@ -387,6 +388,7 @@ model ConversationLog {
 
   scene       Scene?   @relation(fields: [sceneId], references: [id])
 
+  @@index([sessionId, createdAt])
   @@index([sessionId])
   @@index([sceneId])
   @@index([speakerId])
@@ -426,6 +428,7 @@ model Scene {
   characterMemories   CharacterMemory[]
   conversationLogs    ConversationLog[]
 
+  @@index([sessionId, isActive])
   @@index([sessionId])
   @@index([isActive])
 }
@@ -541,6 +544,7 @@ model CharacterMemory {
   scene       Scene?   @relation(fields: [sceneId], references: [id])
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
+  @@index([sessionId, characterId, memoryType])
   @@index([sessionId])
   @@index([characterId])
   @@index([sceneId])

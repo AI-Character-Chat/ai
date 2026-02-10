@@ -144,10 +144,7 @@ export default function PersonaModal({
 
   const handleSelect = async (persona: Persona) => {
     if (onSelect && showSelectMode) {
-      console.log('PersonaModal: selecting persona', persona.name);
-      // 먼저 선택 콜백 실행 (async일 수 있음)
       await onSelect(persona);
-      console.log('PersonaModal: onSelect completed, closing modal');
       // 모달 닫기
       onClose();
     }

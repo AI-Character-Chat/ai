@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
 
 // 작품 상세 조회
 export async function GET(
@@ -56,7 +57,22 @@ export async function PUT(
   { params }: { params: { workId: string } }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const workId = params.workId;
+
+    // 소유자 확인
+    const existingWork = await prisma.work.findUnique({ where: { id: workId } });
+    if (!existingWork) {
+      return NextResponse.json({ error: '작품을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (existingWork.authorId !== session.user.id) {
+      return NextResponse.json({ error: '수정 권한이 없습니다.' }, { status: 403 });
+    }
+
     const body = await request.json();
     const {
       title,
@@ -103,7 +119,21 @@ export async function DELETE(
   { params }: { params: { workId: string } }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const workId = params.workId;
+
+    // 소유자 확인
+    const existingWork = await prisma.work.findUnique({ where: { id: workId } });
+    if (!existingWork) {
+      return NextResponse.json({ error: '작품을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (existingWork.authorId !== session.user.id) {
+      return NextResponse.json({ error: '삭제 권한이 없습니다.' }, { status: 403 });
+    }
 
     await prisma.work.delete({
       where: { id: workId },

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
 
 // 오프닝 생성
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       workId,
@@ -13,7 +19,7 @@ export async function POST(request: NextRequest) {
       order = 0,
       initialLocation = '알 수 없는 장소',
       initialTime = '알 수 없는 시간',
-      initialCharacters = [] // 초기 등장 캐릭터 (빈 배열이면 모든 캐릭터)
+      initialCharacters = []
     } = body;
 
     if (!workId || !title || !content) {
@@ -21,6 +27,15 @@ export async function POST(request: NextRequest) {
         { error: '작품 ID, 제목, 내용은 필수입니다.' },
         { status: 400 }
       );
+    }
+
+    // 작품 소유자 확인
+    const work = await prisma.work.findUnique({ where: { id: workId } });
+    if (!work) {
+      return NextResponse.json({ error: '작품을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (work.authorId !== session.user.id) {
+      return NextResponse.json({ error: '이 작품에 오프닝을 추가할 권한이 없습니다.' }, { status: 403 });
     }
 
     // 기본 오프닝으로 설정할 경우, 기존 기본 오프닝 해제
@@ -44,7 +59,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 응답 시 initialCharacters를 배열로 파싱
     return NextResponse.json({
       ...opening,
       initialCharacters: JSON.parse(opening.initialCharacters),
@@ -76,7 +90,6 @@ export async function GET(request: NextRequest) {
       orderBy: { order: 'asc' },
     });
 
-    // initialCharacters를 배열로 파싱해서 반환
     const parsedOpenings = openings.map(o => ({
       ...o,
       initialCharacters: JSON.parse(o.initialCharacters || '[]'),
@@ -95,6 +108,11 @@ export async function GET(request: NextRequest) {
 // 오프닝 수정
 export async function PUT(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, title, content, isDefault, order, initialLocation, initialTime, initialCharacters } = body;
 
@@ -105,16 +123,17 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // 기존 오프닝 조회
+    // 소유자 확인
     const existingOpening = await prisma.opening.findUnique({
       where: { id },
+      include: { work: true },
     });
 
     if (!existingOpening) {
-      return NextResponse.json(
-        { error: '오프닝을 찾을 수 없습니다.' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: '오프닝을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (existingOpening.work.authorId !== session.user.id) {
+      return NextResponse.json({ error: '수정 권한이 없습니다.' }, { status: 403 });
     }
 
     // 기본 오프닝으로 변경할 경우, 기존 기본 오프닝 해제
@@ -140,7 +159,6 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    // 응답 시 initialCharacters를 배열로 파싱
     return NextResponse.json({
       ...opening,
       initialCharacters: JSON.parse(opening.initialCharacters || '[]'),

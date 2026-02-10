@@ -235,6 +235,12 @@ export async function POST(request: NextRequest) {
 // 메시지 전송 (통합 스토리 응답)
 export async function PUT(request: NextRequest) {
   try {
+    // 인증 확인
+    const authSession = await auth();
+    if (!authSession?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { sessionId, content } = body;
 
@@ -243,6 +249,14 @@ export async function PUT(request: NextRequest) {
         { error: '세션 ID와 메시지 내용이 필요합니다.' },
         { status: 400 }
       );
+    }
+
+    // 메시지 길이 검증
+    if (typeof content !== 'string' || content.trim().length === 0) {
+      return NextResponse.json({ error: '메시지 내용이 비어있습니다.' }, { status: 400 });
+    }
+    if (content.length > 5000) {
+      return NextResponse.json({ error: '메시지는 5000자 이하여야 합니다.' }, { status: 400 });
     }
 
     // 세션 정보 조회
@@ -269,6 +283,11 @@ export async function PUT(request: NextRequest) {
         { error: '세션을 찾을 수 없습니다.' },
         { status: 404 }
       );
+    }
+
+    // 세션 소유자 확인
+    if (session.userId && session.userId !== authSession.user.id) {
+      return NextResponse.json({ error: '이 세션에 대한 접근 권한이 없습니다.' }, { status: 403 });
     }
 
     const characters = session.work.characters;
@@ -697,6 +716,12 @@ export async function PUT(request: NextRequest) {
 // 세션 메시지 조회
 export async function GET(request: NextRequest) {
   try {
+    // 인증 확인
+    const authSession = await auth();
+    if (!authSession?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
 
@@ -723,6 +748,11 @@ export async function GET(request: NextRequest) {
 
     if (!session) {
       return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    // 세션 소유자 확인
+    if (session.userId && session.userId !== authSession.user.id) {
+      return NextResponse.json({ error: '이 세션에 대한 접근 권한이 없습니다.' }, { status: 403 });
     }
 
     return NextResponse.json({
