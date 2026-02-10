@@ -104,6 +104,7 @@ export default function ChatHistorySidebar() {
                 <Link
                   key={chat.id}
                   href={`/chat/${chat.workId}?session=${chat.id}`}
+                  scroll={false}
                   className="relative w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden hover:ring-2 hover:ring-primary-500 transition-all flex-shrink-0"
                   title={chat.work.title}
                 >
@@ -214,6 +215,7 @@ export default function ChatHistorySidebar() {
                     <Link
                       key={chat.id}
                       href={`/chat/${chat.workId}?session=${chat.id}`}
+                      scroll={false}
                       className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                       <div className="flex gap-3">

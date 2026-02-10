@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import PersonaModal from '@/components/PersonaModal';
 import PersonaDropdown from '@/components/PersonaDropdown';
 import { useLayout } from '@/contexts/LayoutContext';
+import { useChatCache } from '@/contexts/ChatCacheContext';
 
 interface Persona {
   id: string;
@@ -65,14 +66,18 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const { data: authSession } = useSession();
   const { sidebarOpen, sidebarCollapsed, refreshSidebar } = useLayout();
+  const chatCache = useChatCache();
   const workId = params.workId as string;
   const existingSessionId = searchParams.get('session');
 
-  const [work, setWork] = useState<Work | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // 캐시에서 초기 데이터 로드 (즉시 렌더링)
+  const cached = existingSessionId ? chatCache.getCache(workId, existingSessionId) : null;
+
+  const [work, setWork] = useState<Work | null>(cached?.work || null);
+  const [session, setSession] = useState<Session | null>(cached?.session || null);
+  const [messages, setMessages] = useState<Message[]>(cached?.messages || []);
   const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(true);        // 초기 작품 로딩
+  const [loading, setLoading] = useState(!cached);        // 캐시 있으면 로딩 스킵
   const [sessionLoading, setSessionLoading] = useState(false); // 세션 전환 로딩
   const [sending, setSending] = useState(false);
   const [showOpeningSelect, setShowOpeningSelect] = useState(false);
@@ -141,9 +146,17 @@ export default function ChatPage() {
     }
   };
 
-  // 기존 세션 불러오기
+  // 기존 세션 불러오기 (세션 전환 시 캐시 우선 적용)
   useEffect(() => {
     if (existingSessionId && work) {
+      // 캐시에서 즉시 렌더링 후 백그라운드 갱신
+      const cachedEntry = chatCache.getCache(workId, existingSessionId);
+      if (cachedEntry) {
+        setSession(cachedEntry.session);
+        setMessages(cachedEntry.messages);
+        setShowOpeningSelect(false);
+        setLoading(false);
+      }
       loadExistingSession(existingSessionId);
     }
   }, [existingSessionId, work]);
@@ -258,14 +271,19 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Failed to fetch work:', error);
     } finally {
-      setLoading(false);
+      if (!cached) setLoading(false);
     }
   };
 
   // 기존 세션 불러오기
   const loadExistingSession = async (sessionId: string) => {
     try {
-      setSessionLoading(true);
+      // 캐시 히트 시 로딩 표시 없이 백그라운드 갱신
+      const cachedEntry = chatCache.getCache(workId, sessionId);
+      if (!cachedEntry) {
+        setSessionLoading(true);
+      }
+
       const response = await fetch(`/api/chat/session/${sessionId}`);
 
       if (!response.ok) {
@@ -299,8 +317,9 @@ export default function ChatPage() {
       setUserName(data.session.userName || '유저');
 
       // 메시지 설정
+      let formattedMessages: Message[] = [];
       if (data.messages && Array.isArray(data.messages)) {
-        const formattedMessages: Message[] = data.messages.map((msg: any) => ({
+        formattedMessages = data.messages.map((msg: any) => ({
           id: msg.id,
           characterId: msg.characterId,
           content: msg.content,
@@ -310,6 +329,15 @@ export default function ChatPage() {
           generatedImageUrl: msg.generatedImageUrl || null,
         }));
         setMessages(formattedMessages);
+      }
+
+      // 캐시 저장
+      if (work) {
+        chatCache.setCache(workId, sessionId, {
+          work,
+          session: normalizedSession,
+          messages: formattedMessages,
+        });
       }
 
       setShowOpeningSelect(false);
@@ -379,6 +407,28 @@ export default function ChatPage() {
         character: null,
       };
       setMessages([openingMessage]);
+
+      // 새 세션 캐시 저장
+      if (work && data.session) {
+        const normalizedSess = {
+          ...data.session,
+          presentCharacters: Array.isArray(data.session.presentCharacters)
+            ? data.session.presentCharacters
+            : (typeof data.session.presentCharacters === 'string'
+                ? JSON.parse(data.session.presentCharacters)
+                : []),
+          recentEvents: Array.isArray(data.session.recentEvents)
+            ? data.session.recentEvents
+            : (typeof data.session.recentEvents === 'string'
+                ? JSON.parse(data.session.recentEvents)
+                : []),
+        };
+        chatCache.setCache(workId, data.session.id, {
+          work,
+          session: normalizedSess,
+          messages: [openingMessage],
+        });
+      }
 
       // 사이드바 채팅 목록 새로고침
       refreshSidebar();
@@ -492,7 +542,7 @@ export default function ChatPage() {
               case 'session_update':
                 if (parsed.session) {
                   const s = parsed.session;
-                  setSession({
+                  const updatedSess = {
                     ...s,
                     presentCharacters: Array.isArray(s.presentCharacters)
                       ? s.presentCharacters
@@ -500,7 +550,9 @@ export default function ChatPage() {
                     recentEvents: Array.isArray(s.recentEvents)
                       ? s.recentEvents
                       : (typeof s.recentEvents === 'string' ? JSON.parse(s.recentEvents) : []),
-                  });
+                  };
+                  setSession(updatedSess);
+                  chatCache.updateSession(workId, s.id, updatedSess);
                 }
                 break;
 
@@ -508,6 +560,13 @@ export default function ChatPage() {
                 throw new Error(parsed.error || '메시지 전송에 실패했습니다.');
 
               case 'done':
+                // 응답 완료 시 캐시 업데이트
+                if (session) {
+                  setMessages(prev => {
+                    chatCache.updateMessages(workId, session.id, prev);
+                    return prev;
+                  });
+                }
                 break;
             }
           } catch (parseError) {
