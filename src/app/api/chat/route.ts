@@ -1,13 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { generateStoryResponse, generateSessionSummary } from '@/lib/gemini';
+import {
+  buildSystemInstruction,
+  buildContents,
+  generateStoryResponse,
+  generateSessionSummary,
+} from '@/lib/gemini';
 import {
   formatConversationHistory,
   filterActiveLorebookEntries,
   extractRecentText,
 } from '@/lib/prompt-builder';
+import {
+  buildNarrativeContext,
+  processConversationForMemory,
+  decayMemoryStrength,
+  pruneWeakMemories,
+  getActiveScene,
+} from '@/lib/narrative-memory';
 import { auth } from '@/lib/auth';
+
+// 요약 Race Condition 방지
+const summarizingSessionIds = new Set<string>();
+
+async function triggerSummary(
+  sessionId: string,
+  messages: Array<{ messageType: string; content: string; character?: { name: string } | null }>,
+  existingSummary?: string
+) {
+  if (summarizingSessionIds.has(sessionId)) return;
+  summarizingSessionIds.add(sessionId);
+
+  try {
+    const summaryMessages = messages.map(m => ({
+      role: m.messageType,
+      content: m.content,
+      characterName: m.character?.name,
+    }));
+    const summary = await generateSessionSummary(summaryMessages, existingSummary);
+    if (summary) {
+      await prisma.chatSession.update({
+        where: { id: sessionId },
+        data: { sessionSummary: summary },
+      });
+    }
+  } finally {
+    summarizingSessionIds.delete(sessionId);
+  }
+}
 
 // 새 채팅 세션 생성
 export async function POST(request: NextRequest) {
@@ -221,21 +262,58 @@ export async function PUT(request: NextRequest) {
           if (parsed.name) userPersona = parsed;
         } catch { /* ignore */ }
 
-        // [3] AI 응답 생성 (세션 요약 = 장기 기억)
+        // [3] narrative-memory: 캐릭터별 기억 수집 + 장면 정보 (병렬)
         send('status', { step: 'generating' });
+        const t0 = Date.now();
 
-        const storyResponse = await generateStoryResponse(
-          activeCharacters.map(c => ({ id: c.id, name: c.name, prompt: c.prompt })),
-          conversationHistory,
-          content,
-          session.userName,
-          { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
-          lorebookContext,
-          session.work.worldSetting || '',
-          previousPresentCharacters,
+        const [narrativeContexts, activeScene] = await Promise.all([
+          Promise.all(
+            activeCharacters.map(c =>
+              buildNarrativeContext(sessionId, c.id, c.name)
+                .catch(() => ({ narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null }))
+            )
+          ),
+          getActiveScene(sessionId).catch(() => null),
+        ]);
+        const memoryPrompts = narrativeContexts
+          .map(ctx => ctx.narrativePrompt)
+          .filter(p => p.length > 0);
+        const t1 = Date.now();
+        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts)`);
+
+        // [4] systemInstruction 빌드 (작품별 고정 → 캐시됨)
+        const systemInstruction = buildSystemInstruction({
+          worldSetting: session.work.worldSetting || '',
+          characters: activeCharacters.map(c => ({ name: c.name, prompt: c.prompt })),
+          lorebookStatic: lorebookContext,
+          userName: session.userName,
+        });
+
+        // [5] contents 빌드 (매 턴 변경)
+        const contents = buildContents({
           userPersona,
-          session.sessionSummary || undefined
-        );
+          narrativeContexts: memoryPrompts,
+          sessionSummary: session.sessionSummary || undefined,
+          sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
+          conversationHistory,
+          userMessage: content,
+          userName: session.userName,
+          previousPresentCharacters,
+        });
+
+        // [6] AI 응답 생성 (systemInstruction + contents 2계층)
+        const t2 = Date.now();
+        console.log(`[PERF] prompt build: ${t2 - t1}ms (sysInstruction: ${systemInstruction.length} chars, contents: ${contents.length} parts)`);
+        const storyResponse = await generateStoryResponse({
+          systemInstruction,
+          contents,
+          characters: activeCharacters.map(c => ({ id: c.id, name: c.name })),
+          sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
+        });
+
+        const t3 = Date.now();
+        console.log(`[PERF] ★ Gemini API: ${t3 - t2}ms | responses: ${storyResponse.responses.length} chars`);
+        console.log(`[PERF] total so far: ${t3 - t0}ms`);
 
         // [4] 나레이션 저장 + 전송
         if (storyResponse.narratorNote) {
@@ -280,21 +358,6 @@ export async function PUT(request: NextRequest) {
           },
         });
 
-        // [7] 세션 요약 생성 (20턴마다 - 장기 기억 업데이트)
-        if (session.turnCount > 0 && (session.turnCount + 1) % 20 === 0) {
-          try {
-            const summaryMessages = recentMessages.map(m => ({
-              role: m.messageType,
-              content: m.content,
-              characterName: m.character?.name,
-            }));
-            const summary = await generateSessionSummary(summaryMessages, session.sessionSummary || undefined);
-            if (summary) {
-              await prisma.chatSession.update({ where: { id: sessionId }, data: { sessionSummary: summary } });
-            }
-          } catch { /* 요약 실패는 비핵심 - 무시 */ }
-        }
-
         // 이미지 생성용 데이터
         const presentCharacterProfiles = characters
           .filter(c => storyResponse.updatedScene.presentCharacters.some(
@@ -321,6 +384,39 @@ export async function PUT(request: NextRequest) {
 
         send('done', {});
         controller.close();
+
+        // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
+
+        // [A] 캐릭터 기억 업데이트 (매 턴)
+        processConversationForMemory({
+          sessionId,
+          sceneId: activeScene?.sceneId,
+          userMessage: content,
+          characterResponses: storyResponse.responses.map(r => ({
+            characterId: r.characterId,
+            characterName: r.characterName,
+            content: r.content,
+            emotion: r.emotion ? { primary: r.emotion.primary, intensity: r.emotion.intensity } : undefined,
+          })),
+          emotionalMoment: storyResponse.responses.some(r =>
+            r.emotion && ['sad', 'angry', 'surprised', 'happy'].includes(r.emotion.primary) && r.emotion.intensity > 0.7
+          ),
+        }).catch(e => console.error('[NarrativeMemory] processConversation failed:', e));
+
+        // [B] 5턴마다: 세션 요약 + 기억 감쇠 (비동기)
+        const newTurnCount = session.turnCount + 1;
+        if (newTurnCount % 5 === 0) {
+          triggerSummary(sessionId, recentMessages, session.sessionSummary || undefined)
+            .catch(() => {});
+          decayMemoryStrength(sessionId)
+            .catch(() => {});
+        }
+
+        // [C] 25턴마다: 약한 기억 정리 (비동기)
+        if (newTurnCount % 25 === 0) {
+          pruneWeakMemories(sessionId)
+            .catch(() => {});
+        }
       } catch (error) {
         console.error('메시지 전송 에러:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);

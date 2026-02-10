@@ -10,25 +10,21 @@
  * 4. 프로필 없는 캐릭터는 실루엣/익명으로 표현
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { put } from '@vercel/blob';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import prisma from './prisma';
 
-// Gemini API 초기화
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Gemini API 초기화 (@google/genai)
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 /**
  * 이미지 생성 모델
  * - gemini-2.5-flash-image: 빠르고 효율적 (안정)
  */
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
-
-const imageModel = genAI.getGenerativeModel({
-  model: IMAGE_MODEL,
-});
 
 // ============================================
 // 타입 정의
@@ -315,16 +311,16 @@ export async function generateSceneImage(
     // 텍스트 프롬프트
     parts.push({ text: prompt });
 
-    // generateContent 호출
-    const result = await imageModel.generateContent({
+    // generateContent 호출 (@google/genai SDK)
+    const result = await ai.models.generateContent({
+      model: IMAGE_MODEL,
       contents: [{ role: 'user', parts }] as any,
-      generationConfig: {
+      config: {
         responseModalities: ['IMAGE', 'TEXT'],
       } as any,
     });
 
-    const response = result.response;
-    const candidates = response.candidates;
+    const candidates = result.candidates;
 
     if (!candidates || candidates.length === 0) {
       console.error('❌ 응답 없음');

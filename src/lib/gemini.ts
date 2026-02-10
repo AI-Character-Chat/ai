@@ -1,47 +1,41 @@
 /**
- * Gemini AI 통합 모듈 (v3 - 속도 최적화)
+ * Gemini AI 통합 모듈 (v4 - Context Caching + Narrative Memory)
  *
  * 핵심:
- * - Markdown 기반 프롬프트 (토큰 효율)
- * - 세션 요약으로 장기 기억 지원
- * - 최소 재시도, 빠른 응답
- * - gemini-2.5-flash 사용
+ * - @google/genai SDK (신규)
+ * - gemini-2.5-flash + implicit caching (systemInstruction)
+ * - systemInstruction(정적, 캐시됨) + contents(동적) 2계층 분리
+ * - JSON 응답 모드 (Markdown 파싱 제거)
+ * - narrative-memory 컨텍스트 주입
  *
  * 프롬프트 계층:
- * [1] 세계관 (창작자 설정)
- * [2] 캐릭터 (personality)
- * [3] 장기 기억 (세션 요약)
- * [4] 로어북 (조건부)
- * [5] 상황 + 대화
+ * [systemInstruction - 캐시됨]
+ *   [1] 응답 규칙 + JSON 형식
+ *   [2] 세계관 (작품별 고정)
+ *   [3] 캐릭터 페르소나 (작품별 고정)
+ *   [4] 로어북 정적 항목
+ * [contents - 매 턴 변경]
+ *   [5] 유저 페르소나
+ *   [6] 캐릭터별 기억 (narrative-memory)
+ *   [7] 세션 요약 (장기 기억)
+ *   [8] 현재 장면 + 대화 이력
+ *   [9] 유저 메시지
  */
 
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { replaceVariables } from './prompt-builder';
 
-// Gemini API 클라이언트 초기화
+// ============================================================
+// 클라이언트 초기화
+// ============================================================
+
 if (!process.env.GEMINI_API_KEY) {
   console.error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
 }
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-// Safety Settings - 창작 콘텐츠용 설정
-const safetySettings = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-];
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-export const geminiModel = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-  generationConfig: {
-    temperature: 0.85,
-    topP: 0.9,
-    topK: 40,
-    maxOutputTokens: 2500,
-  },
-  safetySettings,
-});
+const MODEL = 'gemini-2.5-flash';
 
 // ============================================================
 // 타입 정의
@@ -67,7 +61,7 @@ interface UserPersona {
   description: string | null;
 }
 
-interface StoryResponse {
+export interface StoryResponse {
   responses: Array<{
     characterId: string;
     characterName: string;
@@ -86,10 +80,10 @@ interface StoryResponse {
 }
 
 // ============================================================
-// 재시도 설정 (rate limit 제거 - 불필요한 딜레이 없음)
+// 재시도 설정
 // ============================================================
 
-const MAX_RETRIES = 2;  // 최대 2회 재시도
+const MAX_RETRIES = 2;
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -104,293 +98,278 @@ const EXPRESSION_TYPES = [
 ] as const;
 
 // ============================================================
-// 응답 형식
+// JSON Response Schema
 // ============================================================
 
-const RESPONSE_FORMAT_GUIDE = `응답형식:
-[나레이션] 2-4문장. 분위기, 감각, 환경 묘사 포함. 시각/청각/촉각 등 오감 활용
-[캐릭터|표정] "대사 2-3문장 이상" *상세한 행동과 표정 묘사*
-[장면] 장소|시간|인물들
-표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed
-규칙:
-- 캐릭터 성격과 말투를 일관되게 유지
-- 구체적인 행동과 감정 묘사 필수
-- 상황에 맞는 자연스러운 반응`;
+const RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    narrator: {
+      type: Type.STRING,
+      description: '나레이션. 2-4문장의 분위기/환경 묘사. 오감 활용.',
+    },
+    responses: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          character: { type: Type.STRING, description: '캐릭터 이름 (정확히)' },
+          content: { type: Type.STRING, description: '"대사 2-3문장 이상" *상세한 행동과 표정 묘사*' },
+          emotion: {
+            type: Type.STRING,
+            description: '표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed',
+          },
+        },
+        required: ['character', 'content', 'emotion'],
+      },
+    },
+    scene: {
+      type: Type.OBJECT,
+      properties: {
+        location: { type: Type.STRING, description: '현재 장소' },
+        time: { type: Type.STRING, description: '현재 시간대' },
+        presentCharacters: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: '현재 장면에 있는 캐릭터 이름 배열',
+        },
+      },
+      required: ['location', 'time', 'presentCharacters'],
+    },
+  },
+  required: ['narrator', 'responses', 'scene'],
+};
 
 // ============================================================
-// 프롬프트 빌더
+// [1] systemInstruction 빌더 (작품별 고정 → 캐시됨)
 // ============================================================
 
-function buildCharacterSection(characters: CharacterInfo[], userName: string): string {
-  const maxLength = characters.length <= 2 ? 1500 :
-                    characters.length <= 3 ? 1000 : 700;
-
-  return characters
-    .map((char) => {
-      let prompt = replaceVariables(char.prompt, userName, char.name);
-      if (prompt.length > maxLength) {
-        prompt = prompt.substring(0, maxLength) + '...';
-      }
-      return `### ${char.name}\n${prompt}`;
-    })
-    .join('\n');
-}
-
-function buildFirstAppearanceGuide(
-  presentCharacters: string[],
-  previousPresentCharacters: string[]
-): string {
-  const newCharacters = presentCharacters.filter(
-    charName => !previousPresentCharacters.includes(charName)
-  );
-  if (newCharacters.length === 0) return '';
-  return `\n(첫등장: ${newCharacters.join(', ')} → 외모+등장묘사 필수)`;
-}
-
-function buildDynamicSections(params: {
+export function buildSystemInstruction(params: {
   worldSetting: string;
-  lorebookContext: string;
+  characters: Array<{ name: string; prompt: string }>;
+  lorebookStatic: string;
+  userName: string;
 }): string {
   const parts: string[] = [];
 
+  // 응답 규칙 (전역 고정)
+  parts.push(`당신은 인터랙티브 스토리 AI입니다.
+
+## 응답 규칙
+- 나레이션: 2-4문장, 오감(시각/청각/촉각) 활용한 분위기 묘사
+- 캐릭터 대사: 2-3문장 이상 + 구체적 행동/표정 묘사
+- 캐릭터 성격과 말투를 절대 일관되게 유지
+- 상황에 맞는 자연스러운 감정 반응
+- 구체적인 행동과 감정 묘사 필수
+- 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed`);
+
+  // 세계관 (작품별 고정)
   if (params.worldSetting) {
-    const trimmed = params.worldSetting.length > 1200
-      ? params.worldSetting.substring(0, 1200) + '...'
+    const trimmed = params.worldSetting.length > 2000
+      ? params.worldSetting.substring(0, 2000) + '...'
       : params.worldSetting;
     parts.push(`## 세계관\n${trimmed}`);
   }
 
-  if (params.lorebookContext) {
-    const trimmed = params.lorebookContext.length > 800
-      ? params.lorebookContext.substring(0, 800) + '...'
-      : params.lorebookContext;
-    parts.push(`## 참고\n${trimmed}`);
+  // 캐릭터 페르소나 (작품별 고정)
+  if (params.characters.length > 0) {
+    const maxLength = params.characters.length <= 2 ? 1500 :
+                      params.characters.length <= 3 ? 1000 : 700;
+
+    const charSection = params.characters
+      .map((char) => {
+        let prompt = replaceVariables(char.prompt, params.userName, char.name);
+        if (prompt.length > maxLength) {
+          prompt = prompt.substring(0, maxLength) + '...';
+        }
+        return `### ${char.name}\n${prompt}`;
+      })
+      .join('\n\n');
+
+    parts.push(`## 캐릭터\n${charSection}`);
+  }
+
+  // 로어북 정적 항목 (작품별 고정)
+  if (params.lorebookStatic) {
+    const trimmed = params.lorebookStatic.length > 1000
+      ? params.lorebookStatic.substring(0, 1000) + '...'
+      : params.lorebookStatic;
+    parts.push(`## 참고 설정\n${trimmed}`);
   }
 
   return parts.join('\n\n');
 }
 
-function buildUserPersonaSection(persona: UserPersona): string {
-  const parts: string[] = [];
-  parts.push(`이름: ${persona.name}`);
-  if (persona.age) parts.push(`나이: ${persona.age}세`);
-  if (persona.gender && persona.gender !== 'private') {
-    parts.push(`성별: ${persona.gender === 'male' ? '남성' : '여성'}`);
-  }
-  if (persona.description) {
-    const trimmed = persona.description.length > 800
-      ? persona.description.substring(0, 800) + '...'
-      : persona.description;
-    parts.push(`${trimmed}`);
-  }
-  return `## 유저 (${persona.name})\n${parts.join('\n')}`;
-}
-
 // ============================================================
-// Markdown 응답 파서
+// [2] contents 빌더 (매 턴 변경)
 // ============================================================
 
-interface ParsedMarkdownResponse {
-  narrator: string;
-  responses: Array<{
-    character: string;
-    content: string;
-    emotion: { primary: string; intensity: number };
-  }>;
-  scene: {
-    location: string;
-    time: string;
-    presentCharacters: string[];
-  };
-}
+export function buildContents(params: {
+  userPersona?: UserPersona;
+  narrativeContexts: string[];
+  sessionSummary?: string;
+  sceneState: SceneState;
+  conversationHistory: string;
+  userMessage: string;
+  userName: string;
+  previousPresentCharacters?: string[];
+}): Array<{ role: 'user'; parts: Array<{ text: string }> }> {
+  const sections: string[] = [];
 
-function parseMarkdownResponse(
-  text: string,
-  characters: CharacterInfo[],
-  sceneState: SceneState
-): ParsedMarkdownResponse {
-  const result: ParsedMarkdownResponse = {
-    narrator: '',
-    responses: [],
-    scene: {
-      location: sceneState.location,
-      time: sceneState.time,
-      presentCharacters: sceneState.presentCharacters,
-    },
-  };
-
-  const narratorMatch = text.match(/\[나레이션\]\s*([\s\S]*?)(?=\[|$)/i);
-  if (narratorMatch) {
-    result.narrator = narratorMatch[1].trim();
-  }
-
-  const characterPattern = /\[([^\|\]]+)\|?([^\]]*)\]\s*([\s\S]*?)(?=\[|$)/g;
-  let match;
-
-  while ((match = characterPattern.exec(text)) !== null) {
-    const [, charName, emotionStr, content] = match;
-
-    if (['나레이션', '장면', 'scene'].includes(charName.toLowerCase().trim())) {
-      continue;
+  // 유저 페르소나
+  if (params.userPersona) {
+    const personaParts: string[] = [];
+    personaParts.push(`이름: ${params.userPersona.name}`);
+    if (params.userPersona.age) personaParts.push(`나이: ${params.userPersona.age}세`);
+    if (params.userPersona.gender && params.userPersona.gender !== 'private') {
+      personaParts.push(`성별: ${params.userPersona.gender === 'male' ? '남성' : '여성'}`);
     }
-
-    const char = characters.find(
-      (c) => c.name === charName.trim() ||
-             c.name.includes(charName.trim()) ||
-             charName.trim().includes(c.name) ||
-             c.name.toLowerCase() === charName.trim().toLowerCase()
-    );
-
-    if (char) {
-      const emotion = emotionStr?.trim() || 'neutral';
-      result.responses.push({
-        character: char.name,
-        content: content.trim(),
-        emotion: {
-          primary: EXPRESSION_TYPES.includes(emotion as any) ? emotion : 'neutral',
-          intensity: 0.7,
-        },
-      });
+    if (params.userPersona.description) {
+      const trimmed = params.userPersona.description.length > 800
+        ? params.userPersona.description.substring(0, 800) + '...'
+        : params.userPersona.description;
+      personaParts.push(trimmed);
     }
+    sections.push(`## 유저 (${params.userPersona.name})\n${personaParts.join('\n')}`);
   }
 
-  const sceneMatch = text.match(/\[장면\]\s*([^\n]+)/i);
-  if (sceneMatch) {
-    const sceneParts = sceneMatch[1].split('|').map(s => s.trim());
-    if (sceneParts.length >= 2) {
-      result.scene.location = sceneParts[0] || sceneState.location;
-      result.scene.time = sceneParts[1] || sceneState.time;
-      if (sceneParts[2]) {
-        result.scene.presentCharacters = sceneParts[2].split(',').map(s => s.trim());
-      }
-    }
+  // 캐릭터별 기억 (narrative-memory 결과)
+  if (params.narrativeContexts.length > 0) {
+    sections.push(`## 캐릭터 기억\n${params.narrativeContexts.join('\n\n')}`);
   }
 
-  return result;
-}
+  // 세션 요약 (장기 기억)
+  if (params.sessionSummary) {
+    sections.push(`## 이전 대화 요약 (장기 기억)\n${params.sessionSummary}`);
+  }
 
-// ============================================================
-// 메인 스토리 응답 생성 함수 (v3 - 장기 기억 + 속도 최적화)
-// ============================================================
-
-export async function generateStoryResponse(
-  characters: CharacterInfo[],
-  conversationHistory: string,
-  userMessage: string,
-  userName: string,
-  sceneState: SceneState,
-  lorebookContext: string,
-  worldSetting: string = '',
-  previousPresentCharacters: string[] = [],
-  userPersona?: UserPersona,
-  sessionSummary?: string
-): Promise<StoryResponse> {
-  const startTime = Date.now();
-
-  const characterSection = buildCharacterSection(characters, userName);
-  const firstAppearanceGuide = buildFirstAppearanceGuide(
-    sceneState.presentCharacters,
-    previousPresentCharacters
+  // 첫 등장 가이드
+  const newChars = params.sceneState.presentCharacters.filter(
+    name => !(params.previousPresentCharacters || []).includes(name)
   );
-  const dynamicSections = buildDynamicSections({ worldSetting, lorebookContext });
-  const userPersonaSection = userPersona ? buildUserPersonaSection(userPersona) : '';
-
-  // 장기 기억 섹션 (세션 요약)
-  const memorySummarySection = sessionSummary
-    ? `## 이전 대화 요약 (장기 기억)\n${sessionSummary}`
+  const firstAppearance = newChars.length > 0
+    ? `\n(첫등장: ${newChars.join(', ')} → 외모+등장묘사 필수)`
     : '';
 
-  const prompt = `${dynamicSections}
-${userPersonaSection ? '\n' + userPersonaSection + '\n' : ''}
-## 캐릭터
-${characterSection}
-${memorySummarySection ? '\n' + memorySummarySection + '\n' : ''}
-## 상황
-${sceneState.location}, ${sceneState.time}
-등장: ${sceneState.presentCharacters.join(', ')}${firstAppearanceGuide}
+  // 현재 상황
+  sections.push(`## 상황\n${params.sceneState.location}, ${params.sceneState.time}\n등장: ${params.sceneState.presentCharacters.join(', ')}${firstAppearance}`);
 
-## 대화
-${conversationHistory || '(시작)'}
+  // 대화 이력
+  sections.push(`## 대화\n${params.conversationHistory || '(시작)'}`);
 
-## ${userName}
-${userMessage}
+  // 유저 메시지
+  sections.push(`## ${params.userName}\n${params.userMessage}`);
 
----
-${RESPONSE_FORMAT_GUIDE}`;
+  return [{
+    role: 'user' as const,
+    parts: [{ text: sections.join('\n\n') }],
+  }];
+}
 
-  console.log(`📤 Gemini 요청 (${prompt.length}자)`);
+// ============================================================
+// [3] 메인 스토리 응답 생성
+// ============================================================
+
+export async function generateStoryResponse(params: {
+  systemInstruction: string;
+  contents: Array<{ role: 'user'; parts: Array<{ text: string }> }>;
+  characters: Array<{ id: string; name: string }>;
+  sceneState: SceneState;
+}): Promise<StoryResponse> {
+  const startTime = Date.now();
+  const { systemInstruction, contents, characters, sceneState } = params;
+
+  console.log(`📤 Gemini 요청 (systemInstruction: ${systemInstruction.length}자, contents: ${JSON.stringify(contents).length}자)`);
 
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await geminiModel.generateContent(prompt);
-      const response = await result.response;
-      const candidates = response.candidates;
+      const result = await ai.models.generateContent({
+        model: MODEL,
+        config: {
+          systemInstruction,
+          temperature: 0.85,
+          topP: 0.9,
+          topK: 40,
+          maxOutputTokens: 2500,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+        },
+        contents,
+      });
 
-      if (!candidates || candidates.length === 0) {
-        const blockReason = response.promptFeedback?.blockReason;
-        if (blockReason) throw new Error(`BLOCKED: ${blockReason}`);
-        throw new Error('NO_CANDIDATES');
+      const text = result.text?.trim();
+
+      if (!text || text.length === 0) {
+        throw new Error('EMPTY_RESPONSE');
       }
 
-      const finishReason = candidates[0].finishReason;
-      if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
-        throw new Error(`BLOCKED: ${finishReason}`);
-      }
-
-      let text: string;
+      // JSON 파싱
+      let parsed: { narrator?: string; responses?: Array<{ character: string; content: string; emotion: string }>; scene?: { location: string; time: string; presentCharacters: string[] } };
       try {
-        text = response.text().trim();
+        parsed = JSON.parse(text);
       } catch {
-        throw new Error(`TEXT_EXTRACT_FAILED: ${candidates[0]?.finishReason}`);
+        // JSON 파싱 실패 → 폴백 (Markdown 파서)
+        console.warn('⚠️ JSON 파싱 실패, 폴백 파서 시도');
+        parsed = parseMarkdownFallback(text, characters, sceneState);
       }
 
-      if (!text || text.length === 0) throw new Error('EMPTY_RESPONSE');
+      // 캐릭터 응답 매핑
+      const responseWithIds = (parsed.responses || [])
+        .map((r) => {
+          const char = characters.find(
+            (c) => c.name === r.character ||
+                   c.name.includes(r.character) ||
+                   r.character.includes(c.name) ||
+                   c.name.toLowerCase() === r.character.toLowerCase()
+          );
+          return {
+            characterId: char?.id || '',
+            characterName: r.character,
+            content: r.content?.trim() || '',
+            emotion: {
+              primary: EXPRESSION_TYPES.includes(r.emotion as typeof EXPRESSION_TYPES[number]) ? r.emotion : 'neutral',
+              intensity: 0.7,
+            },
+          };
+        })
+        .filter((r) => r.characterId && r.content);
 
-      const parsed = parseMarkdownResponse(text, characters, sceneState);
-
-      const responseWithIds = parsed.responses.map((r) => {
-        const char = characters.find((c) => c.name === r.character);
-        return {
-          characterId: char?.id || '',
-          characterName: r.character,
-          content: r.content,
-          emotion: r.emotion,
-        };
-      }).filter((r) => r.characterId);
-
-      // 응답이 없으면 첫 번째 캐릭터로 폴백
+      // 응답이 없는 경우 폴백
       if (responseWithIds.length === 0 && characters.length > 0) {
         const firstChar = characters[0];
-        const contentWithoutNarrator = text
-          .replace(/\[나레이션\][\s\S]*?(?=\[|$)/i, '')
-          .replace(/\[장면\][\s\S]*/i, '')
-          .trim();
-
         responseWithIds.push({
           characterId: firstChar.id,
           characterName: firstChar.name,
-          content: contentWithoutNarrator || '*조용히 당신을 바라본다*',
+          content: '*조용히 당신을 바라본다*',
           emotion: { primary: 'neutral', intensity: 0.5 },
         });
       }
 
-      let narratorNote = parsed.narrator;
+      // 나레이션 폴백
+      let narratorNote = parsed.narrator?.trim() || '';
       if (!narratorNote || narratorNote.length < 10) {
-        narratorNote = `${userName}의 행동에 공기가 미묘하게 흔들린다.`;
+        narratorNote = '잠시 정적이 흐른다.';
       }
 
       const elapsed = Date.now() - startTime;
+      const usage = result.usageMetadata;
+      const cachedTokens = (usage as any)?.cachedContentTokenCount || 0;
+      const promptTokens = usage?.promptTokenCount || 0;
+      const outputTokens = usage?.candidatesTokenCount || 0;
+      const cacheHitRate = promptTokens > 0 ? Math.round((cachedTokens / promptTokens) * 100) : 0;
       console.log(`✅ Gemini 응답 완료 (${elapsed}ms)`);
+      console.log(`   📊 토큰: prompt=${promptTokens}, cached=${cachedTokens} (${cacheHitRate}%), output=${outputTokens}, total=${usage?.totalTokenCount || '?'}`);
+      if (cachedTokens > 0) console.log(`   💰 캐시 HIT! ${cachedTokens}토큰 90% 할인 적용`);
 
       return {
         responses: responseWithIds,
         narratorNote,
         updatedScene: {
-          location: parsed.scene.location,
-          time: parsed.scene.time,
-          presentCharacters: parsed.scene.presentCharacters,
+          location: parsed.scene?.location || sceneState.location,
+          time: parsed.scene?.time || sceneState.time,
+          presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
         },
       };
 
@@ -399,19 +378,15 @@ ${RESPONSE_FORMAT_GUIDE}`;
       console.error(`❌ 시도 ${attempt}/${MAX_RETRIES}:`, lastError.message);
 
       const errorMessage = lastError.message.toLowerCase();
-
-      // 콘텐츠 차단 → 즉시 폴백 (재시도 무의미)
       if (errorMessage.includes('blocked') || errorMessage.includes('prohibited')) {
         console.warn('⚠️ 콘텐츠 필터 차단 - 폴백 응답');
         break;
       }
 
-      // 429 포함 모든 에러 → 짧은 대기 후 재시도
       if (attempt < MAX_RETRIES) {
         await delay(200);
         continue;
       }
-
       break;
     }
   }
@@ -440,10 +415,73 @@ ${RESPONSE_FORMAT_GUIDE}`;
   throw new Error('AI 응답 생성 실패');
 }
 
-/**
- * 대화 요약 생성 (세션 요약용 - 장기 기억)
- * 20턴마다 호출하여 대화 맥락을 압축
- */
+// ============================================================
+// Markdown 폴백 파서 (JSON 파싱 실패 시)
+// ============================================================
+
+function parseMarkdownFallback(
+  text: string,
+  characters: Array<{ id: string; name: string }>,
+  sceneState: SceneState,
+): { narrator: string; responses: Array<{ character: string; content: string; emotion: string }>; scene: { location: string; time: string; presentCharacters: string[] } } {
+  const result = {
+    narrator: '',
+    responses: [] as Array<{ character: string; content: string; emotion: string }>,
+    scene: {
+      location: sceneState.location,
+      time: sceneState.time,
+      presentCharacters: sceneState.presentCharacters,
+    },
+  };
+
+  const narratorMatch = text.match(/\[나레이션\]\s*([\s\S]*?)(?=\[|$)/i);
+  if (narratorMatch) {
+    result.narrator = narratorMatch[1].trim();
+  }
+
+  const characterPattern = /\[([^\|\]]+)\|?([^\]]*)\]\s*([\s\S]*?)(?=\[|$)/g;
+  let match;
+
+  while ((match = characterPattern.exec(text)) !== null) {
+    const [, charName, emotionStr, content] = match;
+    if (['나레이션', '장면', 'scene'].includes(charName.toLowerCase().trim())) continue;
+
+    const char = characters.find(
+      (c) => c.name === charName.trim() ||
+             c.name.includes(charName.trim()) ||
+             charName.trim().includes(c.name) ||
+             c.name.toLowerCase() === charName.trim().toLowerCase()
+    );
+
+    if (char) {
+      const emotion = emotionStr?.trim() || 'neutral';
+      result.responses.push({
+        character: char.name,
+        content: content.trim(),
+        emotion: EXPRESSION_TYPES.includes(emotion as typeof EXPRESSION_TYPES[number]) ? emotion : 'neutral',
+      });
+    }
+  }
+
+  const sceneMatch = text.match(/\[장면\]\s*([^\n]+)/i);
+  if (sceneMatch) {
+    const sceneParts = sceneMatch[1].split('|').map(s => s.trim());
+    if (sceneParts.length >= 2) {
+      result.scene.location = sceneParts[0] || sceneState.location;
+      result.scene.time = sceneParts[1] || sceneState.time;
+      if (sceneParts[2]) {
+        result.scene.presentCharacters = sceneParts[2].split(',').map(s => s.trim());
+      }
+    }
+  }
+
+  return result;
+}
+
+// ============================================================
+// [4] 세션 요약 생성 (장기 기억)
+// ============================================================
+
 export async function generateSessionSummary(
   messages: Array<{ role: string; content: string; characterName?: string }>,
   existingSummary?: string
@@ -464,13 +502,15 @@ ${messagesText}
 요약:`;
 
   try {
-    const result = await geminiModel.generateContent(prompt);
-    const text = result.response.text();
-    return text.trim();
+    const result = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+    });
+    return result.text?.trim() || existingSummary || '';
   } catch (error) {
     console.error('[Summary] 요약 생성 실패:', error);
     return existingSummary || '';
   }
 }
 
-export default genAI;
+export default ai;

@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import MainHeader from '@/components/MainHeader';
 import ChatHistorySidebar from '@/components/ChatHistorySidebar';
-import ChatView from '@/components/ChatView';
+import ChatContainer from '@/components/chat/ChatContainer';
 import { ChatCacheProvider } from '@/contexts/ChatCacheContext';
 
 // memo로 감싸서 ChatView 리렌더 시 헤더/사이드바 리렌더 방지
@@ -15,7 +15,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     <ChatCacheProvider>
       <MemoizedHeader />
       <MemoizedSidebar />
-      <ChatView />
+      <ChatContainer />
       {children}
     </ChatCacheProvider>
   );
