@@ -336,8 +336,18 @@ export default function ChatPage() {
         }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          alert('로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error(errorData.error || `서버 오류 (${response.status})`);
+      }
+
       const data = await response.json();
-      
+
       // presentCharacters와 recentEvents 정규화
       if (data.session) {
         const normalizedSession = {
@@ -709,7 +719,7 @@ export default function ChatPage() {
                     로그인하기
                   </Link>
                   <Link
-                    href="/register"
+                    href="/login"
                     className="block w-full py-3 border border-violet-600 text-violet-600 dark:text-violet-400 rounded-lg font-semibold hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
                   >
                     회원가입하기

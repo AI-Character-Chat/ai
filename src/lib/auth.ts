@@ -108,6 +108,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: '/login',
     error: '/login',
   },
+  // Vercel 등 리버스 프록시 환경에서 호스트 신뢰
+  trustHost: true,
   // 디버그 모드 (개발 환경에서만)
   debug: process.env.NODE_ENV === 'development',
 });

@@ -17,6 +17,10 @@ import {
 import narrativeMemory, { decayMemoryStrength, pruneWeakMemories, cleanExpiredImageCache } from '@/lib/narrative-memory';
 import { auth } from '@/lib/auth';
 
+// 타임아웃 헬퍼 (Promise가 지정 시간 내 완료되지 않으면 fallback 반환)
+const withTimeout = <T>(promise: Promise<T>, fallback: T, ms = 5000): Promise<T> =>
+  Promise.race([promise, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
 // 새 채팅 세션 생성
 export async function POST(request: NextRequest) {
   try {
@@ -139,13 +143,17 @@ export async function POST(request: NextRequest) {
 
     if (initialChars.length > 0) {
       try {
-        // 다중 캐릭터 병렬 검색 함수 사용 (공식 문서 패턴)
+        // 다중 캐릭터 병렬 검색 함수 사용 (타임아웃 3초)
         const characterIds = initialChars.map(c => c.id);
-        const memoriesMap = await searchMemoriesForMultipleCharacters(
-          "유저에 대한 정보와 선호도",
-          memUserId,
-          characterIds,
-          10
+        const memoriesMap = await withTimeout(
+          searchMemoriesForMultipleCharacters(
+            "유저에 대한 정보와 선호도",
+            memUserId,
+            characterIds,
+            10
+          ),
+          new Map<string, string[]>(),
+          3000
         );
 
         // Map을 캐시 객체로 변환
@@ -187,33 +195,45 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // === 서사 기억 시스템 초기화 ===
+    // === 서사 기억 시스템 초기화 (타임아웃 5초) ===
     const initialCharacterIds = work.characters
       .filter(c => initialCharacters.includes(c.name))
       .map(c => c.id);
 
-    const sceneId = await narrativeMemory.startScene({
-      sessionId: session.id,
-      location: opening.initialLocation || '알 수 없는 장소',
-      time: opening.initialTime || '알 수 없는 시간',
-      participants: initialCharacterIds,
-    });
+    try {
+      await withTimeout(
+        (async () => {
+          const sceneId = await narrativeMemory.startScene({
+            sessionId: session.id,
+            location: opening.initialLocation || '알 수 없는 장소',
+            time: opening.initialTime || '알 수 없는 시간',
+            participants: initialCharacterIds,
+          });
 
-    // 초기 등장 캐릭터들과의 관계 초기화
-    for (const char of work.characters.filter(c => initialCharacters.includes(c.name))) {
-      await narrativeMemory.getOrCreateRelationship(session.id, char.id, char.name);
+          // 초기 등장 캐릭터들과의 관계 초기화
+          await Promise.all(
+            work.characters
+              .filter(c => initialCharacters.includes(c.name))
+              .map(char => narrativeMemory.getOrCreateRelationship(session.id, char.id, char.name))
+          );
+
+          // 오프닝 내용을 원본 대화 로그에 저장
+          await narrativeMemory.saveConversationLog({
+            sessionId: session.id,
+            speakerType: 'narrator',
+            speakerName: '시스템',
+            content: opening.content,
+            sceneId,
+          });
+
+          console.log(`[NarrativeMemory] 세션 ${session.id} 초기화 완료`);
+        })(),
+        undefined,
+        5000
+      );
+    } catch (error) {
+      console.error(`[NarrativeMemory] 세션 ${session.id} 초기화 스킵:`, error);
     }
-
-    // 오프닝 내용을 원본 대화 로그에 저장
-    await narrativeMemory.saveConversationLog({
-      sessionId: session.id,
-      speakerType: 'narrator',
-      speakerName: '시스템',
-      content: opening.content,
-      sceneId,
-    });
-
-    console.log(`[NarrativeMemory] 세션 ${session.id} 초기화 완료`);
 
     return NextResponse.json({
       session: {
