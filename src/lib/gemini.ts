@@ -97,6 +97,27 @@ const EXPRESSION_TYPES = [
 ] as const;
 
 // ============================================================
+// 캐릭터 프롬프트 캐치프레이즈 변환
+// ============================================================
+
+/**
+ * 캐릭터 프롬프트에서 "자주 쓰는 표현" 등의 지시를 변환하여
+ * AI가 캐치프레이즈를 매 턴 반복하지 않도록 함.
+ * 경쟁사와 동일한 캐릭터 설정에서도 자연스러운 대화를 생성하기 위한 처리.
+ */
+function transformCatchPhraseInstructions(prompt: string): string {
+  return prompt
+    // "자주 쓰는 표현" → "감정이 고조된 순간에만 쓰는 시그니처 표현"
+    .replace(/자주\s*쓰는\s*표현/g, '감정이 고조된 순간에만 쓰는 시그니처 표현(평소에는 사용하지 않음)')
+    // "자주 사용하는 표현/말" 변형들
+    .replace(/자주\s*사용하는\s*(표현|말|대사)/g, '특별한 순간에만 사용하는 $1')
+    // "입버릇" → 부드럽게 변환
+    .replace(/입버릇/g, '극적 순간의 시그니처 대사')
+    // "항상 ~라고 말한다" 패턴
+    .replace(/항상\s*(.*?)(라고|이라고)\s*(말한다|말함|얘기한다)/g, '감정적 순간에 $1$2 $3');
+}
+
+// ============================================================
 // JSON Response Schema
 // ============================================================
 
@@ -119,7 +140,7 @@ const RESPONSE_SCHEMA = {
           },
           content: {
             type: Type.STRING,
-            description: 'narrator: 1-2문장 행동/반응 묘사. dialogue: 대사 1-3문장.',
+            description: 'narrator: 감각+심리 포함 2-3문장 묘사. dialogue: 세계관 디테일이 녹아든 2-4문장 대사.',
           },
           emotion: {
             type: Type.STRING,
@@ -168,11 +189,16 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 3. 다른 캐릭터는 장소·동기·관계가 뒷받침될 때만 등장시켜라. 모든 캐릭터를 매번 등장시키지 마라.
 
 ## 형식
-- turns 3~8개, narrator와 dialogue 교차
-- narrator: 감각(소리/냄새/촉감) + 캐릭터의 심리/의도 묘사. 단순 외형 나열 금지.
-- dialogue: 2-4문장. 세계관 디테일이 녹아든 자연스러운 대화. 캐릭터의 대표 대사/캐치프레이즈는 극적 순간에만 1회 사용하고 평소엔 자연스러운 말투로.
+- turns 5~8개, narrator와 dialogue 교차
+- narrator: 감각(소리/냄새/촉감/빛) + 캐릭터의 내면 심리 묘사. 2-3문장.
+- dialogue: 반드시 2-4문장. 세계관 용어와 상황 디테일을 자연스럽게 녹여서. 한 문장 대사 금지.
 - 새 캐릭터 등장 시 narrator에서 등장 이유와 외모 묘사
-- 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed`);
+- 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed
+
+## 대사 작성 금지사항
+- 캐릭터 설정의 "시그니처 표현"은 10턴에 1번 정도만 사용. 평소엔 그 캐릭터만의 말투와 어휘로 자연스럽게.
+- 같은 표현을 연속 턴에서 반복 금지. 이전 대화에서 쓴 표현은 피할 것.
+- 대사가 1문장이면 안 됨. 캐릭터의 생각, 의도, 감정이 담긴 2문장 이상.`);
 
   // 세계관 (작품별 고정)
   if (params.worldSetting) {
@@ -190,6 +216,8 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
     const charSection = params.characters
       .map((char) => {
         let prompt = replaceVariables(char.prompt, params.userName, char.name);
+        // 캐치프레이즈 과다 사용 방지: "자주 쓰는 표현" → "특별한 순간에만 쓰는 고유 표현"
+        prompt = transformCatchPhraseInstructions(prompt);
         if (prompt.length > maxLength) {
           prompt = prompt.substring(0, maxLength) + '...';
         }
