@@ -321,10 +321,11 @@ export async function generateStoryResponse(params: {
           temperature: 0.85,
           topP: 0.9,
           topK: 40,
-          maxOutputTokens: 16384,
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json',
           responseSchema: RESPONSE_SCHEMA,
           safetySettings: SAFETY_SETTINGS,
+          thinkingConfig: { thinkingBudget: 0 },
         },
         contents,
       });
@@ -346,9 +347,14 @@ export async function generateStoryResponse(params: {
       try {
         parsed = JSON.parse(text);
       } catch {
-        // JSON 파싱 실패 → 폴백 (Markdown 파서)
-        console.warn('⚠️ JSON 파싱 실패, 폴백 파서 시도');
-        parsed = parseMarkdownFallback(text, characters, sceneState);
+        // MAX_TOKENS로 JSON이 잘린 경우 → 복구 시도
+        if (finishReason === 'MAX_TOKENS') {
+          console.warn('⚠️ MAX_TOKENS로 JSON 잘림, 복구 시도');
+          parsed = repairTruncatedJson(text, sceneState);
+        } else {
+          console.warn('⚠️ JSON 파싱 실패, 폴백 파서 시도');
+          parsed = parseMarkdownFallback(text, characters, sceneState);
+        }
       }
 
       // turns 파싱
@@ -440,6 +446,39 @@ export async function generateStoryResponse(params: {
 
   // 에러 원인을 그대로 전달 (디버깅용)
   throw new Error(lastError?.message || 'AI 응답 생성 실패');
+}
+
+// ============================================================
+// 잘린 JSON 복구 (MAX_TOKENS 대응)
+// ============================================================
+
+function repairTruncatedJson(
+  text: string,
+  sceneState: SceneState,
+): { turns: Array<{ type: string; character: string; content: string; emotion: string }>; scene: { location: string; time: string; presentCharacters: string[] } } {
+  // turns 배열에서 완성된 항목만 추출
+  const turns: Array<{ type: string; character: string; content: string; emotion: string }> = [];
+  const turnPattern = /\{\s*"type"\s*:\s*"(narrator|dialogue)"\s*,\s*"character"\s*:\s*"([^"]*)"\s*,\s*"content"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"emotion"\s*:\s*"([^"]*)"\s*\}/g;
+  let match;
+  while ((match = turnPattern.exec(text)) !== null) {
+    turns.push({
+      type: match[1],
+      character: match[2],
+      content: match[3].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+      emotion: match[4],
+    });
+  }
+
+  console.log(`🔧 잘린 JSON에서 ${turns.length}개 턴 복구`);
+
+  return {
+    turns,
+    scene: {
+      location: sceneState.location,
+      time: sceneState.time,
+      presentCharacters: sceneState.presentCharacters,
+    },
+  };
 }
 
 // ============================================================
