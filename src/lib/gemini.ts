@@ -22,7 +22,7 @@
  *   [9] 유저 메시지
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from '@google/genai';
 import { replaceVariables } from './prompt-builder';
 
 // ============================================================
@@ -95,6 +95,18 @@ function delay(ms: number): Promise<void> {
 const EXPRESSION_TYPES = [
   'neutral', 'smile', 'cold', 'angry', 'sad', 'happy', 'surprised', 'embarrassed'
 ] as const;
+
+// ============================================================
+// 안전 필터 설정 (창작 콘텐츠 허용)
+// ============================================================
+
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.OFF },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.OFF },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.OFF },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.OFF },
+  { category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY, threshold: HarmBlockThreshold.OFF },
+];
 
 // ============================================================
 // JSON Response Schema
@@ -312,6 +324,7 @@ export async function generateStoryResponse(params: {
           maxOutputTokens: 4000,
           responseMimeType: 'application/json',
           responseSchema: RESPONSE_SCHEMA,
+          safetySettings: SAFETY_SETTINGS,
         },
         contents,
       });

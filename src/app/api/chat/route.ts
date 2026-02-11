@@ -227,18 +227,21 @@ export async function PUT(request: NextRequest) {
         });
         const previousPresentCharacters = Array.from(appearedCharactersInHistory);
 
-        const conversationHistory = formatConversationHistory(recentMessages, session.userName);
-        const recentText = extractRecentText(recentMessages, content);
-        const lorebookContext = filterActiveLorebookEntries(
-          session.work.lorebook, recentText, session.intimacy, session.turnCount, presentCharacters
-        );
-
         // 유저 페르소나
         let userPersona: { name: string; age: number | null; gender: string; description: string | null } | undefined;
         try {
           const parsed = JSON.parse(session.userPersona || '{}');
           if (parsed.name) userPersona = parsed;
         } catch { /* ignore */ }
+
+        // 페르소나 이름 우선, 없으면 세션 이름 사용
+        const effectiveUserName = userPersona?.name || session.userName;
+
+        const conversationHistory = formatConversationHistory(recentMessages, effectiveUserName);
+        const recentText = extractRecentText(recentMessages, content);
+        const lorebookContext = filterActiveLorebookEntries(
+          session.work.lorebook, recentText, session.intimacy, session.turnCount, presentCharacters
+        );
 
         // [3] narrative-memory: 캐릭터별 기억 수집 + 장면 정보 (병렬)
         send('status', { step: 'generating' });
@@ -270,7 +273,7 @@ export async function PUT(request: NextRequest) {
           worldSetting: session.work.worldSetting || '',
           characters: characters.map(c => ({ name: c.name, prompt: c.prompt })),
           lorebookStatic: lorebookContext,
-          userName: session.userName,
+          userName: effectiveUserName,
         });
 
         // [5] contents 빌드 (매 턴 변경)
@@ -281,7 +284,7 @@ export async function PUT(request: NextRequest) {
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
           conversationHistory,
           userMessage: content,
-          userName: session.userName,
+          userName: effectiveUserName,
           previousPresentCharacters,
         });
 
@@ -318,7 +321,7 @@ export async function PUT(request: NextRequest) {
 
         // [5] 세션 업데이트
         const newEvents: string[] = [];
-        newEvents.push(`${session.userName}: ${content.substring(0, 50)}`);
+        newEvents.push(`${effectiveUserName}: ${content.substring(0, 50)}`);
         const firstNarrator = storyResponse.turns.find(t => t.type === 'narrator');
         const firstDialogue = storyResponse.turns.find(t => t.type === 'dialogue');
         if (firstNarrator) {
