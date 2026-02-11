@@ -12,6 +12,10 @@ interface ChatMessagesProps {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
   messagesEndRef: RefObject<HTMLDivElement | null>;
+  scrollContainerRef: RefObject<HTMLElement | null>;
+  onScroll: () => void;
+  showScrollButton: boolean;
+  onScrollToBottom: () => void;
 }
 
 function getCharacterColor(characterId: string | null, characters: ChatCharacter[]) {
@@ -130,6 +134,10 @@ export default function ChatMessages({
   sidebarOpen,
   sidebarCollapsed,
   messagesEndRef,
+  scrollContainerRef,
+  onScroll,
+  showScrollButton,
+  onScrollToBottom,
 }: ChatMessagesProps) {
   const [openMetadataId, setOpenMetadataId] = useState<string | null>(null);
   const sidebarMargin = sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : '';
@@ -143,7 +151,11 @@ export default function ChatMessages({
   }, []);
 
   return (
-    <main className={`flex-1 overflow-y-auto pt-[120px] transition-all duration-300 ${sidebarMargin}`}>
+    <main
+      ref={scrollContainerRef as RefObject<HTMLElement>}
+      onScroll={onScroll}
+      className={`flex-1 overflow-y-auto pt-[120px] transition-all duration-300 ${sidebarMargin}`}
+    >
       <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
         {messages.map(message => {
           const { messageType } = message;
@@ -284,6 +296,18 @@ export default function ChatMessages({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {showScrollButton && (
+        <button
+          onClick={onScrollToBottom}
+          className="fixed bottom-24 right-6 z-40 w-10 h-10 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 rounded-full shadow-lg flex items-center justify-center hover:bg-gray-700 dark:hover:bg-gray-300 transition-all"
+          title="아래로 스크롤"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </button>
+      )}
     </main>
   );
 }

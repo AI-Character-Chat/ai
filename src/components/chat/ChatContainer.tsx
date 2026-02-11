@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useEffect, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -32,14 +32,32 @@ export default function ChatContainer() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement>(null);
+  const isNearBottomRef = useRef(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const activeWorkIdRef = useRef(workId);
   const activeSessionIdRef = useRef(existingSessionId);
   const pendingRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef(0);
 
   // ─── 스크롤 ───
-  useEffect(() => {
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    isNearBottomRef.current = nearBottom;
+    setShowScrollButton(!nearBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollButton(false);
+  }, []);
+
+  useEffect(() => {
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [state.messages]);
 
   // ─── 페르소나 로드 ───
@@ -557,6 +575,10 @@ export default function ChatContainer() {
         sidebarOpen={sidebarOpen}
         sidebarCollapsed={sidebarCollapsed}
         messagesEndRef={messagesEndRef}
+        scrollContainerRef={scrollContainerRef}
+        onScroll={handleScroll}
+        showScrollButton={showScrollButton}
+        onScrollToBottom={scrollToBottom}
       />
 
       <ChatInput
