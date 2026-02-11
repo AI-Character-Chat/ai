@@ -61,6 +61,24 @@ export interface Persona {
   isDefault: boolean;
 }
 
+export interface ResponseMetadata {
+  model: string;
+  thinking: boolean;
+  promptTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  thinkingTokens: number;
+  totalTokens: number;
+  cacheHitRate: number;
+  finishReason: string;
+  geminiApiMs: number;
+  narrativeMemoryMs: number;
+  promptBuildMs: number;
+  totalMs: number;
+  turnsCount: number;
+  systemInstructionLength: number;
+}
+
 // ============================================================
 // 상태
 // ============================================================
@@ -80,6 +98,7 @@ export interface ChatState {
   // 기타
   generatingImages: Set<string>;
   chatMenuOpen: boolean;
+  responseMetadata: Record<string, ResponseMetadata>;
 }
 
 export const initialChatState: ChatState = {
@@ -93,6 +112,7 @@ export const initialChatState: ChatState = {
   selectedPersona: null,
   generatingImages: new Set(),
   chatMenuOpen: false,
+  responseMetadata: {},
 };
 
 // ============================================================
@@ -111,6 +131,7 @@ export type ChatAction =
   | { type: 'SET_MENU'; open: boolean }
   | { type: 'ADD_GENERATING_IMAGE'; messageId: string }
   | { type: 'REMOVE_GENERATING_IMAGE'; messageId: string }
+  | { type: 'SET_RESPONSE_METADATA'; messageId: string; metadata: ResponseMetadata }
   | { type: 'RESET' };
 
 // ============================================================
@@ -163,6 +184,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       next.delete(action.messageId);
       return { ...state, generatingImages: next };
     }
+
+    case 'SET_RESPONSE_METADATA':
+      return {
+        ...state,
+        responseMetadata: {
+          ...state.responseMetadata,
+          [action.messageId]: action.metadata,
+        },
+      };
 
     case 'RESET':
       return {

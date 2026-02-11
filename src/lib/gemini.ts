@@ -1,11 +1,15 @@
 /**
- * Gemini AI 통합 모듈 (v4 - Context Caching + Narrative Memory)
+ * Gemini AI 통합 모듈 (v5 - Pro + Flash 혼합 + Context Caching + Narrative Memory)
+ *
+ * 모델 전략:
+ * - 스토리 생성 (generateStoryResponse): gemini-2.5-pro (최고 품질 + thinking)
+ * - 보조 작업 (요약 등): gemini-2.5-flash (빠르고 저렴)
  *
  * 핵심:
- * - @google/genai SDK (신규)
- * - gemini-2.5-flash + implicit caching (systemInstruction)
+ * - @google/genai SDK
+ * - implicit caching (systemInstruction)
  * - systemInstruction(정적, 캐시됨) + contents(동적) 2계층 분리
- * - JSON 응답 모드 (Markdown 파싱 제거)
+ * - JSON 응답 모드
  * - narrative-memory 컨텍스트 주입
  *
  * 프롬프트 계층:
@@ -35,7 +39,8 @@ if (!process.env.GEMINI_API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL_PRO = 'gemini-2.5-pro';    // 스토리 생성 (최고 품질)
+const MODEL_FLASH = 'gemini-2.5-flash'; // 보조 작업 (요약 등)
 
 // ============================================================
 // 타입 정의
@@ -69,6 +74,19 @@ export interface StoryTurn {
   emotion: { primary: string; intensity: number };
 }
 
+export interface ResponseMetadata {
+  model: string;
+  thinking: boolean;
+  promptTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  thinkingTokens: number;
+  totalTokens: number;
+  cacheHitRate: number;
+  finishReason: string;
+  geminiApiMs: number;
+}
+
 export interface StoryResponse {
   turns: StoryTurn[];
   updatedScene: {
@@ -76,6 +94,7 @@ export interface StoryResponse {
     time: string;
     presentCharacters: string[];
   };
+  metadata: ResponseMetadata;
 }
 
 // ============================================================
@@ -315,17 +334,17 @@ export async function generateStoryResponse(params: {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const result = await ai.models.generateContent({
-        model: MODEL,
+        model: MODEL_PRO,
         config: {
           systemInstruction,
           temperature: 0.85,
           topP: 0.9,
           topK: 40,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 16384,
           responseMimeType: 'application/json',
           responseSchema: RESPONSE_SCHEMA,
           safetySettings: SAFETY_SETTINGS,
-          thinkingConfig: { thinkingBudget: 0 },
+          thinkingConfig: { thinkingBudget: -1 },
         },
         contents,
       });
@@ -410,10 +429,24 @@ export async function generateStoryResponse(params: {
       const cachedTokens = (usage as any)?.cachedContentTokenCount || 0;
       const promptTokens = usage?.promptTokenCount || 0;
       const outputTokens = usage?.candidatesTokenCount || 0;
+      const thinkingTokens = (usage as any)?.thoughtsTokenCount || 0;
       const cacheHitRate = promptTokens > 0 ? Math.round((cachedTokens / promptTokens) * 100) : 0;
       console.log(`✅ Gemini 응답 완료 (${elapsed}ms)`);
-      console.log(`   📊 토큰: prompt=${promptTokens}, cached=${cachedTokens} (${cacheHitRate}%), output=${outputTokens}, total=${usage?.totalTokenCount || '?'}`);
+      console.log(`   📊 토큰: prompt=${promptTokens}, cached=${cachedTokens} (${cacheHitRate}%), output=${outputTokens}, thinking=${thinkingTokens}, total=${usage?.totalTokenCount || '?'}`);
       if (cachedTokens > 0) console.log(`   💰 캐시 HIT! ${cachedTokens}토큰 90% 할인 적용`);
+
+      const metadata: ResponseMetadata = {
+        model: MODEL_PRO,
+        thinking: thinkingTokens > 0,
+        promptTokens,
+        outputTokens,
+        cachedTokens,
+        thinkingTokens,
+        totalTokens: usage?.totalTokenCount || 0,
+        cacheHitRate,
+        finishReason: finishReason || 'STOP',
+        geminiApiMs: elapsed,
+      };
 
       return {
         turns,
@@ -422,6 +455,7 @@ export async function generateStoryResponse(params: {
           time: parsed.scene?.time || sceneState.time,
           presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
         },
+        metadata,
       };
 
     } catch (error) {
@@ -570,7 +604,7 @@ ${messagesText}
 
   try {
     const result = await ai.models.generateContent({
-      model: MODEL,
+      model: MODEL_FLASH,
       contents: prompt,
     });
     return result.text?.trim() || existingSummary || '';

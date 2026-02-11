@@ -351,6 +351,7 @@ export default function ChatContainer() {
       let userMessageReplaced = false;
       // SSE 처리 중 메시지를 누적하기 위한 로컬 배열 (dispatch 사이 시차 문제 방지)
       let localNewMessages: ChatMessage[] = [];
+      let lastAiMessageId = '';
 
       while (true) {
         const { value, done } = await reader.read();
@@ -404,6 +405,7 @@ export default function ChatContainer() {
                 };
                 dispatch({ type: 'ADD_MESSAGE', message: narratorMsg });
                 localNewMessages.push(narratorMsg);
+                lastAiMessageId = narratorMsg.id;
                 break;
               }
 
@@ -411,8 +413,19 @@ export default function ChatContainer() {
                 const charMsg: ChatMessage = { ...parsed, messageType: 'dialogue' as const };
                 dispatch({ type: 'ADD_MESSAGE', message: charMsg });
                 localNewMessages.push(charMsg);
+                lastAiMessageId = charMsg.id;
                 break;
               }
+
+              case 'response_metadata':
+                if (lastAiMessageId) {
+                  dispatch({
+                    type: 'SET_RESPONSE_METADATA',
+                    messageId: lastAiMessageId,
+                    metadata: parsed,
+                  });
+                }
+                break;
 
               case 'session_update':
                 if (parsed.session) {
@@ -540,6 +553,7 @@ export default function ChatContainer() {
         work={state.work}
         sending={state.sending}
         generatingImages={state.generatingImages}
+        responseMetadata={state.responseMetadata}
         sidebarOpen={sidebarOpen}
         sidebarCollapsed={sidebarCollapsed}
         messagesEndRef={messagesEndRef}

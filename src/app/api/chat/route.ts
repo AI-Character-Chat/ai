@@ -369,6 +369,16 @@ export async function PUT(request: NextRequest) {
           sceneUpdate: storyResponse.updatedScene,
         });
 
+        // 메타데이터 전송 (done 직전)
+        send('response_metadata', {
+          ...storyResponse.metadata,
+          narrativeMemoryMs: t1 - t0,
+          promptBuildMs: t2 - t1,
+          totalMs: t3 - t0,
+          turnsCount: storyResponse.turns.length,
+          systemInstructionLength: systemInstruction.length,
+        });
+
         send('done', {});
         controller.close();
 
