@@ -332,7 +332,13 @@ export async function generateStoryResponse(params: {
       const text = result.text?.trim();
 
       if (!text || text.length === 0) {
-        throw new Error('EMPTY_RESPONSE');
+        // 응답이 비어있을 때 상세 원인 로깅
+        const candidates = (result as any).candidates;
+        const promptFeedback = (result as any).promptFeedback;
+        const finishReason = candidates?.[0]?.finishReason;
+        const safetyRatings = candidates?.[0]?.safetyRatings || promptFeedback?.safetyRatings;
+        console.error('🔍 EMPTY_RESPONSE 상세:', JSON.stringify({ finishReason, safetyRatings, promptFeedback }, null, 2));
+        throw new Error(`EMPTY_RESPONSE|finishReason:${finishReason || 'unknown'}|safety:${JSON.stringify(safetyRatings || [])}`);
       }
 
       // JSON 파싱
@@ -432,32 +438,8 @@ export async function generateStoryResponse(params: {
 
   console.error('🚨 모든 재시도 실패:', lastError?.message);
 
-  // 최종 폴백
-  if (characters.length > 0) {
-    const firstChar = characters[0];
-    return {
-      turns: [
-        {
-          type: 'narrator', characterId: '', characterName: '',
-          content: '잠시 정적이 흐른다.',
-          emotion: { primary: 'neutral', intensity: 0.5 },
-        },
-        {
-          type: 'dialogue',
-          characterId: firstChar.id, characterName: firstChar.name,
-          content: `*${firstChar.name}이(가) 당신을 바라본다*\n\n"..."`,
-          emotion: { primary: 'neutral', intensity: 0.5 },
-        },
-      ],
-      updatedScene: {
-        location: sceneState.location,
-        time: sceneState.time,
-        presentCharacters: sceneState.presentCharacters,
-      },
-    };
-  }
-
-  throw new Error('AI 응답 생성 실패');
+  // 에러 원인을 그대로 전달 (디버깅용)
+  throw new Error(lastError?.message || 'AI 응답 생성 실패');
 }
 
 // ============================================================
