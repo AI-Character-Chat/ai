@@ -116,6 +116,18 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
           </div>
         </div>
 
+        {/* Pro 디렉터 노트 포함 여부 */}
+        <div className="border-b border-gray-100 dark:border-gray-700 pb-2">
+          <div className="flex justify-between">
+            <span>Pro 디렉터 노트</span>
+            {metadata.proAnalysis ? (
+              <span className="text-green-600 dark:text-green-400 font-medium">포함 ({metadata.proAnalysis.length}자)</span>
+            ) : (
+              <span className="text-gray-400 dark:text-gray-500">미포함 (첫 턴)</span>
+            )}
+          </div>
+        </div>
+
         {/* 기타 */}
         <div className="flex justify-between">
           <span>turns: {metadata.turnsCount}개</span>
