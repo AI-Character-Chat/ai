@@ -97,40 +97,6 @@ const EXPRESSION_TYPES = [
 ] as const;
 
 // ============================================================
-// 캐릭터 프롬프트 캐치프레이즈 변환
-// ============================================================
-
-/**
- * 캐릭터 프롬프트에서 캐치프레이즈/시그니처 표현을 제거하여
- * AI가 매 턴 반복하지 않도록 함.
- *
- * 전략: 라벨만 바꾸는 것으로는 부족 — 인용된 실제 문구가 프롬프트에 있으면
- * AI가 그것을 사용해야 한다고 인식함. 따라서 인용구 자체를 제거.
- */
-function transformCatchPhraseInstructions(prompt: string): string {
-  let result = prompt;
-
-  // 1) "자주 쓰는 표현: "..." , "..." " 패턴 → 줄 전체 제거
-  //    예: - 자주 쓰는 표현: "시스템은 거짓말을 해", "접속 완료", "신뢰는 사치야"
-  result = result.replace(/[-•]\s*자주\s*쓰는\s*표현\s*[:：].*$/gm, '');
-  result = result.replace(/[-•]\s*자주\s*사용하는\s*(표현|말|대사)\s*[:：].*$/gm, '');
-  result = result.replace(/[-•]\s*입버릇\s*[:：].*$/gm, '');
-  result = result.replace(/[-•]\s*대표\s*(대사|표현)\s*[:：].*$/gm, '');
-
-  // 2) "예시:" 섹션에서 인용구가 캐치프레이즈처럼 반복되지 않도록
-  //    예시 섹션 자체는 유지하되, 앞에 제한 지시 추가
-  result = result.replace(
-    /([-•]\s*예시\s*[:：])/g,
-    '- 대화 스타일 참고(그대로 인용하지 말 것, 말투만 참고):'
-  );
-
-  // 3) 빈 줄 정리
-  result = result.replace(/\n{3,}/g, '\n\n');
-
-  return result;
-}
-
-// ============================================================
 // JSON Response Schema
 // ============================================================
 
@@ -208,10 +174,11 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 - 새 캐릭터 등장 시 narrator에서 등장 이유와 외모 묘사
 - 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed
 
-## 절대 금지
-- 캐릭터 설정에 적힌 예시 대사나 대표 문구를 그대로 인용하지 마라. 말투와 성격만 참고하고, 대사는 매번 새롭게 만들어라.
-- 같은 문장/표현의 반복 금지. 직전 턴에서 쓴 표현은 다음 턴에서 절대 반복하지 마라.
-- 대사가 1문장이면 안 됨. 반드시 2문장 이상, 캐릭터의 의도와 상황 디테일을 담아라.`);
+## 반복 금지 (최우선)
+- 대화 이력을 확인하라. 이전 턴에서 이미 사용한 대사나 표현은 이번 턴에서 절대 다시 쓰지 마라.
+- 캐릭터의 대표 표현/캐치프레이즈는 첫 등장 시 1회만 허용. 이후에는 같은 뜻을 다른 말로 표현하라.
+- 한 응답 안에서도 같은 표현을 두 번 쓰지 마라.
+- 대사는 반드시 2문장 이상. 캐릭터의 의도와 상황 맥락을 담아라.`);
 
   // 세계관 (작품별 고정)
   if (params.worldSetting) {
@@ -229,8 +196,6 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
     const charSection = params.characters
       .map((char) => {
         let prompt = replaceVariables(char.prompt, params.userName, char.name);
-        // 캐치프레이즈 과다 사용 방지: "자주 쓰는 표현" → "특별한 순간에만 쓰는 고유 표현"
-        prompt = transformCatchPhraseInstructions(prompt);
         if (prompt.length > maxLength) {
           prompt = prompt.substring(0, maxLength) + '...';
         }
