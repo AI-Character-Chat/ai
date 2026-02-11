@@ -77,6 +77,7 @@ export interface ResponseMetadata {
   totalMs: number;
   turnsCount: number;
   systemInstructionLength: number;
+  proAnalysis: string;
 }
 
 // ============================================================

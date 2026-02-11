@@ -396,6 +396,7 @@ export async function PUT(request: NextRequest) {
             totalMs: t3 - t0,
             turnsCount: allTurns.length,
             systemInstructionLength: systemInstruction.length,
+            proAnalysis: session.proAnalysis || '',
           });
         }
 

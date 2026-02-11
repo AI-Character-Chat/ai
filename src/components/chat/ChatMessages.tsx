@@ -125,6 +125,54 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
   );
 }
 
+function ProAnalysisPopup({ proAnalysis, onClose }: { proAnalysis: string; onClose: () => void }) {
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  const hasAnalysis = proAnalysis.length > 0;
+
+  return (
+    <div
+      ref={popupRef}
+      className="absolute bottom-8 right-0 z-50 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 text-sm max-h-80 overflow-y-auto"
+    >
+      <div className="font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+        <span>Pro 디렉터 노트</span>
+        <span className={`text-xs px-1.5 py-0.5 rounded ${hasAnalysis ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+          {hasAnalysis ? 'Flash에 전달됨' : '첫 턴'}
+        </span>
+      </div>
+
+      {hasAnalysis ? (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 pb-1">
+            이전 턴에서 Pro(gemini-2.5-pro + thinking)가 분석한 내용입니다. Flash가 이 내용 전체를 참고하여 응답했습니다.
+          </div>
+          <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-xs">
+            {proAnalysis}
+          </div>
+          <div className="text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700 pt-1">
+            {proAnalysis.length}자 | Flash 프롬프트에 100% 포함
+          </div>
+        </div>
+      ) : (
+        <div className="text-gray-500 dark:text-gray-400 text-xs">
+          첫 번째 턴이라 아직 Pro 분석이 없습니다. 이 턴의 응답 완료 후 Pro가 백그라운드에서 분석을 시작하며, 다음 턴부터 Flash가 참고합니다.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatMessages({
   messages,
   work,
@@ -140,14 +188,22 @@ export default function ChatMessages({
   onScrollToBottom,
 }: ChatMessagesProps) {
   const [openMetadataId, setOpenMetadataId] = useState<string | null>(null);
+  const [openProAnalysisId, setOpenProAnalysisId] = useState<string | null>(null);
   const sidebarMargin = sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : '';
 
   const handleInfoClick = useCallback((messageId: string) => {
     setOpenMetadataId(prev => prev === messageId ? null : messageId);
+    setOpenProAnalysisId(null);
+  }, []);
+
+  const handleProAnalysisClick = useCallback((messageId: string) => {
+    setOpenProAnalysisId(prev => prev === messageId ? null : messageId);
+    setOpenMetadataId(null);
   }, []);
 
   const handleClosePopup = useCallback(() => {
     setOpenMetadataId(null);
+    setOpenProAnalysisId(null);
   }, []);
 
   return (
@@ -194,7 +250,16 @@ export default function ChatMessages({
                   <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed italic text-center">{formatMessage(message.content)}</p>
                 </div>
                 {metadata && (
-                  <div className="flex justify-end mt-1">
+                  <div className="flex justify-end mt-1 gap-1 relative">
+                    <button
+                      onClick={() => handleProAnalysisClick(message.id)}
+                      className={`transition-colors p-1 ${metadata.proAnalysis ? 'text-purple-400 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300' : 'text-gray-300 dark:text-gray-600'}`}
+                      title="Pro 디렉터 노트"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5.002 5.002 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </button>
                     <button
                       onClick={() => handleInfoClick(message.id)}
                       className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1"
@@ -207,6 +272,9 @@ export default function ChatMessages({
                     </button>
                     {openMetadataId === message.id && (
                       <MetadataPopup metadata={metadata} onClose={handleClosePopup} />
+                    )}
+                    {openProAnalysisId === message.id && (
+                      <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} onClose={handleClosePopup} />
                     )}
                   </div>
                 )}
@@ -259,7 +327,16 @@ export default function ChatMessages({
                 </div>
               </div>
               {metadata && (
-                <div className="flex justify-end mt-1">
+                <div className="flex justify-end mt-1 gap-1 relative">
+                  <button
+                    onClick={() => handleProAnalysisClick(message.id)}
+                    className={`transition-colors p-1 ${metadata.proAnalysis ? 'text-purple-400 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300' : 'text-gray-300 dark:text-gray-600'}`}
+                    title="Pro 디렉터 노트"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5.002 5.002 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </button>
                   <button
                     onClick={() => handleInfoClick(message.id)}
                     className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1"
@@ -272,6 +349,9 @@ export default function ChatMessages({
                   </button>
                   {openMetadataId === message.id && (
                     <MetadataPopup metadata={metadata} onClose={handleClosePopup} />
+                  )}
+                  {openProAnalysisId === message.id && (
+                    <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} onClose={handleClosePopup} />
                   )}
                 </div>
               )}
