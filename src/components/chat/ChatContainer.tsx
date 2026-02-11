@@ -468,16 +468,13 @@ export default function ChatContainer() {
               case 'done':
                 // Pro 분석 트리거 (별도 API — Vercel serverless 타임아웃 회피)
                 if (lastAiMessageId && parsed.aiResponseSummary) {
+                  const proMsgId = lastAiMessageId;
                   // 분석 중 상태 표시
                   dispatch({
-                    type: 'SET_RESPONSE_METADATA',
-                    messageId: lastAiMessageId,
-                    metadata: {
-                      ...(state.responseMetadata[lastAiMessageId] || {}),
-                      proAnalysisMetrics: { analysis: '', timeMs: 0, promptTokens: 0, outputTokens: 0, thinkingTokens: 0, totalTokens: 0, status: 'pending' as const },
-                    },
+                    type: 'SET_PRO_ANALYSIS_METRICS',
+                    messageId: proMsgId,
+                    metrics: { analysis: '', timeMs: 0, promptTokens: 0, outputTokens: 0, thinkingTokens: 0, totalTokens: 0, status: 'pending' },
                   });
-                  const proMsgId = lastAiMessageId;
                   fetch('/api/chat/pro-analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -487,12 +484,9 @@ export default function ChatContainer() {
                     .then(result => {
                       if (result) {
                         dispatch({
-                          type: 'SET_RESPONSE_METADATA',
+                          type: 'SET_PRO_ANALYSIS_METRICS',
                           messageId: proMsgId,
-                          metadata: {
-                            ...(state.responseMetadata[proMsgId] || {}),
-                            proAnalysisMetrics: { ...result, status: result.analysis ? 'complete' : 'failed' },
-                          },
+                          metrics: { ...result, status: result.analysis ? 'complete' : 'failed' },
                         });
                       }
                     })

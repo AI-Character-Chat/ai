@@ -53,7 +53,7 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  const fmt = (n: number) => n.toLocaleString();
+  const fmt = (n: number | undefined) => (n ?? 0).toLocaleString();
 
   return (
     <div
@@ -144,7 +144,7 @@ function ProAnalysisPopup({ proAnalysis, proMetrics, onClose }: {
   }, [onClose]);
 
   const hasUsedAnalysis = proAnalysis.length > 0;
-  const fmt = (n: number) => n.toLocaleString();
+  const fmt = (n: number | undefined) => (n ?? 0).toLocaleString();
 
   return (
     <div

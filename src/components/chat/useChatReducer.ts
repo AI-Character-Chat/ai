@@ -144,6 +144,7 @@ export type ChatAction =
   | { type: 'ADD_GENERATING_IMAGE'; messageId: string }
   | { type: 'REMOVE_GENERATING_IMAGE'; messageId: string }
   | { type: 'SET_RESPONSE_METADATA'; messageId: string; metadata: ResponseMetadata }
+  | { type: 'SET_PRO_ANALYSIS_METRICS'; messageId: string; metrics: ProAnalysisMetrics }
   | { type: 'RESET' };
 
 // ============================================================
@@ -205,6 +206,18 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           [action.messageId]: action.metadata,
         },
       };
+
+    case 'SET_PRO_ANALYSIS_METRICS': {
+      const existing = state.responseMetadata[action.messageId];
+      if (!existing) return state;
+      return {
+        ...state,
+        responseMetadata: {
+          ...state.responseMetadata,
+          [action.messageId]: { ...existing, proAnalysisMetrics: action.metrics },
+        },
+      };
+    }
 
     case 'RESET':
       return {
