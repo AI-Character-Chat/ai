@@ -19,7 +19,6 @@ export async function POST(request: NextRequest) {
       order = 0,
       initialLocation = '알 수 없는 장소',
       initialTime = '알 수 없는 시간',
-      initialCharacters = []
     } = body;
 
     if (!workId || !title || !content) {
@@ -55,14 +54,10 @@ export async function POST(request: NextRequest) {
         order,
         initialLocation,
         initialTime,
-        initialCharacters: JSON.stringify(initialCharacters),
       },
     });
 
-    return NextResponse.json({
-      ...opening,
-      initialCharacters: JSON.parse(opening.initialCharacters),
-    });
+    return NextResponse.json(opening);
   } catch (error) {
     console.error('Error creating opening:', error);
     return NextResponse.json(
@@ -90,12 +85,7 @@ export async function GET(request: NextRequest) {
       orderBy: { order: 'asc' },
     });
 
-    const parsedOpenings = openings.map(o => ({
-      ...o,
-      initialCharacters: JSON.parse(o.initialCharacters || '[]'),
-    }));
-
-    return NextResponse.json(parsedOpenings);
+    return NextResponse.json(openings);
   } catch (error) {
     console.error('Error fetching openings:', error);
     return NextResponse.json(
@@ -114,7 +104,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, title, content, isDefault, order, initialLocation, initialTime, initialCharacters } = body;
+    const { id, title, content, isDefault, order, initialLocation, initialTime } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -153,16 +143,10 @@ export async function PUT(request: NextRequest) {
         order: order ?? existingOpening.order,
         initialLocation: initialLocation ?? existingOpening.initialLocation,
         initialTime: initialTime ?? existingOpening.initialTime,
-        initialCharacters: initialCharacters !== undefined
-          ? JSON.stringify(initialCharacters)
-          : existingOpening.initialCharacters,
       },
     });
 
-    return NextResponse.json({
-      ...opening,
-      initialCharacters: JSON.parse(opening.initialCharacters || '[]'),
-    });
+    return NextResponse.json(opening);
   } catch (error) {
     console.error('Error updating opening:', error);
     return NextResponse.json(

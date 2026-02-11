@@ -109,24 +109,8 @@ export async function POST(request: NextRequest) {
     const opening = work.openings[0];
     const allCharacterNames = work.characters.map(c => c.name);
 
-    // 초기 캐릭터 결정
-    let initialCharacters: string[] = [];
-    try {
-      const parsed = Array.isArray(opening.initialCharacters)
-        ? opening.initialCharacters
-        : typeof opening.initialCharacters === 'string' && opening.initialCharacters
-          ? JSON.parse(opening.initialCharacters)
-          : [];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        initialCharacters = parsed.filter((name: string) =>
-          allCharacterNames.some(cn => cn === name || cn.includes(name) || name.includes(cn.split(' ')[0]))
-        );
-      }
-    } catch { /* ignore */ }
-
-    if (initialCharacters.length === 0) {
-      initialCharacters = allCharacterNames;
-    }
+    // 항상 전체 캐릭터 (AI가 유기적으로 등장시킴)
+    const initialCharacters = allCharacterNames;
 
     // 세션 + 오프닝 메시지를 트랜잭션으로 (2번 DB 호출 → 1번)
     const [session] = await prisma.$transaction([
@@ -249,12 +233,6 @@ export async function PUT(request: NextRequest) {
           session.work.lorebook, recentText, session.intimacy, session.turnCount, presentCharacters
         );
 
-        // 활성 캐릭터 필터
-        const activeCharacters = characters.filter(c =>
-          presentCharacters.includes(c.name) ||
-          presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
-        );
-
         // 유저 페르소나
         let userPersona: { name: string; age: number | null; gender: string; description: string | null } | undefined;
         try {
@@ -268,7 +246,7 @@ export async function PUT(request: NextRequest) {
 
         const [narrativeContexts, activeScene] = await Promise.all([
           Promise.all(
-            activeCharacters.map(c =>
+            characters.map(c =>
               buildNarrativeContext(sessionId, c.id, c.name)
                 .catch(() => ({ narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null }))
             )
@@ -284,7 +262,7 @@ export async function PUT(request: NextRequest) {
         // [4] systemInstruction 빌드 (작품별 고정 → 캐시됨)
         const systemInstruction = buildSystemInstruction({
           worldSetting: session.work.worldSetting || '',
-          characters: activeCharacters.map(c => ({ name: c.name, prompt: c.prompt })),
+          characters: characters.map(c => ({ name: c.name, prompt: c.prompt })),
           lorebookStatic: lorebookContext,
           userName: session.userName,
         });
@@ -307,43 +285,41 @@ export async function PUT(request: NextRequest) {
         const storyResponse = await generateStoryResponse({
           systemInstruction,
           contents,
-          characters: activeCharacters.map(c => ({ id: c.id, name: c.name })),
+          characters: characters.map(c => ({ id: c.id, name: c.name })),
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
         });
 
         const t3 = Date.now();
-        console.log(`[PERF] ★ Gemini API: ${t3 - t2}ms | responses: ${storyResponse.responses.length} chars`);
+        console.log(`[PERF] ★ Gemini API: ${t3 - t2}ms | turns: ${storyResponse.turns.length}`);
         console.log(`[PERF] total so far: ${t3 - t0}ms`);
 
-        // [4] 나레이션 저장 + 전송
-        if (storyResponse.narratorNote) {
-          const narratorMsg = await prisma.message.create({
-            data: { sessionId, characterId: null, content: storyResponse.narratorNote, messageType: 'narrator' },
-          });
-          send('narrator', { id: narratorMsg.id, content: storyResponse.narratorNote });
-        }
-
-        // [5] 캐릭터 응답 병렬 저장 → 순차 전송
-        const savedResponses = await Promise.all(
-          storyResponse.responses.map(r =>
-            prisma.message.create({
-              data: { sessionId, characterId: r.characterId, content: r.content, messageType: 'dialogue' },
+        // [4] turns를 순서대로 저장 + 전송
+        for (const turn of storyResponse.turns) {
+          if (turn.type === 'narrator') {
+            const narratorMsg = await prisma.message.create({
+              data: { sessionId, characterId: null, content: turn.content, messageType: 'narrator' },
+            });
+            send('narrator', { id: narratorMsg.id, content: turn.content });
+          } else {
+            // dialogue
+            const savedMsg = await prisma.message.create({
+              data: { sessionId, characterId: turn.characterId, content: turn.content, messageType: 'dialogue' },
               include: { character: true },
-            })
-          )
-        );
-        for (const message of savedResponses) {
-          send('character_response', message);
+            });
+            send('character_response', savedMsg);
+          }
         }
 
-        // [6] 세션 업데이트
+        // [5] 세션 업데이트
         const newEvents: string[] = [];
         newEvents.push(`${session.userName}: ${content.substring(0, 50)}`);
-        if (storyResponse.narratorNote) {
-          newEvents.push(`[상황] ${storyResponse.narratorNote.substring(0, 60)}...`);
+        const firstNarrator = storyResponse.turns.find(t => t.type === 'narrator');
+        const firstDialogue = storyResponse.turns.find(t => t.type === 'dialogue');
+        if (firstNarrator) {
+          newEvents.push(`[상황] ${firstNarrator.content.substring(0, 60)}...`);
         }
-        if (storyResponse.responses.length > 0) {
-          newEvents.push(`${storyResponse.responses[0].characterName}: ${storyResponse.responses[0].content.substring(0, 40)}...`);
+        if (firstDialogue) {
+          newEvents.push(`${firstDialogue.characterName}: ${firstDialogue.content.substring(0, 40)}...`);
         }
 
         const updatedSession = await prisma.chatSession.update({
@@ -366,9 +342,11 @@ export async function PUT(request: NextRequest) {
           ))
           .map(c => ({ name: c.name, profileImage: c.profileImage }));
 
-        const characterDialogues = storyResponse.responses.map(r => ({
-          name: r.characterName, dialogue: r.content, emotion: r.emotion,
-        }));
+        const characterDialogues = storyResponse.turns
+          .filter(t => t.type === 'dialogue')
+          .map(t => ({
+            name: t.characterName, dialogue: t.content, emotion: t.emotion,
+          }));
 
         // [8] 세션 상태 전송
         send('session_update', {
@@ -388,18 +366,19 @@ export async function PUT(request: NextRequest) {
         // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
 
         // [A] 캐릭터 기억 업데이트 (매 턴)
+        const dialogueTurns = storyResponse.turns.filter(t => t.type === 'dialogue');
         processConversationForMemory({
           sessionId,
           sceneId: activeScene?.sceneId,
           userMessage: content,
-          characterResponses: storyResponse.responses.map(r => ({
-            characterId: r.characterId,
-            characterName: r.characterName,
-            content: r.content,
-            emotion: r.emotion ? { primary: r.emotion.primary, intensity: r.emotion.intensity } : undefined,
+          characterResponses: dialogueTurns.map(t => ({
+            characterId: t.characterId,
+            characterName: t.characterName,
+            content: t.content,
+            emotion: t.emotion ? { primary: t.emotion.primary, intensity: t.emotion.intensity } : undefined,
           })),
-          emotionalMoment: storyResponse.responses.some(r =>
-            r.emotion && ['sad', 'angry', 'surprised', 'happy'].includes(r.emotion.primary) && r.emotion.intensity > 0.7
+          emotionalMoment: dialogueTurns.some(t =>
+            ['sad', 'angry', 'surprised', 'happy'].includes(t.emotion.primary) && t.emotion.intensity > 0.7
           ),
         }).catch(e => console.error('[NarrativeMemory] processConversation failed:', e));
 

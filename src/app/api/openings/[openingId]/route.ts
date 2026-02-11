@@ -15,7 +15,7 @@ export async function PUT(
 
     const openingId = params.openingId;
     const body = await request.json();
-    const { title, content, isDefault, order, initialLocation, initialTime, initialCharacters } = body;
+    const { title, content, isDefault, order, initialLocation, initialTime } = body;
 
     // 소유자 확인
     const currentOpening = await prisma.opening.findUnique({
@@ -45,19 +45,12 @@ export async function PUT(
     if (order !== undefined) updateData.order = order;
     if (initialLocation !== undefined) updateData.initialLocation = initialLocation;
     if (initialTime !== undefined) updateData.initialTime = initialTime;
-    if (initialCharacters !== undefined) {
-      updateData.initialCharacters = JSON.stringify(initialCharacters);
-    }
-
     const opening = await prisma.opening.update({
       where: { id: openingId },
       data: updateData,
     });
 
-    return NextResponse.json({
-      ...opening,
-      initialCharacters: JSON.parse(opening.initialCharacters || '[]'),
-    });
+    return NextResponse.json(opening);
   } catch (error) {
     console.error('Error updating opening:', error);
     return NextResponse.json(

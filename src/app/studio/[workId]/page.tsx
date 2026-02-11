@@ -19,7 +19,6 @@ interface Opening {
   order: number;
   initialLocation?: string;
   initialTime?: string;
-  initialCharacters?: string[]; // 오프닝 시작 시 등장하는 캐릭터들
 }
 
 interface LorebookEntry {
@@ -82,8 +81,6 @@ export default function WorkEditorPage() {
   const [openingIsDefault, setOpeningIsDefault] = useState(false);
   const [openingLocation, setOpeningLocation] = useState('');
   const [openingTime, setOpeningTime] = useState('');
-  const [openingCharacters, setOpeningCharacters] = useState<string[]>([]); // 초기 등장 캐릭터
-
   // Lorebook edit modal
   const [editingLorebook, setEditingLorebook] = useState<LorebookEntry | null>(null);
   const [lorebookName, setLorebookName] = useState('');
@@ -300,16 +297,6 @@ export default function WorkEditorPage() {
       setOpeningIsDefault(opening.isDefault);
       setOpeningLocation(opening.initialLocation || '');
       setOpeningTime(opening.initialTime || '');
-      // initialCharacters가 문자열이면 파싱, 배열이면 그대로 사용
-      let chars: string[] = [];
-      try {
-        chars = Array.isArray(opening.initialCharacters)
-          ? opening.initialCharacters
-          : (typeof opening.initialCharacters === 'string' && opening.initialCharacters
-            ? JSON.parse(opening.initialCharacters)
-            : []);
-      } catch { chars = []; }
-      setOpeningCharacters(chars);
     } else {
       setEditingOpening({ id: '', title: '', content: '', isDefault: false, order: 0 });
       setOpeningTitle('');
@@ -317,7 +304,6 @@ export default function WorkEditorPage() {
       setOpeningIsDefault(false);
       setOpeningLocation('');
       setOpeningTime('');
-      setOpeningCharacters([]);
     }
   };
 
@@ -349,7 +335,6 @@ export default function WorkEditorPage() {
             isDefault: openingIsDefault,
             initialLocation: openingLocation,
             initialTime: openingTime,
-            initialCharacters: openingCharacters,
           }),
         });
       } else {
@@ -363,7 +348,6 @@ export default function WorkEditorPage() {
             isDefault: openingIsDefault,
             initialLocation: openingLocation,
             initialTime: openingTime,
-            initialCharacters: openingCharacters,
           }),
         });
       }
@@ -874,22 +858,6 @@ export default function WorkEditorPage() {
                           <span className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
                             🕐 {opening.initialTime || '미설정'}
                           </span>
-                          <span className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-                            👥 {(() => {
-                              // initialCharacters가 문자열이면 파싱, 배열이면 그대로 사용
-                              let chars: string[] = [];
-                              try {
-                                chars = Array.isArray(opening.initialCharacters)
-                                  ? opening.initialCharacters
-                                  : (typeof opening.initialCharacters === 'string' && opening.initialCharacters
-                                    ? JSON.parse(opening.initialCharacters)
-                                    : []);
-                              } catch { chars = []; }
-                              return chars.length > 0
-                                ? `${chars.length}명 (${chars.slice(0, 3).join(', ')}${chars.length > 3 ? '...' : ''})`
-                                : '모든 캐릭터';
-                            })()}
-                          </span>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -1146,53 +1114,6 @@ export default function WorkEditorPage() {
                       className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                     />
                   </div>
-                </div>
-                {/* 초기 등장 캐릭터 선택 */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    초기 등장 캐릭터
-                    <span className="text-gray-500 font-normal ml-2">
-                      (선택 안하면 모든 캐릭터가 등장)
-                    </span>
-                  </label>
-                  <div className="flex flex-wrap gap-2 p-3 border rounded-lg dark:border-gray-600 max-h-40 overflow-y-auto">
-                    {work?.characters.map((char) => (
-                      <label
-                        key={char.id}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
-                          openingCharacters.includes(char.name)
-                            ? 'bg-primary-100 border-primary-500 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
-                            : 'bg-gray-50 border-gray-300 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={openingCharacters.includes(char.name)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setOpeningCharacters([...openingCharacters, char.name]);
-                            } else {
-                              setOpeningCharacters(openingCharacters.filter(n => n !== char.name));
-                            }
-                          }}
-                          className="hidden"
-                        />
-                        {char.profileImage && (
-                          <img
-                            src={char.profileImage}
-                            alt={char.name}
-                            className="w-5 h-5 rounded-full object-cover"
-                          />
-                        )}
-                        <span className="text-sm">{char.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {openingCharacters.length > 0 && (
-                    <p className="text-xs text-primary-600 mt-1">
-                      {openingCharacters.length}명 선택됨: {openingCharacters.join(', ')}
-                    </p>
-                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <input
