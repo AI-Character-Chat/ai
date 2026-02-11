@@ -315,6 +315,9 @@ model ChatSession {
   // 👤 유저 페르소나 (캐릭터들이 인지할 유저 정보)
   userPersona       String   @default("{}") // JSON - {name, age, gender, description}
 
+  // 🤖 Pro 분석 결과 (하이브리드 아키텍처)
+  proAnalysis       String   @default("") // Pro가 분석한 디렉터 노트 (다음 턴 Flash가 참조)
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

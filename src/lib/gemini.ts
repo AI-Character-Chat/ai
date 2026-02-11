@@ -250,6 +250,7 @@ export function buildContents(params: {
   userPersona?: UserPersona;
   narrativeContexts: string[];
   sessionSummary?: string;
+  proAnalysis?: string;
   sceneState: SceneState;
   conversationHistory: string;
   userMessage: string;
@@ -280,6 +281,11 @@ export function buildContents(params: {
   // 세션 요약 (장기 기억)
   if (params.sessionSummary) {
     sections.push(`## 이전 대화 요약 (장기 기억)\n${params.sessionSummary}`);
+  }
+
+  // 디렉터 노트 (Pro 분석 결과 - 하이브리드 아키텍처)
+  if (params.proAnalysis) {
+    sections.push(`## 디렉터 노트 (이전 분석)\n${params.proAnalysis}`);
   }
 
   // 첫 등장 가이드
@@ -587,17 +593,17 @@ export async function* generateStoryResponseStream(params: {
   console.log(`📤 Gemini 스트리밍 요청 (systemInstruction: ${systemInstruction.length}자)`);
 
   const stream = await ai.models.generateContentStream({
-    model: MODEL_PRO,
+    model: MODEL_FLASH,
     config: {
       systemInstruction,
       temperature: 0.85,
       topP: 0.9,
       topK: 40,
-      maxOutputTokens: 16384,
+      maxOutputTokens: 8192,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: -1 },
+      thinkingConfig: { thinkingBudget: 0 },
     },
     contents,
   });
@@ -725,7 +731,7 @@ export async function* generateStoryResponseStream(params: {
   yield {
     type: 'metadata',
     metadata: {
-      model: MODEL_PRO,
+      model: MODEL_FLASH,
       thinking: thinkingTokens > 0,
       promptTokens,
       outputTokens,
@@ -737,6 +743,70 @@ export async function* generateStoryResponseStream(params: {
       geminiApiMs: elapsed,
     },
   };
+}
+
+// ============================================================
+// [3-C] Pro 백그라운드 분석 (하이브리드 아키텍처)
+// ============================================================
+
+export async function generateProAnalysis(params: {
+  systemInstruction: string;
+  conversationSummary: string;
+  currentTurnSummary: string;
+  sceneState: SceneState;
+  characterNames: string[];
+}): Promise<string> {
+  const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames } = params;
+
+  const analysisPrompt = `당신은 인터랙티브 스토리의 서사 디렉터입니다.
+방금 일어난 대화를 분석하고, 다음 턴의 AI에게 전달할 디렉터 노트를 작성하세요.
+
+## 분석 항목
+1. 서사 연속성: 현재 스토리 흐름, 해결되지 않은 갈등, 복선
+2. 캐릭터 감정 상태: 각 캐릭터(${characterNames.join(', ')})의 현재 감정과 동기
+3. 관계 변화: 유저와 캐릭터 간 관계 진전/후퇴
+4. 다음 턴 가이드: 주의할 연속성 포인트, 피해야 할 반복, 자연스러운 전개 방향
+
+## 현재 장면
+장소: ${sceneState.location}, 시간: ${sceneState.time}
+등장인물: ${sceneState.presentCharacters.join(', ')}
+
+## 이전 대화 요약
+${conversationSummary}
+
+## 이번 턴
+${currentTurnSummary}
+
+간결하고 핵심적으로 작성하세요 (500자 이내). 다음 턴 AI가 바로 참조할 수 있는 실용적인 노트로.`;
+
+  const startTime = Date.now();
+  console.log(`[ProAnalysis] 시작 (캐릭터: ${characterNames.join(', ')})`);
+
+  try {
+    const result = await ai.models.generateContent({
+      model: MODEL_PRO,
+      config: {
+        systemInstruction,
+        temperature: 0.5,
+        maxOutputTokens: 4096,
+        safetySettings: SAFETY_SETTINGS,
+        thinkingConfig: { thinkingBudget: -1 },
+      },
+      contents: analysisPrompt,
+    });
+
+    const elapsed = Date.now() - startTime;
+    const text = result.text?.trim() || '';
+    const usage = result.usageMetadata;
+    const thinkingTokens = (usage as any)?.thoughtsTokenCount || 0;
+    console.log(`[ProAnalysis] 완료 (${elapsed}ms, thinking: ${thinkingTokens}, output: ${usage?.candidatesTokenCount || 0})`);
+
+    return text;
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    console.error(`[ProAnalysis] 실패 (${elapsed}ms):`, error instanceof Error ? error.message : String(error));
+    return '';
+  }
 }
 
 // ============================================================

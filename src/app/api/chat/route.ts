@@ -6,6 +6,7 @@ import {
   buildContents,
   generateStoryResponseStream,
   generateSessionSummary,
+  generateProAnalysis,
   type StoryTurn,
 } from '@/lib/gemini';
 import {
@@ -282,6 +283,7 @@ export async function PUT(request: NextRequest) {
           userPersona,
           narrativeContexts: memoryPrompts,
           sessionSummary: session.sessionSummary || undefined,
+          proAnalysis: session.proAnalysis || undefined,
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
           conversationHistory,
           userMessage: content,
@@ -433,6 +435,27 @@ export async function PUT(request: NextRequest) {
           pruneWeakMemories(sessionId)
             .catch(() => {});
         }
+
+        // [D] Pro 백그라운드 분석 (하이브리드 아키텍처 핵심)
+        const currentTurnSummary = allTurns.map(t =>
+          t.type === 'narrator' ? `[나레이션] ${t.content.substring(0, 100)}`
+            : `[${t.characterName}] ${t.content.substring(0, 100)}`
+        ).join('\n');
+
+        generateProAnalysis({
+          systemInstruction,
+          conversationSummary: session.sessionSummary || '(첫 대화)',
+          currentTurnSummary: `유저: ${content}\n\n${currentTurnSummary}`,
+          sceneState: { ...updatedScene, recentEvents: [...recentEvents, ...newEvents].slice(-10) },
+          characterNames: characters.map(c => c.name),
+        }).then(analysis => {
+          if (analysis) {
+            return prisma.chatSession.update({
+              where: { id: sessionId },
+              data: { proAnalysis: analysis },
+            });
+          }
+        }).catch(e => console.error('[ProAnalysis] failed:', e));
       } catch (error) {
         console.error('메시지 전송 에러:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
