@@ -169,8 +169,8 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 
 ## 형식
 - turns 3~8개, narrator와 dialogue 교차
-- narrator: 행동/표정/반응 1-2문장. 환경 반복 금지.
-- dialogue: 대사 1-3문장. *행동묘사* 넣지 말 것.
+- narrator: 감각(소리/냄새/촉감) + 캐릭터의 심리/의도 묘사. 단순 외형 나열 금지.
+- dialogue: 세계관 디테일이 자연스럽게 녹아든 대사. 캐치프레이즈를 매 턴 반복하지 말 것.
 - 새 캐릭터 등장 시 narrator에서 등장 이유와 외모 묘사
 - 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed`);
 
