@@ -187,6 +187,7 @@ export default function AdminPage() {
     setStatsLoading(true);
     try {
       const response = await fetch('/api/admin/stats');
+      if (!response.ok) return;
       const data = await response.json();
       setStats(data);
     } catch (error) {

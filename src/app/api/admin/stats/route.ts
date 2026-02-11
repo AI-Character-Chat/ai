@@ -58,12 +58,12 @@ export async function GET() {
       prisma.report.count({ where: { status: 'pending' } })
     ]);
 
-    // 일별 가입자 수 (최근 7일)
+    // 일별 가입자 수 (최근 7일) - PostgreSQL
     const dailySignups = await prisma.$queryRaw<{ date: string; count: number }[]>`
-      SELECT DATE(createdAt) as date, COUNT(*) as count
-      FROM User
-      WHERE createdAt >= ${weekAgo.toISOString()}
-      GROUP BY DATE(createdAt)
+      SELECT DATE("createdAt") as date, COUNT(*)::int as count
+      FROM "User"
+      WHERE "createdAt" >= ${weekAgo}
+      GROUP BY DATE("createdAt")
       ORDER BY date DESC
     `;
 
