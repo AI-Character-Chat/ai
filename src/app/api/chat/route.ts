@@ -109,8 +109,8 @@ export async function POST(request: NextRequest) {
     const opening = work.openings[0];
     const allCharacterNames = work.characters.map(c => c.name);
 
-    // 항상 전체 캐릭터 (AI가 유기적으로 등장시킴)
-    const initialCharacters = allCharacterNames;
+    // 첫 캐릭터 1명으로 시작 (나머지는 AI가 스토리 흐름에 따라 유기적으로 등장시킴)
+    const initialCharacters = allCharacterNames.slice(0, 1);
 
     // 세션 + 오프닝 메시지를 트랜잭션으로 (2번 DB 호출 → 1번)
     const [session] = await prisma.$transaction([
@@ -244,9 +244,15 @@ export async function PUT(request: NextRequest) {
         send('status', { step: 'generating' });
         const t0 = Date.now();
 
+        // presentCharacters에 해당하는 캐릭터만 기억 조회 (집중 + 성능)
+        const presentChars = characters.filter(c =>
+          presentCharacters.includes(c.name) ||
+          presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
+        );
+
         const [narrativeContexts, activeScene] = await Promise.all([
           Promise.all(
-            characters.map(c =>
+            presentChars.map(c =>
               buildNarrativeContext(sessionId, c.id, c.name)
                 .catch(() => ({ narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null }))
             )
