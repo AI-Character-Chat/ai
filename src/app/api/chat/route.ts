@@ -4,8 +4,9 @@ import { Prisma } from '@prisma/client';
 import {
   buildSystemInstruction,
   buildContents,
-  generateStoryResponse,
+  generateStoryResponseStream,
   generateSessionSummary,
+  type StoryTurn,
 } from '@/lib/gemini';
 import {
   formatConversationHistory,
@@ -288,42 +289,57 @@ export async function PUT(request: NextRequest) {
           previousPresentCharacters,
         });
 
-        // [6] AI 응답 생성 (systemInstruction + contents 2계층)
+        // [6] AI 스트리밍 응답 생성
         const t2 = Date.now();
         console.log(`[PERF] prompt build: ${t2 - t1}ms (sysInstruction: ${systemInstruction.length} chars, contents: ${contents.length} parts)`);
-        const storyResponse = await generateStoryResponse({
+
+        const allTurns: StoryTurn[] = [];
+        let updatedScene = { location: session.currentLocation, time: session.currentTime, presentCharacters };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let responseMetadataFromAI: any = null;
+
+        for await (const event of generateStoryResponseStream({
           systemInstruction,
           contents,
           characters: characters.map(c => ({ id: c.id, name: c.name })),
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
-        });
-
-        const t3 = Date.now();
-        console.log(`[PERF] ★ Gemini API: ${t3 - t2}ms | turns: ${storyResponse.turns.length}`);
-        console.log(`[PERF] total so far: ${t3 - t0}ms`);
-
-        // [4] turns를 순서대로 저장 + 전송
-        for (const turn of storyResponse.turns) {
-          if (turn.type === 'narrator') {
-            const narratorMsg = await prisma.message.create({
-              data: { sessionId, characterId: null, content: turn.content, messageType: 'narrator' },
-            });
-            send('narrator', { id: narratorMsg.id, content: turn.content });
-          } else {
-            // dialogue
-            const savedMsg = await prisma.message.create({
-              data: { sessionId, characterId: turn.characterId, content: turn.content, messageType: 'dialogue' },
-              include: { character: true },
-            });
-            send('character_response', savedMsg);
+        })) {
+          switch (event.type) {
+            case 'turn': {
+              allTurns.push(event.turn);
+              // 턴이 완성되는 즉시 DB 저장 + SSE 전송
+              if (event.turn.type === 'narrator') {
+                const narratorMsg = await prisma.message.create({
+                  data: { sessionId, characterId: null, content: event.turn.content, messageType: 'narrator' },
+                });
+                send('narrator', { id: narratorMsg.id, content: event.turn.content });
+              } else {
+                const savedMsg = await prisma.message.create({
+                  data: { sessionId, characterId: event.turn.characterId, content: event.turn.content, messageType: 'dialogue' },
+                  include: { character: true },
+                });
+                send('character_response', savedMsg);
+              }
+              break;
+            }
+            case 'scene':
+              updatedScene = event.scene;
+              break;
+            case 'metadata':
+              responseMetadataFromAI = event.metadata;
+              break;
           }
         }
+
+        const t3 = Date.now();
+        console.log(`[PERF] ★ Gemini 스트리밍: ${t3 - t2}ms | turns: ${allTurns.length}`);
+        console.log(`[PERF] total so far: ${t3 - t0}ms`);
 
         // [5] 세션 업데이트
         const newEvents: string[] = [];
         newEvents.push(`${effectiveUserName}: ${content.substring(0, 50)}`);
-        const firstNarrator = storyResponse.turns.find(t => t.type === 'narrator');
-        const firstDialogue = storyResponse.turns.find(t => t.type === 'dialogue');
+        const firstNarrator = allTurns.find(t => t.type === 'narrator');
+        const firstDialogue = allTurns.find(t => t.type === 'dialogue');
         if (firstNarrator) {
           newEvents.push(`[상황] ${firstNarrator.content.substring(0, 60)}...`);
         }
@@ -336,22 +352,22 @@ export async function PUT(request: NextRequest) {
           data: {
             turnCount: session.turnCount + 1,
             intimacy: Math.min(session.intimacy + 0.1, 10),
-            currentLocation: storyResponse.updatedScene.location,
-            currentTime: storyResponse.updatedScene.time,
-            presentCharacters: JSON.stringify(storyResponse.updatedScene.presentCharacters),
+            currentLocation: updatedScene.location,
+            currentTime: updatedScene.time,
+            presentCharacters: JSON.stringify(updatedScene.presentCharacters),
             recentEvents: JSON.stringify([...recentEvents, ...newEvents].slice(-10)),
           },
         });
 
         // 이미지 생성용 데이터
         const presentCharacterProfiles = characters
-          .filter(c => storyResponse.updatedScene.presentCharacters.some(
+          .filter(c => updatedScene.presentCharacters.some(
             pn => pn === c.name || pn.includes(c.name) || c.name.includes(pn) ||
               c.name.split(' ')[0] === pn || pn.split(' ')[0] === c.name.split(' ')[0]
           ))
           .map(c => ({ name: c.name, profileImage: c.profileImage }));
 
-        const characterDialogues = storyResponse.turns
+        const characterDialogues = allTurns
           .filter(t => t.type === 'dialogue')
           .map(t => ({
             name: t.characterName, dialogue: t.content, emotion: t.emotion,
@@ -366,18 +382,20 @@ export async function PUT(request: NextRequest) {
           },
           presentCharacters: presentCharacterProfiles,
           characterDialogues,
-          sceneUpdate: storyResponse.updatedScene,
+          sceneUpdate: updatedScene,
         });
 
         // 메타데이터 전송 (done 직전)
-        send('response_metadata', {
-          ...storyResponse.metadata,
-          narrativeMemoryMs: t1 - t0,
-          promptBuildMs: t2 - t1,
-          totalMs: t3 - t0,
-          turnsCount: storyResponse.turns.length,
-          systemInstructionLength: systemInstruction.length,
-        });
+        if (responseMetadataFromAI) {
+          send('response_metadata', {
+            ...responseMetadataFromAI,
+            narrativeMemoryMs: t1 - t0,
+            promptBuildMs: t2 - t1,
+            totalMs: t3 - t0,
+            turnsCount: allTurns.length,
+            systemInstructionLength: systemInstruction.length,
+          });
+        }
 
         send('done', {});
         controller.close();
@@ -385,7 +403,7 @@ export async function PUT(request: NextRequest) {
         // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
 
         // [A] 캐릭터 기억 업데이트 (매 턴)
-        const dialogueTurns = storyResponse.turns.filter(t => t.type === 'dialogue');
+        const dialogueTurns = allTurns.filter(t => t.type === 'dialogue');
         processConversationForMemory({
           sessionId,
           sceneId: activeScene?.sceneId,

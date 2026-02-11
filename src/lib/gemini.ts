@@ -474,6 +474,262 @@ export async function generateStoryResponse(params: {
 }
 
 // ============================================================
+// [3-B] 스트리밍 스토리 응답 생성
+// ============================================================
+
+export type StreamEvent =
+  | { type: 'turn'; turn: StoryTurn }
+  | { type: 'scene'; scene: { location: string; time: string; presentCharacters: string[] } }
+  | { type: 'metadata'; metadata: ResponseMetadata };
+
+function parseSingleTurn(
+  raw: { type: string; character: string; content: string; emotion: string },
+  characters: Array<{ id: string; name: string }>,
+): StoryTurn | null {
+  const content = raw.content?.trim() || '';
+  if (!content) return null;
+
+  if (raw.type === 'narrator') {
+    return {
+      type: 'narrator',
+      characterId: '',
+      characterName: '',
+      content,
+      emotion: { primary: 'neutral', intensity: 0.5 },
+    };
+  }
+
+  const char = characters.find(
+    (c) => c.name === raw.character ||
+           c.name.includes(raw.character) ||
+           raw.character?.includes(c.name) ||
+           c.name.toLowerCase() === raw.character?.toLowerCase()
+  );
+  if (!char?.id) return null;
+
+  return {
+    type: 'dialogue',
+    characterId: char.id,
+    characterName: raw.character || '',
+    content,
+    emotion: {
+      primary: EXPRESSION_TYPES.includes(raw.emotion as typeof EXPRESSION_TYPES[number]) ? raw.emotion : 'neutral',
+      intensity: 0.7,
+    },
+  };
+}
+
+/**
+ * 스트리밍 JSON 버퍼에서 완성된 turn 객체를 점진적으로 추출
+ * brace depth tracking으로 JSON 문자열 내 중괄호와 실제 구분자를 구별
+ */
+function extractNewTurnsFromBuffer(
+  buffer: string,
+  alreadyProcessed: number,
+  characters: Array<{ id: string; name: string }>,
+): { newTurns: StoryTurn[]; totalObjectCount: number } {
+  const turnsMatch = buffer.match(/"turns"\s*:\s*\[/);
+  if (!turnsMatch || turnsMatch.index === undefined) return { newTurns: [], totalObjectCount: alreadyProcessed };
+
+  const arrayStart = turnsMatch.index + turnsMatch[0].length;
+  const newTurns: StoryTurn[] = [];
+  let pos = arrayStart;
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let turnStart = -1;
+  let objectCount = 0;
+
+  while (pos < buffer.length) {
+    const ch = buffer[pos];
+
+    if (escapeNext) { escapeNext = false; pos++; continue; }
+    if (ch === '\\' && inString) { escapeNext = true; pos++; continue; }
+    if (ch === '"') { inString = !inString; pos++; continue; }
+    if (inString) { pos++; continue; }
+
+    if (ch === '{') {
+      if (depth === 0) turnStart = pos;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && turnStart !== -1) {
+        objectCount++;
+        if (objectCount > alreadyProcessed) {
+          try {
+            const turnJson = buffer.substring(turnStart, pos + 1);
+            const raw = JSON.parse(turnJson);
+            const turn = parseSingleTurn(raw, characters);
+            if (turn) newTurns.push(turn);
+          } catch { /* 불완전한 JSON - 다음 청크에서 재시도 */ }
+        }
+        turnStart = -1;
+      }
+    } else if (ch === ']' && depth === 0) {
+      break;
+    }
+
+    pos++;
+  }
+
+  return { newTurns, totalObjectCount: objectCount };
+}
+
+export async function* generateStoryResponseStream(params: {
+  systemInstruction: string;
+  contents: Array<{ role: 'user'; parts: Array<{ text: string }> }>;
+  characters: Array<{ id: string; name: string }>;
+  sceneState: SceneState;
+}): AsyncGenerator<StreamEvent> {
+  const startTime = Date.now();
+  const { systemInstruction, contents, characters, sceneState } = params;
+
+  console.log(`📤 Gemini 스트리밍 요청 (systemInstruction: ${systemInstruction.length}자)`);
+
+  const stream = await ai.models.generateContentStream({
+    model: MODEL_PRO,
+    config: {
+      systemInstruction,
+      temperature: 0.85,
+      topP: 0.9,
+      topK: 40,
+      maxOutputTokens: 16384,
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+      safetySettings: SAFETY_SETTINGS,
+      thinkingConfig: { thinkingBudget: -1 },
+    },
+    contents,
+  });
+
+  let buffer = '';
+  let processedObjectCount = 0;
+  const emittedTurns: StoryTurn[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let lastUsageMetadata: any = null;
+  let lastFinishReason = 'STOP';
+
+  for await (const chunk of stream) {
+    if (chunk.usageMetadata) lastUsageMetadata = chunk.usageMetadata;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const candidates = (chunk as any).candidates;
+    if (candidates?.[0]?.finishReason) lastFinishReason = candidates[0].finishReason;
+
+    const text = chunk.text || '';
+    if (!text) continue;
+    buffer += text;
+
+    // 새로 완성된 turn 객체 추출
+    const { newTurns, totalObjectCount } = extractNewTurnsFromBuffer(
+      buffer, processedObjectCount, characters
+    );
+    processedObjectCount = totalObjectCount;
+
+    for (const turn of newTurns) {
+      emittedTurns.push(turn);
+      yield { type: 'turn', turn };
+    }
+  }
+
+  // 스트림 완료 - 누락된 turn + scene 파싱
+  const fullText = buffer.trim();
+  let parsedScene: { location: string; time: string; presentCharacters: string[] } | null = null;
+
+  if (fullText) {
+    try {
+      const parsed = JSON.parse(fullText);
+
+      // 스트리밍 중 누락된 turn 보완
+      const allTurns = (parsed.turns || [])
+        .map((raw: { type: string; character: string; content: string; emotion: string }) => parseSingleTurn(raw, characters))
+        .filter((t: StoryTurn | null): t is StoryTurn => t !== null);
+
+      for (let i = emittedTurns.length; i < allTurns.length; i++) {
+        emittedTurns.push(allTurns[i]);
+        yield { type: 'turn', turn: allTurns[i] };
+      }
+
+      parsedScene = {
+        location: parsed.scene?.location || sceneState.location,
+        time: parsed.scene?.time || sceneState.time,
+        presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
+      };
+    } catch {
+      if (lastFinishReason === 'MAX_TOKENS') {
+        console.warn('⚠️ 스트리밍: MAX_TOKENS로 JSON 잘림, 복구 시도');
+      }
+      const repaired = repairTruncatedJson(fullText, sceneState);
+      const repairedTurns = (repaired.turns || [])
+        .map((raw: { type: string; character: string; content: string; emotion: string }) => parseSingleTurn(raw, characters))
+        .filter((t: StoryTurn | null): t is StoryTurn => t !== null);
+
+      for (let i = emittedTurns.length; i < repairedTurns.length; i++) {
+        emittedTurns.push(repairedTurns[i]);
+        yield { type: 'turn', turn: repairedTurns[i] };
+      }
+
+      parsedScene = repaired.scene;
+    }
+  }
+
+  // 폴백: turn이 하나도 없을 때
+  if (emittedTurns.length === 0 && characters.length > 0) {
+    const fb1: StoryTurn = {
+      type: 'narrator', characterId: '', characterName: '',
+      content: '잠시 정적이 흐른다.',
+      emotion: { primary: 'neutral', intensity: 0.5 },
+    };
+    const fb2: StoryTurn = {
+      type: 'dialogue', characterId: characters[0].id, characterName: characters[0].name,
+      content: '*조용히 당신을 바라본다*',
+      emotion: { primary: 'neutral', intensity: 0.5 },
+    };
+    yield { type: 'turn', turn: fb1 };
+    yield { type: 'turn', turn: fb2 };
+    emittedTurns.push(fb1, fb2);
+  }
+
+  // Scene 업데이트
+  yield {
+    type: 'scene',
+    scene: parsedScene || {
+      location: sceneState.location,
+      time: sceneState.time,
+      presentCharacters: sceneState.presentCharacters,
+    },
+  };
+
+  // 메타데이터
+  const elapsed = Date.now() - startTime;
+  const usage = lastUsageMetadata;
+  const cachedTokens = usage?.cachedContentTokenCount || 0;
+  const promptTokens = usage?.promptTokenCount || 0;
+  const outputTokens = usage?.candidatesTokenCount || 0;
+  const thinkingTokens = usage?.thoughtsTokenCount || 0;
+  const cacheHitRate = promptTokens > 0 ? Math.round((cachedTokens / promptTokens) * 100) : 0;
+
+  console.log(`✅ Gemini 스트리밍 완료 (${elapsed}ms, ${emittedTurns.length} turns)`);
+  console.log(`   📊 토큰: prompt=${promptTokens}, cached=${cachedTokens} (${cacheHitRate}%), output=${outputTokens}, thinking=${thinkingTokens}`);
+  if (cachedTokens > 0) console.log(`   💰 캐시 HIT! ${cachedTokens}토큰 90% 할인 적용`);
+
+  yield {
+    type: 'metadata',
+    metadata: {
+      model: MODEL_PRO,
+      thinking: thinkingTokens > 0,
+      promptTokens,
+      outputTokens,
+      cachedTokens,
+      thinkingTokens,
+      totalTokens: usage?.totalTokenCount || 0,
+      cacheHitRate,
+      finishReason: lastFinishReason,
+      geminiApiMs: elapsed,
+    },
+  };
+}
+
+// ============================================================
 // 잘린 JSON 복구 (MAX_TOKENS 대응)
 // ============================================================
 
