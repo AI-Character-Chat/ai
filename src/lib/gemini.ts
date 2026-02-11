@@ -750,13 +750,22 @@ export async function* generateStoryResponseStream(params: {
 // [3-C] Pro 백그라운드 분석 (하이브리드 아키텍처)
 // ============================================================
 
+export interface ProAnalysisResult {
+  analysis: string;
+  timeMs: number;
+  promptTokens: number;
+  outputTokens: number;
+  thinkingTokens: number;
+  totalTokens: number;
+}
+
 export async function generateProAnalysis(params: {
   systemInstruction: string;
   conversationSummary: string;
   currentTurnSummary: string;
   sceneState: SceneState;
   characterNames: string[];
-}): Promise<string> {
+}): Promise<ProAnalysisResult> {
   const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames } = params;
 
   const analysisPrompt = `당신은 인터랙티브 스토리의 서사 디렉터입니다.
@@ -802,11 +811,18 @@ ${currentTurnSummary}
     const thinkingTokens = (usage as any)?.thoughtsTokenCount || 0;
     console.log(`[ProAnalysis] 완료 (${elapsed}ms, thinking: ${thinkingTokens}, output: ${usage?.candidatesTokenCount || 0})`);
 
-    return text;
+    return {
+      analysis: text,
+      timeMs: elapsed,
+      promptTokens: usage?.promptTokenCount || 0,
+      outputTokens: usage?.candidatesTokenCount || 0,
+      thinkingTokens,
+      totalTokens: usage?.totalTokenCount || 0,
+    };
   } catch (error) {
     const elapsed = Date.now() - startTime;
     console.error(`[ProAnalysis] 실패 (${elapsed}ms):`, error instanceof Error ? error.message : String(error));
-    return '';
+    return { analysis: '', timeMs: elapsed, promptTokens: 0, outputTokens: 0, thinkingTokens: 0, totalTokens: 0 };
   }
 }
 

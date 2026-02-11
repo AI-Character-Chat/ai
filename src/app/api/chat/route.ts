@@ -6,7 +6,6 @@ import {
   buildContents,
   generateStoryResponseStream,
   generateSessionSummary,
-  generateProAnalysis,
   type StoryTurn,
 } from '@/lib/gemini';
 import {
@@ -420,7 +419,13 @@ export async function PUT(request: NextRequest) {
           }).catch(e => console.error('[Metadata] save failed:', e));
         }
 
-        send('done', {});
+        // AI 응답 요약 (클라이언트가 Pro 분석 요청 시 전달용)
+        const aiResponseSummary = allTurns.map(t =>
+          t.type === 'narrator' ? `[나레이션] ${t.content.substring(0, 100)}`
+            : `[${t.characterName}] ${t.content.substring(0, 100)}`
+        ).join('\n');
+
+        send('done', { aiResponseSummary });
         controller.close();
 
         // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
@@ -456,27 +461,6 @@ export async function PUT(request: NextRequest) {
           pruneWeakMemories(sessionId)
             .catch(() => {});
         }
-
-        // [D] Pro 백그라운드 분석 (하이브리드 아키텍처 핵심)
-        const currentTurnSummary = allTurns.map(t =>
-          t.type === 'narrator' ? `[나레이션] ${t.content.substring(0, 100)}`
-            : `[${t.characterName}] ${t.content.substring(0, 100)}`
-        ).join('\n');
-
-        generateProAnalysis({
-          systemInstruction,
-          conversationSummary: session.sessionSummary || '(첫 대화)',
-          currentTurnSummary: `유저: ${content}\n\n${currentTurnSummary}`,
-          sceneState: { ...updatedScene, recentEvents: [...recentEvents, ...newEvents].slice(-10) },
-          characterNames: characters.map(c => c.name),
-        }).then(analysis => {
-          if (analysis) {
-            return prisma.chatSession.update({
-              where: { id: sessionId },
-              data: { proAnalysis: analysis },
-            });
-          }
-        }).catch(e => console.error('[ProAnalysis] failed:', e));
       } catch (error) {
         console.error('메시지 전송 에러:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);

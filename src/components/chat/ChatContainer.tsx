@@ -466,8 +466,38 @@ export default function ChatContainer() {
                 throw new Error(parsed.error || '메시지 전송에 실패했습니다.');
 
               case 'done':
-                // 캐시 업데이트는 state.messages가 최신이 아닐 수 있으므로
-                // chatCache.updateMessages는 다음 렌더 이후에 처리
+                // Pro 분석 트리거 (별도 API — Vercel serverless 타임아웃 회피)
+                if (lastAiMessageId && parsed.aiResponseSummary) {
+                  // 분석 중 상태 표시
+                  dispatch({
+                    type: 'SET_RESPONSE_METADATA',
+                    messageId: lastAiMessageId,
+                    metadata: {
+                      ...(state.responseMetadata[lastAiMessageId] || {}),
+                      proAnalysisMetrics: { analysis: '', timeMs: 0, promptTokens: 0, outputTokens: 0, thinkingTokens: 0, totalTokens: 0, status: 'pending' as const },
+                    },
+                  });
+                  const proMsgId = lastAiMessageId;
+                  fetch('/api/chat/pro-analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: sendingSessionId, userMessage, aiResponseSummary: parsed.aiResponseSummary }),
+                  })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(result => {
+                      if (result) {
+                        dispatch({
+                          type: 'SET_RESPONSE_METADATA',
+                          messageId: proMsgId,
+                          metadata: {
+                            ...(state.responseMetadata[proMsgId] || {}),
+                            proAnalysisMetrics: { ...result, status: result.analysis ? 'complete' : 'failed' },
+                          },
+                        });
+                      }
+                    })
+                    .catch(() => {});
+                }
                 break;
             }
           } catch (parseError) {

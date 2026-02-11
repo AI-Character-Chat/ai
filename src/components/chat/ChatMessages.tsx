@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
-import type { ChatWork, ChatMessage, ChatCharacter, ResponseMetadata } from './useChatReducer';
+import type { ChatWork, ChatMessage, ChatCharacter, ResponseMetadata, ProAnalysisMetrics } from './useChatReducer';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -126,7 +126,11 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
   );
 }
 
-function ProAnalysisPopup({ proAnalysis, onClose }: { proAnalysis: string; onClose: () => void }) {
+function ProAnalysisPopup({ proAnalysis, proMetrics, onClose }: {
+  proAnalysis: string;
+  proMetrics?: ProAnalysisMetrics;
+  onClose: () => void;
+}) {
   const popupRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -139,37 +143,97 @@ function ProAnalysisPopup({ proAnalysis, onClose }: { proAnalysis: string; onClo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  const hasAnalysis = proAnalysis.length > 0;
+  const hasUsedAnalysis = proAnalysis.length > 0;
+  const fmt = (n: number) => n.toLocaleString();
 
   return (
     <div
       ref={popupRef}
-      className="absolute bottom-8 right-0 z-50 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 text-sm max-h-80 overflow-y-auto"
+      className="absolute bottom-8 right-0 z-50 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 text-sm max-h-96 overflow-y-auto"
     >
-      <div className="font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-        <span>Pro 디렉터 노트</span>
-        <span className={`text-xs px-1.5 py-0.5 rounded ${hasAnalysis ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-          {hasAnalysis ? 'Flash에 전달됨' : '첫 턴'}
-        </span>
-      </div>
+      <div className="font-semibold text-gray-900 dark:text-white mb-2">Pro 디렉터 노트</div>
 
-      {hasAnalysis ? (
-        <div className="space-y-2">
-          <div className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 pb-1">
-            이전 턴에서 Pro(gemini-2.5-pro + thinking)가 분석한 내용입니다. Flash가 이 내용 전체를 참고하여 응답했습니다.
-          </div>
-          <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-xs">
+      {/* Flash가 참고한 이전 분석 */}
+      <div className="border-b border-gray-100 dark:border-gray-700 pb-2 mb-2">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">이전 분석 → Flash 참고</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded ${hasUsedAnalysis ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+            {hasUsedAnalysis ? '100% 포함' : '없음 (첫 턴)'}
+          </span>
+        </div>
+        {hasUsedAnalysis && (
+          <div className="text-gray-600 dark:text-gray-400 text-xs whitespace-pre-wrap leading-relaxed max-h-24 overflow-y-auto">
             {proAnalysis}
           </div>
-          <div className="text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700 pt-1">
-            {proAnalysis.length}자 | Flash 프롬프트에 100% 포함
+        )}
+      </div>
+
+      {/* 이번 턴 Pro 분석 */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">이번 턴 Pro 분석</span>
+          {proMetrics?.status === 'pending' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 flex items-center gap-1">
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              분석 중...
+            </span>
+          )}
+          {proMetrics?.status === 'complete' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">완료</span>
+          )}
+          {proMetrics?.status === 'failed' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">실패</span>
+          )}
+        </div>
+
+        {proMetrics?.status === 'complete' && proMetrics.analysis && (
+          <>
+            <div className="text-gray-700 dark:text-gray-300 text-xs whitespace-pre-wrap leading-relaxed mb-2">
+              {proMetrics.analysis}
+            </div>
+            <div className="border-t border-gray-100 dark:border-gray-700 pt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex justify-between">
+                <span>Pro 분석 시간</span>
+                <span className="text-gray-900 dark:text-white font-medium">{(proMetrics.timeMs / 1000).toFixed(1)}초</span>
+              </div>
+              <div className="flex justify-between">
+                <span>입력 토큰</span>
+                <span className="text-gray-900 dark:text-white">{fmt(proMetrics.promptTokens)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>사고 토큰</span>
+                <span className="text-purple-600 dark:text-purple-400">{fmt(proMetrics.thinkingTokens)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>출력 토큰</span>
+                <span className="text-gray-900 dark:text-white">{fmt(proMetrics.outputTokens)}</span>
+              </div>
+              <div className="flex justify-between font-medium">
+                <span>총 토큰</span>
+                <span className="text-gray-900 dark:text-white">{fmt(proMetrics.totalTokens)}</span>
+              </div>
+              <div className="text-xs text-gray-400 dark:text-gray-500 pt-1">
+                {proMetrics.analysis.length}자 | 다음 턴 Flash 프롬프트에 100% 포함 예정
+              </div>
+            </div>
+          </>
+        )}
+
+        {proMetrics?.status === 'pending' && (
+          <div className="text-gray-500 dark:text-gray-400 text-xs">
+            gemini-2.5-pro (thinking ON)로 서사 분석 중... 완료 후 다음 턴 Flash가 참고합니다.
           </div>
-        </div>
-      ) : (
-        <div className="text-gray-500 dark:text-gray-400 text-xs">
-          첫 번째 턴이라 아직 Pro 분석이 없습니다. 이 턴의 응답 완료 후 Pro가 백그라운드에서 분석을 시작하며, 다음 턴부터 Flash가 참고합니다.
-        </div>
-      )}
+        )}
+
+        {!proMetrics && (
+          <div className="text-gray-500 dark:text-gray-400 text-xs">
+            Pro 분석 대기 중. Flash 응답 완료 후 자동으로 시작됩니다.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -255,7 +319,7 @@ export default function ChatMessages({
                   <div className="flex justify-end mt-1 gap-1 relative">
                     <button
                       onClick={() => handleProAnalysisClick(message.id)}
-                      className={`transition-colors p-1 ${metadata.proAnalysis ? 'text-purple-400 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300' : 'text-gray-300 dark:text-gray-600'}`}
+                      className={`transition-colors p-1 ${metadata.proAnalysisMetrics?.status === 'pending' ? 'text-yellow-400 animate-pulse' : metadata.proAnalysisMetrics?.status === 'complete' || metadata.proAnalysis ? 'text-purple-400 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300' : 'text-gray-300 dark:text-gray-600'}`}
                       title="Pro 디렉터 노트"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -276,7 +340,7 @@ export default function ChatMessages({
                       <MetadataPopup metadata={metadata} onClose={handleClosePopup} />
                     )}
                     {openProAnalysisId === message.id && (
-                      <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} onClose={handleClosePopup} />
+                      <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} proMetrics={metadata.proAnalysisMetrics} onClose={handleClosePopup} />
                     )}
                   </div>
                 )}
@@ -332,7 +396,7 @@ export default function ChatMessages({
                 <div className="flex justify-end mt-1 gap-1 relative">
                   <button
                     onClick={() => handleProAnalysisClick(message.id)}
-                    className={`transition-colors p-1 ${metadata.proAnalysis ? 'text-purple-400 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300' : 'text-gray-300 dark:text-gray-600'}`}
+                    className={`transition-colors p-1 ${metadata.proAnalysisMetrics?.status === 'pending' ? 'text-yellow-400 animate-pulse' : metadata.proAnalysisMetrics?.status === 'complete' || metadata.proAnalysis ? 'text-purple-400 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300' : 'text-gray-300 dark:text-gray-600'}`}
                     title="Pro 디렉터 노트"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -353,7 +417,7 @@ export default function ChatMessages({
                     <MetadataPopup metadata={metadata} onClose={handleClosePopup} />
                   )}
                   {openProAnalysisId === message.id && (
-                    <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} onClose={handleClosePopup} />
+                    <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} proMetrics={metadata.proAnalysisMetrics} onClose={handleClosePopup} />
                   )}
                 </div>
               )}

@@ -61,6 +61,16 @@ export interface Persona {
   isDefault: boolean;
 }
 
+export interface ProAnalysisMetrics {
+  analysis: string;
+  timeMs: number;
+  promptTokens: number;
+  outputTokens: number;
+  thinkingTokens: number;
+  totalTokens: number;
+  status: 'pending' | 'complete' | 'failed';
+}
+
 export interface ResponseMetadata {
   model: string;
   thinking: boolean;
@@ -78,6 +88,7 @@ export interface ResponseMetadata {
   turnsCount: number;
   systemInstructionLength: number;
   proAnalysis: string;
+  proAnalysisMetrics?: ProAnalysisMetrics;
 }
 
 // ============================================================
