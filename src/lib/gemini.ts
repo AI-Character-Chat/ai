@@ -609,13 +609,22 @@ export async function* generateStoryResponseStream(params: {
   let lastUsageMetadata: any = null;
   let lastFinishReason = 'STOP';
 
+  let chunkIndex = 0;
   for await (const chunk of stream) {
+    chunkIndex++;
     if (chunk.usageMetadata) lastUsageMetadata = chunk.usageMetadata;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const candidates = (chunk as any).candidates;
     if (candidates?.[0]?.finishReason) lastFinishReason = candidates[0].finishReason;
 
-    const text = chunk.text || '';
+    // chunk.text가 thinking 청크에서 throw할 수 있음
+    let text = '';
+    try {
+      text = chunk.text || '';
+    } catch {
+      // thinking 또는 빈 청크 - 건너뛰기
+      continue;
+    }
     if (!text) continue;
     buffer += text;
 
@@ -626,6 +635,7 @@ export async function* generateStoryResponseStream(params: {
     processedObjectCount = totalObjectCount;
 
     for (const turn of newTurns) {
+      console.log(`   🔄 스트리밍 turn ${emittedTurns.length + 1}: ${turn.type} (chunk #${chunkIndex})`);
       emittedTurns.push(turn);
       yield { type: 'turn', turn };
     }
