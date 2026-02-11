@@ -408,8 +408,12 @@ export async function PUT(request: NextRequest) {
       } catch (error) {
         console.error('메시지 전송 에러:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        // 디버깅: 실제 에러 메시지를 클라이언트에 전달
-        send('error', { error: `[DEBUG] ${errorMessage}` });
+        const userErrorMessage = errorMessage.includes('EMPTY_RESPONSE')
+          ? 'AI 응답 생성에 실패했습니다. 다시 시도해주세요.'
+          : errorMessage.includes('API') || errorMessage.includes('인증')
+            ? 'AI 서비스 연결에 문제가 발생했습니다.'
+            : '메시지 전송에 실패했습니다.';
+        send('error', { error: userErrorMessage });
         controller.close();
       }
     },

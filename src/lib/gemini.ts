@@ -321,7 +321,7 @@ export async function generateStoryResponse(params: {
           temperature: 0.85,
           topP: 0.9,
           topK: 40,
-          maxOutputTokens: 4000,
+          maxOutputTokens: 16384,
           responseMimeType: 'application/json',
           responseSchema: RESPONSE_SCHEMA,
           safetySettings: SAFETY_SETTINGS,
@@ -331,14 +331,14 @@ export async function generateStoryResponse(params: {
 
       const text = result.text?.trim();
 
+      // finishReason 체크
+      const finishReason = (result as any).candidates?.[0]?.finishReason;
+      if (finishReason && finishReason !== 'STOP') {
+        console.warn(`⚠️ finishReason: ${finishReason} (토큰 부족 또는 필터)`);
+      }
+
       if (!text || text.length === 0) {
-        // 응답이 비어있을 때 상세 원인 로깅
-        const candidates = (result as any).candidates;
-        const promptFeedback = (result as any).promptFeedback;
-        const finishReason = candidates?.[0]?.finishReason;
-        const safetyRatings = candidates?.[0]?.safetyRatings || promptFeedback?.safetyRatings;
-        console.error('🔍 EMPTY_RESPONSE 상세:', JSON.stringify({ finishReason, safetyRatings, promptFeedback }, null, 2));
-        throw new Error(`EMPTY_RESPONSE|finishReason:${finishReason || 'unknown'}|safety:${JSON.stringify(safetyRatings || [])}`);
+        throw new Error(`EMPTY_RESPONSE (finishReason: ${finishReason || 'unknown'})`);
       }
 
       // JSON 파싱
