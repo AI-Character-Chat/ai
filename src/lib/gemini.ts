@@ -217,25 +217,16 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 - 한 응답 안에서도 같은 표현을 두 번 쓰지 마라.
 - 대사는 반드시 2문장 이상. 캐릭터의 의도와 상황 맥락을 담아라.`);
 
-  // 세계관 (작품별 고정)
+  // 세계관 (작품별 고정 - 전체 포함)
   if (params.worldSetting) {
-    const trimmed = params.worldSetting.length > 2000
-      ? params.worldSetting.substring(0, 2000) + '...'
-      : params.worldSetting;
-    parts.push(`## 세계관\n${trimmed}`);
+    parts.push(`## 세계관\n${params.worldSetting}`);
   }
 
-  // 캐릭터 페르소나 (작품별 고정)
+  // 캐릭터 페르소나 (작품별 고정 - 전체 포함)
   if (params.characters.length > 0) {
-    const maxLength = params.characters.length <= 2 ? 1500 :
-                      params.characters.length <= 3 ? 1000 : 700;
-
     const charSection = params.characters
       .map((char) => {
-        let prompt = replaceVariables(char.prompt, params.userName, char.name);
-        if (prompt.length > maxLength) {
-          prompt = prompt.substring(0, maxLength) + '...';
-        }
+        const prompt = replaceVariables(char.prompt, params.userName, char.name);
         return `### ${char.name}\n${prompt}`;
       })
       .join('\n\n');
@@ -243,12 +234,9 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
     parts.push(`## 캐릭터\n${charSection}`);
   }
 
-  // 로어북 정적 항목 (작품별 고정)
+  // 로어북 정적 항목 (작품별 고정 - 전체 포함)
   if (params.lorebookStatic) {
-    const trimmed = params.lorebookStatic.length > 1000
-      ? params.lorebookStatic.substring(0, 1000) + '...'
-      : params.lorebookStatic;
-    parts.push(`## 참고 설정\n${trimmed}`);
+    parts.push(`## 참고 설정\n${params.lorebookStatic}`);
   }
 
   return parts.join('\n\n');
@@ -279,10 +267,7 @@ export function buildContents(params: {
       personaParts.push(`성별: ${params.userPersona.gender === 'male' ? '남성' : '여성'}`);
     }
     if (params.userPersona.description) {
-      const trimmed = params.userPersona.description.length > 800
-        ? params.userPersona.description.substring(0, 800) + '...'
-        : params.userPersona.description;
-      personaParts.push(trimmed);
+      personaParts.push(params.userPersona.description);
     }
     sections.push(`## 유저 (${params.userPersona.name})\n${personaParts.join('\n')}`);
   }
