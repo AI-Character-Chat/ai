@@ -134,6 +134,15 @@ export default function ChatContainer() {
 
       dispatch({ type: 'LOAD_SESSION', session, messages });
 
+      // DB에 저장된 메타데이터 복원 (새로고침 시에도 아이콘 유지)
+      (data.messages || []).forEach((msg: any) => {
+        if (msg.metadata) {
+          try {
+            dispatch({ type: 'SET_RESPONSE_METADATA', messageId: msg.id, metadata: JSON.parse(msg.metadata) });
+          } catch { /* ignore */ }
+        }
+      });
+
       // 캐시 저장
       if (currentWork) {
         chatCache.setCache(sessionId, { work: currentWork, session, messages });
@@ -579,6 +588,7 @@ export default function ChatContainer() {
         onScroll={handleScroll}
         showScrollButton={showScrollButton}
         onScrollToBottom={scrollToBottom}
+        isAdmin={(authSession?.user as any)?.role === 'admin'}
       />
 
       <ChatInput

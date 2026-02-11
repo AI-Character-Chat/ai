@@ -299,6 +299,7 @@ export async function PUT(request: NextRequest) {
         let updatedScene = { location: session.currentLocation, time: session.currentTime, presentCharacters };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseMetadataFromAI: any = null;
+        let lastAiMessageId = '';
 
         for await (const event of generateStoryResponseStream({
           systemInstruction,
@@ -314,12 +315,14 @@ export async function PUT(request: NextRequest) {
                 const narratorMsg = await prisma.message.create({
                   data: { sessionId, characterId: null, content: event.turn.content, messageType: 'narrator' },
                 });
+                lastAiMessageId = narratorMsg.id;
                 send('narrator', { id: narratorMsg.id, content: event.turn.content });
               } else {
                 const savedMsg = await prisma.message.create({
                   data: { sessionId, characterId: event.turn.characterId, content: event.turn.content, messageType: 'dialogue' },
                   include: { character: true },
                 });
+                lastAiMessageId = savedMsg.id;
                 send('character_response', savedMsg);
               }
               break;
@@ -398,6 +401,23 @@ export async function PUT(request: NextRequest) {
             systemInstructionLength: systemInstruction.length,
             proAnalysis: session.proAnalysis || '',
           });
+        }
+
+        // [7] 메타데이터 DB 저장 (새로고침 시에도 유지)
+        if (lastAiMessageId && responseMetadataFromAI) {
+          const fullMetadata = {
+            ...responseMetadataFromAI,
+            narrativeMemoryMs: t1 - t0,
+            promptBuildMs: t2 - t1,
+            totalMs: t3 - t0,
+            turnsCount: allTurns.length,
+            systemInstructionLength: systemInstruction.length,
+            proAnalysis: session.proAnalysis || '',
+          };
+          prisma.message.update({
+            where: { id: lastAiMessageId },
+            data: { metadata: JSON.stringify(fullMetadata) },
+          }).catch(e => console.error('[Metadata] save failed:', e));
         }
 
         send('done', {});

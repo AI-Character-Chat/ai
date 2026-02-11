@@ -97,9 +97,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   callbacks: {
     async session({ session, user }) {
-      // 세션에 유저 ID 추가
+      // 세션에 유저 ID + role 추가
       if (session.user) {
         session.user.id = user.id;
+        const dbUser = await basePrisma.user.findUnique({ where: { id: user.id }, select: { role: true } });
+        (session.user as any).role = dbUser?.role || 'user';
       }
       return session;
     },
@@ -122,6 +124,7 @@ declare module 'next-auth' {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      role?: string;
     };
   }
 }

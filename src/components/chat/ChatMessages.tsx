@@ -16,6 +16,7 @@ interface ChatMessagesProps {
   onScroll: () => void;
   showScrollButton: boolean;
   onScrollToBottom: () => void;
+  isAdmin?: boolean;
 }
 
 function getCharacterColor(characterId: string | null, characters: ChatCharacter[]) {
@@ -186,6 +187,7 @@ export default function ChatMessages({
   onScroll,
   showScrollButton,
   onScrollToBottom,
+  isAdmin,
 }: ChatMessagesProps) {
   const [openMetadataId, setOpenMetadataId] = useState<string | null>(null);
   const [openProAnalysisId, setOpenProAnalysisId] = useState<string | null>(null);
@@ -249,7 +251,7 @@ export default function ChatMessages({
                   )}
                   <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed italic text-center">{formatMessage(message.content)}</p>
                 </div>
-                {metadata && (
+                {isAdmin && metadata && (
                   <div className="flex justify-end mt-1 gap-1 relative">
                     <button
                       onClick={() => handleProAnalysisClick(message.id)}
@@ -326,7 +328,7 @@ export default function ChatMessages({
                   </div>
                 </div>
               </div>
-              {metadata && (
+              {isAdmin && metadata && (
                 <div className="flex justify-end mt-1 gap-1 relative">
                   <button
                     onClick={() => handleProAnalysisClick(message.id)}
