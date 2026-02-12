@@ -300,11 +300,15 @@ export function buildContents(params: {
   // 현재 상황
   sections.push(`## 상황\n${params.sceneState.location}, ${params.sceneState.time}\n등장: ${params.sceneState.presentCharacters.join(', ')}${firstAppearance}`);
 
-  // 대화 이력
-  sections.push(`## 대화\n${params.conversationHistory || '(시작)'}`);
+  // 대화 이력 (과거 경계 명시 → 반복 방지)
+  if (params.conversationHistory) {
+    sections.push(`## 대화 이력 (이미 완료된 과거 — 아래 내용을 절대 반복하지 마세요)\n${params.conversationHistory}\n\n---\n[위는 과거 대화입니다. 같은 대사, 묘사, 표현을 재사용하지 마세요.]`);
+  } else {
+    sections.push(`## 대화 이력\n(시작)`);
+  }
 
-  // 유저 메시지
-  sections.push(`## ${params.userName}\n${params.userMessage}`);
+  // 유저 메시지 (현재 입력 — 이것에 대해서만 새 응답 생성)
+  sections.push(`## ${params.userName}의 새 입력 (이것에 대해 새로운 응답을 생성하세요)\n${params.userMessage}`);
 
   return [{
     role: 'user' as const,
@@ -604,7 +608,7 @@ export async function* generateStoryResponseStream(params: {
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig: { thinkingBudget: 1024 },  // 최소 사고: 반복 방지 + 맥락 파악 (0→1024)
     },
     contents,
   });
@@ -769,13 +773,17 @@ export async function generateProAnalysis(params: {
   const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames } = params;
 
   const analysisPrompt = `당신은 인터랙티브 스토리의 서사 디렉터입니다.
-방금 일어난 대화를 분석하고, 다음 턴의 AI에게 전달할 디렉터 노트를 작성하세요.
+다음 턴의 AI가 참조할 "앞으로의 방향 가이드"를 작성하세요.
 
-## 분석 항목
-1. 서사 연속성: 현재 스토리 흐름, 해결되지 않은 갈등, 복선
-2. 캐릭터 감정 상태: 각 캐릭터(${characterNames.join(', ')})의 현재 감정과 동기
-3. 관계 변화: 유저와 캐릭터 간 관계 진전/후퇴
-4. 다음 턴 가이드: 주의할 연속성 포인트, 피해야 할 반복, 자연스러운 전개 방향
+## 중요: 과거 묘사 금지
+- 이미 일어난 장면이나 대사를 다시 묘사하지 마세요
+- "~했다", "~흔들렸다" 같은 과거형 서술 대신, "~해야 한다", "~방향으로" 같은 지시형으로 작성하세요
+
+## 작성 항목
+1. 다음 턴 방향: 유저의 마지막 행동에 대해 어떤 새로운 전개가 자연스러운지
+2. 캐릭터 내면 상태: 각 캐릭터(${characterNames.join(', ')})가 지금 느끼는 감정과 다음에 취할 태도
+3. 미해결 복선: 아직 풀리지 않은 갈등이나 떡밥
+4. 금지 사항: 이전 턴에서 이미 사용된 표현/대사 중 절대 반복하면 안 되는 것들
 
 ## 현재 장면
 장소: ${sceneState.location}, 시간: ${sceneState.time}
@@ -787,7 +795,7 @@ ${conversationSummary}
 ## 이번 턴
 ${currentTurnSummary}
 
-간결하고 핵심적으로 작성하세요 (500자 이내). 다음 턴 AI가 바로 참조할 수 있는 실용적인 노트로.`;
+간결하고 핵심적으로, 미래 지향적으로 작성하세요 (500자 이내). 과거에 무슨 일이 있었는지가 아니라, 다음에 무엇을 해야 하는지에 집중하세요.`;
 
   const startTime = Date.now();
   console.log(`[ProAnalysis] 시작 (캐릭터: ${characterNames.join(', ')})`);
