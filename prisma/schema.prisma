@@ -338,6 +338,7 @@ model Message {
   messageType String   @default("dialogue") // "dialogue" | "narrator" | "user" | "system"
   imageUrl    String?  // AI 생성 상황 이미지 URL
   metadata    String?  // JSON - AI 응답 메타데이터 (관리자용)
+  embedding   String   @default("[]") // 256차원 임베딩 벡터 (유저 메시지, 선별적 히스토리 검색용)
   createdAt   DateTime @default(now())
 
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

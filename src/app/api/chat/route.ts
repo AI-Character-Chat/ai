@@ -6,12 +6,15 @@ import {
   buildContents,
   generateStoryResponseStream,
   generateSessionSummary,
+  generateEmbedding,
   type StoryTurn,
 } from '@/lib/gemini';
 import {
   formatConversationHistory,
   filterActiveLorebookEntries,
   extractRecentText,
+  findRelevantMessages,
+  buildSelectiveHistory,
 } from '@/lib/prompt-builder';
 import {
   buildNarrativeContext,
@@ -176,18 +179,27 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: '메시지는 5000자 이하여야 합니다.' }, { status: 400 });
   }
 
-  // 세션 + 최근 30개 메시지만 로드 (성능 최적화)
-  const session = await prisma.chatSession.findUnique({
-    where: { id: sessionId },
-    include: {
-      work: { include: { characters: true, lorebook: true } },
-      messages: {
-        include: { character: true },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
+  // 세션 + 즉시 컨텍스트 (최근 10개) + 검색용 과거 메시지 (100개)
+  const [session, olderMessages] = await Promise.all([
+    prisma.chatSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        work: { include: { characters: true, lorebook: true } },
+        messages: {
+          include: { character: true },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
       },
-    },
-  });
+    }),
+    // 검색용: 임베딩 있는 과거 유저 메시지 (최근 100개, 선별적 검색용)
+    prisma.message.findMany({
+      where: { sessionId, messageType: 'user', NOT: { embedding: '[]' } },
+      include: { character: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+  ]);
 
   if (!session) {
     return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
@@ -212,11 +224,22 @@ export async function PUT(request: NextRequest) {
       };
 
       try {
-        // [1] 유저 메시지 저장 → 즉시 전송
-        const userMessage = await prisma.message.create({
-          data: { sessionId, characterId: null, content, messageType: 'user' },
-        });
+        // [1] 유저 메시지 저장 + 임베딩 생성 (병렬)
+        const [userMessage, queryEmbedding] = await Promise.all([
+          prisma.message.create({
+            data: { sessionId, characterId: null, content, messageType: 'user' },
+          }),
+          generateEmbedding(content).catch(() => [] as number[]),
+        ]);
         send('user_message', userMessage);
+
+        // 유저 메시지 임베딩 저장 (fire-and-forget, 다음 턴에서 검색 가능)
+        if (queryEmbedding.length > 0) {
+          prisma.message.update({
+            where: { id: userMessage.id },
+            data: { embedding: JSON.stringify(queryEmbedding) },
+          }).catch(() => {});
+        }
 
         // [2] 컨텍스트 수집
         const presentCharacters = JSON.parse(session.presentCharacters) as string[];
@@ -238,7 +261,14 @@ export async function PUT(request: NextRequest) {
         // 페르소나 이름 우선, 없으면 세션 이름 사용
         const effectiveUserName = userPersona?.name || session.userName;
 
-        const conversationHistory = formatConversationHistory(recentMessages, effectiveUserName);
+        // [2.5] 선별적 대화 히스토리 빌드
+        const immediateIds = new Set(recentMessages.map(m => m.id));
+        const relevantHistory = findRelevantMessages(
+          olderMessages, immediateIds, queryEmbedding, 5
+        );
+        const conversationHistory = relevantHistory.length > 0
+          ? buildSelectiveHistory(relevantHistory, recentMessages, effectiveUserName)
+          : formatConversationHistory(recentMessages, effectiveUserName);
         const recentText = extractRecentText(recentMessages, content);
         const lorebookContext = filterActiveLorebookEntries(
           session.work.lorebook, recentText, session.intimacy, session.turnCount, presentCharacters
