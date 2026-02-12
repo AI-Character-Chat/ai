@@ -94,6 +94,11 @@ export interface ResponseMetadata {
   selectiveHistory?: boolean;
   relevantHistoryCount?: number;
   turnNumber?: number;
+  // mem0 장기 기억 메트릭
+  mem0Available?: boolean;
+  mem0SearchMs?: number;
+  mem0MemoriesFound?: number;
+  mem0MemoriesSaved?: number;
 }
 
 // ============================================================

@@ -293,6 +293,7 @@ export async function PUT(request: NextRequest) {
           presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
         );
 
+        const mem0SearchStart = Date.now();
         const [narrativeContexts, activeScene, mem0Results] = await Promise.all([
           Promise.all(
             presentChars.map(c =>
@@ -310,6 +311,7 @@ export async function PUT(request: NextRequest) {
               ).catch(() => new Map<string, string[]>())
             : Promise.resolve(new Map<string, string[]>()),
         ]);
+        const mem0SearchMs = Date.now() - mem0SearchStart;
         const memoryPrompts = narrativeContexts
           .map(ctx => ctx.narrativePrompt)
           .filter(p => p.length > 0);
@@ -317,10 +319,10 @@ export async function PUT(request: NextRequest) {
         // mem0 기억을 프롬프트 텍스트로 변환
         const charNameMap = new Map(presentChars.map(c => [c.id, c.name]));
         const mem0Context = formatMem0ForPrompt(mem0Results, charNameMap);
+        const mem0MemoriesFound = Array.from(mem0Results.values()).reduce((s, m) => s + m.length, 0);
 
         const t1 = Date.now();
-        const mem0MemCount = Array.from(mem0Results.values()).reduce((s, m) => s + m.length, 0);
-        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts, mem0: ${mem0MemCount} memories)`);
+        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts, mem0: ${mem0MemoriesFound} memories in ${mem0SearchMs}ms)`);
 
         // [4] systemInstruction 빌드 (작품별 고정 → 캐시됨)
         const systemInstruction = buildSystemInstruction({
@@ -450,12 +452,18 @@ export async function PUT(request: NextRequest) {
         );
         const lorebookActivated = lorebookContext ? lorebookContext.split('\n\n').length : 0;
 
+        const mem0SaveCount = isMem0Available() ? dialogueTurnsForMeta.length : 0;
         const extraMeta = {
           emotions: emotionsSummary,
           lorebookActivated,
           selectiveHistory: relevantHistory.length > 0,
           relevantHistoryCount: relevantHistory.length,
           turnNumber: session.turnCount + 1,
+          // mem0 메트릭
+          mem0Available: isMem0Available(),
+          mem0SearchMs,
+          mem0MemoriesFound,
+          mem0MemoriesSaved: mem0SaveCount,
         };
 
         if (responseMetadataFromAI) {
