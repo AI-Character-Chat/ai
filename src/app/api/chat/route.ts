@@ -21,6 +21,8 @@ import {
   processConversationForMemory,
   decayMemoryStrength,
   pruneWeakMemories,
+  consolidateMemories,
+  promoteMemories,
   getActiveScene,
 } from '@/lib/narrative-memory';
 import { auth } from '@/lib/auth';
@@ -503,6 +505,12 @@ export async function PUT(request: NextRequest) {
             .catch(() => {});
           decayMemoryStrength(sessionId)
             .catch(() => {});
+        }
+
+        // [D] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
+        if (newTurnCount % 10 === 0) {
+          consolidateMemories(sessionId).catch(() => {});
+          promoteMemories(sessionId).catch(() => {});
         }
 
         // [C] 25턴마다: 약한 기억 정리 (비동기)

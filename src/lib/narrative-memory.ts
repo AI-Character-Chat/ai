@@ -450,9 +450,49 @@ export async function getAllRelationships(sessionId: string): Promise<Relationsh
 // ============================================================
 
 /**
+ * 유사 기억 강화 (A-MEM: Reinforcement)
+ * 새 기억과 유사한 기존 기억이 있으면 강화하고 새 저장 생략
+ */
+async function reinforceMemory(
+  sessionId: string,
+  characterId: string,
+  newEmbedding: number[],
+  newImportance: number,
+  similarityThreshold: number = 0.85
+): Promise<boolean> {
+  if (newEmbedding.length === 0) return false;
+
+  const memories = await prisma.characterMemory.findMany({
+    where: { sessionId, characterId },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+
+  for (const mem of memories) {
+    const emb = JSON.parse(mem.embedding || '[]') as number[];
+    if (emb.length === 0) continue;
+    const sim = cosineSimilarity(newEmbedding, emb);
+    if (sim >= similarityThreshold) {
+      await prisma.characterMemory.update({
+        where: { id: mem.id },
+        data: {
+          strength: Math.min(1.0, mem.strength + 0.2),
+          importance: Math.min(1.0, Math.max(mem.importance, newImportance)),
+          mentionedCount: { increment: 1 },
+          lastMentioned: new Date(),
+        },
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 캐릭터의 기억 저장 (캐릭터 성격 필터 적용)
  *
  * 같은 사건이라도 캐릭터마다 다르게 해석하여 저장
+ * A-MEM: 유사 기억이 있으면 강화, 없으면 새로 저장
  */
 export async function saveCharacterMemory(params: {
   sessionId: string;
@@ -467,6 +507,12 @@ export async function saveCharacterMemory(params: {
 }) {
   // 임베딩 생성 (interpretation 기반 — 캐릭터 관점의 해석이 검색 키)
   const embedding = await generateEmbedding(params.interpretation);
+
+  // A-MEM: 유사 기억이 있으면 강화하고 새 저장 생략
+  const reinforced = await reinforceMemory(
+    params.sessionId, params.characterId, embedding, params.importance || 0.5
+  );
+  if (reinforced) return null;
 
   return await prisma.characterMemory.create({
     data: {
@@ -648,6 +694,113 @@ export async function pruneWeakMemories(
   }
 
   return totalDeleted;
+}
+
+// ============================================================
+// 기억 진화 (A-MEM: Memory Evolution)
+// ============================================================
+
+/**
+ * 유사 기억 통합 (Consolidation)
+ * 동일 캐릭터의 유사 episodic 기억 그룹을 하나의 semantic 기억으로 병합
+ */
+export async function consolidateMemories(sessionId: string): Promise<number> {
+  const characters = await prisma.characterMemory.findMany({
+    where: { sessionId },
+    select: { characterId: true },
+    distinct: ['characterId'],
+  });
+
+  let totalConsolidated = 0;
+
+  for (const { characterId } of characters) {
+    const memories = await prisma.characterMemory.findMany({
+      where: { sessionId, characterId, memoryType: 'episodic' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const used = new Set<string>();
+    const groups: (typeof memories)[] = [];
+
+    for (let i = 0; i < memories.length; i++) {
+      if (used.has(memories[i].id)) continue;
+      const embI = JSON.parse(memories[i].embedding || '[]') as number[];
+      if (embI.length === 0) continue;
+
+      const group = [memories[i]];
+      used.add(memories[i].id);
+
+      for (let j = i + 1; j < memories.length; j++) {
+        if (used.has(memories[j].id)) continue;
+        const embJ = JSON.parse(memories[j].embedding || '[]') as number[];
+        if (embJ.length === 0) continue;
+        if (cosineSimilarity(embI, embJ) >= 0.80) {
+          group.push(memories[j]);
+          used.add(memories[j].id);
+        }
+      }
+
+      if (group.length >= 2) groups.push(group);
+    }
+
+    for (const group of groups) {
+      const bestMemory = group.reduce((a, b) => a.importance > b.importance ? a : b);
+      const combinedInterpretation = group.map(m => m.interpretation).join(' / ');
+      const maxImportance = Math.max(...group.map(m => m.importance));
+      const totalMentions = group.reduce((sum, m) => sum + m.mentionedCount, 0);
+
+      await prisma.characterMemory.create({
+        data: {
+          sessionId,
+          characterId,
+          sceneId: bestMemory.sceneId,
+          originalEvent: `[통합] ${group.length}개 관련 기억`,
+          interpretation: combinedInterpretation.substring(0, 500),
+          memoryType: 'semantic',
+          importance: Math.min(1.0, maxImportance + 0.1),
+          strength: 1.0,
+          mentionedCount: totalMentions,
+          keywords: bestMemory.keywords,
+          embedding: bestMemory.embedding,
+        },
+      });
+
+      await prisma.characterMemory.deleteMany({
+        where: { id: { in: group.map(m => m.id) } },
+      });
+
+      totalConsolidated += group.length;
+    }
+  }
+
+  if (totalConsolidated > 0) {
+    console.log(`[MemoryEvolution] Consolidated ${totalConsolidated} memories`);
+  }
+  return totalConsolidated;
+}
+
+/**
+ * 반복 언급 기억 승격 (Promotion)
+ * episodic 중 mentionedCount >= 3인 기억을 semantic으로 승격
+ */
+export async function promoteMemories(sessionId: string): Promise<number> {
+  const result = await prisma.characterMemory.updateMany({
+    where: {
+      sessionId,
+      memoryType: 'episodic',
+      mentionedCount: { gte: 3 },
+    },
+    data: {
+      memoryType: 'semantic',
+      importance: 0.8,
+    },
+  });
+
+  if (result.count > 0) {
+    console.log(`[MemoryEvolution] Promoted ${result.count} memories to semantic`);
+  }
+  return result.count;
 }
 
 /**
@@ -906,6 +1059,8 @@ export default {
   searchCharacterMemories,
   markMemoryMentioned,
   pruneWeakMemories,
+  consolidateMemories,
+  promoteMemories,
 
   // 캐시 관리
   cleanExpiredImageCache,
