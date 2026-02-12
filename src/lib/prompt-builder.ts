@@ -293,46 +293,53 @@ export function filterActiveLorebookEntries(
   presentCharacters: string[],
   maxEntries: number = 5
 ): string {
-  const activeEntries: { content: string; priority: number }[] = [];
-  const lowerRecentText = recentText.toLowerCase();
+  const MAX_DEPTH = 3;
+  const activatedIndices = new Set<number>();
+  let scanText = recentText.toLowerCase();
 
-  for (const entry of entries) {
-    // 키워드 파싱 (JSON 문자열 또는 배열)
+  // 키워드 사전 파싱 (1회만)
+  const parsedEntries = entries.map((entry, idx) => {
     let keywords: string[];
     if (typeof entry.keywords === 'string') {
-      try {
-        keywords = JSON.parse(entry.keywords);
-      } catch {
-        keywords = [entry.keywords];
-      }
+      try { keywords = JSON.parse(entry.keywords); }
+      catch { keywords = [entry.keywords]; }
     } else {
       keywords = entry.keywords;
     }
+    return { idx, keywords: keywords.map(kw => kw.toLowerCase()), entry };
+  });
 
-    // 키워드 매칭 확인
-    const hasMatch = keywords.some((kw) =>
-      lowerRecentText.includes(kw.toLowerCase())
-    );
-    if (!hasMatch) continue;
+  // 재귀 스캔 (최대 MAX_DEPTH 라운드)
+  for (let depth = 0; depth < MAX_DEPTH; depth++) {
+    let newActivations = 0;
 
-    // 조건 확인
-    if (entry.minIntimacy !== null && intimacy < entry.minIntimacy) continue;
-    if (entry.minTurns !== null && turnCount < entry.minTurns) continue;
-    if (
-      entry.requiredCharacter !== null &&
-      !presentCharacters.includes(entry.requiredCharacter)
-    ) continue;
+    for (const { idx, keywords, entry } of parsedEntries) {
+      if (activatedIndices.has(idx)) continue;
 
-    activeEntries.push({
-      content: entry.content,
-      priority: entry.priority ?? 0,
-    });
+      const hasMatch = keywords.some(kw => scanText.includes(kw));
+      if (!hasMatch) continue;
+
+      // 조건 확인
+      if (entry.minIntimacy !== null && intimacy < entry.minIntimacy) continue;
+      if (entry.minTurns !== null && turnCount < entry.minTurns) continue;
+      if (
+        entry.requiredCharacter !== null &&
+        !presentCharacters.includes(entry.requiredCharacter)
+      ) continue;
+
+      activatedIndices.add(idx);
+      scanText += ' ' + entry.content.toLowerCase();
+      newActivations++;
+    }
+
+    if (newActivations === 0) break; // 더 이상 새 활성화 없으면 조기 종료
   }
 
-  // 우선순위 정렬 (낮은 숫자가 높은 우선순위)
-  activeEntries.sort((a, b) => a.priority - b.priority);
+  // 활성화된 항목들을 우선순위로 정렬
+  const activeEntries = Array.from(activatedIndices)
+    .map(idx => ({ content: entries[idx].content, priority: entries[idx].priority ?? 0 }))
+    .sort((a, b) => a.priority - b.priority);
 
-  // 최대 개수만 반환
   return activeEntries
     .slice(0, maxEntries)
     .map(e => e.content)
