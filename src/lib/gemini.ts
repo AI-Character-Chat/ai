@@ -156,8 +156,12 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: 'dialogue일 때 표정. narrator일 때 "neutral".',
           },
+          emotionIntensity: {
+            type: Type.NUMBER,
+            description: 'dialogue일 때 감정 강도 0.0~1.0. narrator일 때 0.5.',
+          },
         },
-        required: ['type', 'character', 'content', 'emotion'],
+        required: ['type', 'character', 'content', 'emotion', 'emotionIntensity'],
       },
     },
     scene: {
@@ -387,7 +391,7 @@ export async function generateStoryResponse(params: {
       }
 
       // JSON 파싱
-      let parsed: { turns?: Array<{ type: string; character: string; content: string; emotion: string }>; scene?: { location: string; time: string; presentCharacters: string[] } };
+      let parsed: { turns?: Array<{ type: string; character: string; content: string; emotion: string; emotionIntensity?: number }>; scene?: { location: string; time: string; presentCharacters: string[] } };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -403,7 +407,7 @@ export async function generateStoryResponse(params: {
 
       // turns 파싱
       const turns: StoryTurn[] = (parsed.turns || [])
-        .map((turn: { type: string; character: string; content: string; emotion: string }) => {
+        .map((turn: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => {
           if (turn.type === 'narrator') {
             return {
               type: 'narrator' as const,
@@ -427,7 +431,9 @@ export async function generateStoryResponse(params: {
             content: turn.content?.trim() || '',
             emotion: {
               primary: EXPRESSION_TYPES.includes(turn.emotion as typeof EXPRESSION_TYPES[number]) ? turn.emotion : 'neutral',
-              intensity: 0.7,
+              intensity: typeof turn.emotionIntensity === 'number'
+                ? Math.max(0, Math.min(1, turn.emotionIntensity))
+                : 0.5,
             },
           };
         })

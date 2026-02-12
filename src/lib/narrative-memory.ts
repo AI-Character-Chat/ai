@@ -76,6 +76,7 @@ export interface RelationshipState {
   nicknameForUser?: string;
   knownFacts: string[];
   sharedExperiences: string[];
+  emotionalHistory: Array<{ emotion: string; intensity: number; at: string }>;
 }
 
 // ============================================================
@@ -269,6 +270,7 @@ export async function getOrCreateRelationship(
     nicknameForUser: relationship.nicknameForUser || undefined,
     knownFacts: JSON.parse(relationship.knownFacts),
     sharedExperiences: JSON.parse(relationship.sharedExperiences),
+    emotionalHistory: JSON.parse(relationship.emotionalHistory || '[]'),
   };
 }
 
@@ -442,6 +444,7 @@ export async function getAllRelationships(sessionId: string): Promise<Relationsh
     nicknameForUser: r.nicknameForUser || undefined,
     knownFacts: JSON.parse(r.knownFacts),
     sharedExperiences: JSON.parse(r.sharedExperiences),
+    emotionalHistory: JSON.parse(r.emotionalHistory || '[]'),
   }));
 }
 
@@ -940,6 +943,13 @@ function generateNarrativePrompt(
     });
   }
 
+  // 최근 감정 흐름
+  if (relationship.emotionalHistory.length > 0) {
+    lines.push(`\n[${characterName}의 최근 감정 흐름]`);
+    const recentEmotions = relationship.emotionalHistory.slice(-5);
+    lines.push(`- ${recentEmotions.map(e => `${e.emotion}(${(e.intensity * 100).toFixed(0)}%)`).join(' → ')}`);
+  }
+
   // 현재 장면 분위기
   if (scene && scene.emotionalTone.mood) {
     lines.push(`\n[현재 장면 분위기]`);
@@ -1010,7 +1020,34 @@ export async function processConversationForMemory(params: {
       newFacts: extractedFacts,
     });
 
-    // 2. 캐릭터 기억 저장 (캐릭터 해석은 추후 AI로 생성)
+    // 2. 감정 히스토리 누적
+    if (response.emotion) {
+      try {
+        const rel = await prisma.userCharacterRelationship.findUnique({
+          where: { sessionId_characterId: { sessionId, characterId: response.characterId } },
+        });
+        if (rel) {
+          const history = JSON.parse(rel.emotionalHistory || '[]') as Array<{
+            emotion: string; intensity: number; at: string;
+          }>;
+          history.push({
+            emotion: response.emotion.primary,
+            intensity: response.emotion.intensity,
+            at: new Date().toISOString(),
+          });
+          // 최대 10개 유지 (FIFO)
+          const trimmed = history.slice(-10);
+          await prisma.userCharacterRelationship.update({
+            where: { id: rel.id },
+            data: { emotionalHistory: JSON.stringify(trimmed) },
+          });
+        }
+      } catch (e) {
+        console.error('[EmotionHistory] update failed:', e);
+      }
+    }
+
+    // 3. 캐릭터 기억 저장 (캐릭터 해석은 추후 AI로 생성)
     if (extractedFacts && extractedFacts.length > 0) {
       // 간단한 해석 생성 (추후 AI로 고도화)
       const interpretation = `유저가 "${extractedFacts.join(', ')}"에 대해 이야기했다`;
