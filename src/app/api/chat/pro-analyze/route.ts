@@ -15,14 +15,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { sessionId?: string; userMessage?: string; aiResponseSummary?: string };
+  let body: { sessionId?: string; messageId?: string; userMessage?: string; aiResponseSummary?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
-  const { sessionId, userMessage, aiResponseSummary } = body;
+  const { sessionId, messageId, userMessage, aiResponseSummary } = body;
   if (!sessionId || !userMessage || !aiResponseSummary) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
@@ -76,13 +76,44 @@ export async function POST(request: NextRequest) {
     characterNames: characters.map(c => c.name),
   });
 
-  // DB 저장
+  // DB 저장: 세션 proAnalysis + 메시지 metadata에 proAnalysisMetrics 추가
+  const proMetrics = {
+    analysis: result.analysis,
+    timeMs: result.timeMs,
+    promptTokens: result.promptTokens,
+    outputTokens: result.outputTokens,
+    thinkingTokens: result.thinkingTokens,
+    totalTokens: result.totalTokens,
+    status: result.analysis ? 'complete' : 'failed',
+  };
+
+  const dbOps: Promise<unknown>[] = [];
+
   if (result.analysis) {
-    await prisma.chatSession.update({
-      where: { id: sessionId },
-      data: { proAnalysis: result.analysis },
-    });
+    dbOps.push(
+      prisma.chatSession.update({
+        where: { id: sessionId },
+        data: { proAnalysis: result.analysis },
+      })
+    );
   }
+
+  // 메시지 metadata에 proAnalysisMetrics 병합 (새로고침 시에도 유지)
+  if (messageId) {
+    dbOps.push(
+      prisma.message.findUnique({ where: { id: messageId }, select: { metadata: true } })
+        .then(msg => {
+          const existing = msg?.metadata ? JSON.parse(msg.metadata) : {};
+          return prisma.message.update({
+            where: { id: messageId },
+            data: { metadata: JSON.stringify({ ...existing, proAnalysisMetrics: proMetrics }) },
+          });
+        })
+        .catch(e => console.error('[ProAnalysis] metadata save failed:', e))
+    );
+  }
+
+  await Promise.all(dbOps);
 
   return NextResponse.json(result);
 }

@@ -478,7 +478,7 @@ export default function ChatContainer() {
                   fetch('/api/chat/pro-analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId: sendingSessionId, userMessage, aiResponseSummary: parsed.aiResponseSummary }),
+                    body: JSON.stringify({ sessionId: sendingSessionId, messageId: proMsgId, userMessage, aiResponseSummary: parsed.aiResponseSummary }),
                   })
                     .then(r => r.ok ? r.json() : null)
                     .then(result => {
