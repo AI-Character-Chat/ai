@@ -40,6 +40,33 @@ function formatMessage(text: string) {
   });
 }
 
+// Gemini API 공식 가격 (2025, Standard Tier, ≤200k)
+// https://ai.google.dev/gemini-api/docs/pricing
+const PRICING = {
+  flash: { input: 0.30, cached: 0.03, output: 2.50 },   // $/1M tokens
+  pro:   { input: 1.25, output: 10.00 },                  // $/1M tokens (output includes thinking)
+};
+
+function calcFlashCost(m: ResponseMetadata) {
+  const cached = m.cachedTokens ?? 0;
+  const nonCached = (m.promptTokens ?? 0) - cached;
+  const inputCost = (nonCached * PRICING.flash.input + cached * PRICING.flash.cached) / 1_000_000;
+  const outputCost = ((m.outputTokens ?? 0) + (m.thinkingTokens ?? 0)) * PRICING.flash.output / 1_000_000;
+  return inputCost + outputCost;
+}
+
+function calcProCost(pm: ProAnalysisMetrics) {
+  const inputCost = (pm.promptTokens ?? 0) * PRICING.pro.input / 1_000_000;
+  const outputCost = ((pm.outputTokens ?? 0) + (pm.thinkingTokens ?? 0)) * PRICING.pro.output / 1_000_000;
+  return inputCost + outputCost;
+}
+
+function formatCost(usd: number) {
+  const krw = usd * 1460;
+  if (usd < 0.001) return `$${usd.toFixed(5)} (₩${krw.toFixed(2)})`;
+  return `$${usd.toFixed(4)} (₩${krw.toFixed(1)})`;
+}
+
 function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onClose: () => void }) {
   const popupRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +81,9 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
   }, [onClose]);
 
   const fmt = (n: number | undefined) => (n ?? 0).toLocaleString();
+  const flashCost = calcFlashCost(metadata);
+  const proCost = metadata.proAnalysisMetrics?.status === 'complete' ? calcProCost(metadata.proAnalysisMetrics) : 0;
+  const totalCost = flashCost + proCost;
 
   return (
     <div
@@ -125,6 +155,24 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
             ) : (
               <span className="text-gray-400 dark:text-gray-500">미포함 (첫 턴)</span>
             )}
+          </div>
+        </div>
+
+        {/* 비용 */}
+        <div className="border-b border-gray-100 dark:border-gray-700 pb-2">
+          <div className="flex justify-between">
+            <span>Flash 비용</span>
+            <span className="text-gray-900 dark:text-white">{formatCost(flashCost)}</span>
+          </div>
+          {proCost > 0 && (
+            <div className="flex justify-between">
+              <span>Pro 분석 비용</span>
+              <span className="text-purple-600 dark:text-purple-400">{formatCost(proCost)}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-medium">
+            <span>턴 총 비용</span>
+            <span className="text-orange-600 dark:text-orange-400">{formatCost(totalCost)}</span>
           </div>
         </div>
 
@@ -226,6 +274,10 @@ function ProAnalysisPopup({ proAnalysis, proMetrics, onClose }: {
               <div className="flex justify-between font-medium">
                 <span>총 토큰</span>
                 <span className="text-gray-900 dark:text-white">{fmt(proMetrics.totalTokens)}</span>
+              </div>
+              <div className="flex justify-between font-medium pt-1 border-t border-gray-100 dark:border-gray-700 mt-1">
+                <span>Pro 분석 비용</span>
+                <span className="text-orange-600 dark:text-orange-400">{formatCost(calcProCost(proMetrics))}</span>
               </div>
               <div className="text-xs text-gray-400 dark:text-gray-500 pt-1">
                 {proMetrics.analysis.length}자 | 다음 턴 Flash 프롬프트에 100% 포함 예정
