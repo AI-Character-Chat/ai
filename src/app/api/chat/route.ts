@@ -257,7 +257,7 @@ export async function PUT(request: NextRequest) {
         const [narrativeContexts, activeScene] = await Promise.all([
           Promise.all(
             presentChars.map(c =>
-              buildNarrativeContext(sessionId, c.id, c.name)
+              buildNarrativeContext(sessionId, c.id, c.name, content)
                 .catch(() => ({ narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null }))
             )
           ),

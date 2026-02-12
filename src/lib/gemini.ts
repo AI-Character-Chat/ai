@@ -858,6 +858,31 @@ ${currentTurnSummary}
 }
 
 // ============================================================
+// [8] 임베딩 생성 (메모리 검색용)
+// ============================================================
+
+const EMBEDDING_MODEL = 'text-embedding-004';
+const EMBEDDING_DIMENSIONS = 256;
+
+/**
+ * 텍스트를 256차원 임베딩 벡터로 변환
+ * 실패 시 빈 배열 반환 (호출자가 폴백 처리)
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  try {
+    const result = await ai.models.embedContent({
+      model: EMBEDDING_MODEL,
+      contents: [{ parts: [{ text }] }],
+      config: { outputDimensionality: EMBEDDING_DIMENSIONS },
+    });
+    return result.embeddings?.[0]?.values || [];
+  } catch (e) {
+    console.error('[Embedding] failed:', e instanceof Error ? e.message : String(e));
+    return [];
+  }
+}
+
+// ============================================================
 // 잘린 JSON 복구 (MAX_TOKENS 대응)
 // ============================================================
 

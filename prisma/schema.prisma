@@ -539,6 +539,9 @@ model CharacterMemory {
   // 연관 키워드 (검색용)
   keywords    String   @default("[]") // JSON array
 
+  // 임베딩 벡터 (의미 기반 검색용, 256차원)
+  embedding   String   @default("[]") // JSON: Float[]
+
   // 이 기억을 언급했는지
   mentionedCount Int   @default(0)
   lastMentioned  DateTime?

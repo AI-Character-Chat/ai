@@ -7,8 +7,28 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { generateEmbedding } from './gemini';
 
 const prisma = new PrismaClient();
+
+// ============================================================
+// 유틸리티
+// ============================================================
+
+/**
+ * 코사인 유사도 계산
+ */
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
 
 // ============================================================
 // 타입 정의
@@ -395,6 +415,9 @@ export async function saveCharacterMemory(params: {
   importance?: number;
   keywords?: string[];
 }) {
+  // 임베딩 생성 (interpretation 기반 — 캐릭터 관점의 해석이 검색 키)
+  const embedding = await generateEmbedding(params.interpretation);
+
   return await prisma.characterMemory.create({
     data: {
       sessionId: params.sessionId,
@@ -408,16 +431,19 @@ export async function saveCharacterMemory(params: {
       memoryType: params.memoryType || 'episodic',
       importance: params.importance || 0.5,
       keywords: JSON.stringify(params.keywords || []),
+      embedding: JSON.stringify(embedding),
     },
   });
 }
 
 /**
  * 캐릭터의 관련 기억 검색
+ * queryEmbedding이 있으면 의미 유사도 기반, 없으면 importance 기반 폴백
  */
 export async function searchCharacterMemories(params: {
   sessionId: string;
   characterId: string;
+  queryEmbedding?: number[];
   keywords?: string[];
   memoryType?: string;
   minImportance?: number;
@@ -429,6 +455,7 @@ export async function searchCharacterMemories(params: {
     interpretation: string;
     importance: number;
     createdAt: Date;
+    similarity?: number;
   }>
 > {
   const memories = await prisma.characterMemory.findMany({
@@ -439,9 +466,36 @@ export async function searchCharacterMemories(params: {
       ...(params.minImportance && { importance: { gte: params.minImportance } }),
     },
     orderBy: [{ importance: 'desc' }, { createdAt: 'desc' }],
-    take: params.limit || 10,
+    // 임베딩 검색 시 전체 로드 후 인메모리 정렬 (최대 100개)
+    take: params.queryEmbedding?.length ? 100 : (params.limit || 10),
   });
 
+  // 임베딩 기반 정렬
+  if (params.queryEmbedding?.length) {
+    const scored = memories.map(m => {
+      const emb: number[] = JSON.parse(m.embedding || '[]');
+      const similarity = emb.length > 0
+        ? cosineSimilarity(params.queryEmbedding!, emb)
+        : 0;
+      // 복합 점수: 유사도 70% + 중요도 20% + 강도 10%
+      const score = similarity * 0.7 + m.importance * 0.2 + m.strength * 0.1;
+      return { ...m, similarity, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, params.limit || 5);
+
+    return top.map(m => ({
+      id: m.id,
+      originalEvent: m.originalEvent,
+      interpretation: m.interpretation,
+      importance: m.importance,
+      createdAt: m.createdAt,
+      similarity: m.similarity,
+    }));
+  }
+
+  // 폴백: 기존 importance 기반
   return memories.map((m) => ({
     id: m.id,
     originalEvent: m.originalEvent,
@@ -572,7 +626,8 @@ export async function cleanExpiredImageCache(): Promise<number> {
 export async function buildNarrativeContext(
   sessionId: string,
   characterId: string,
-  characterName: string
+  characterName: string,
+  userMessage?: string
 ): Promise<{
   relationship: RelationshipState;
   recentMemories: Array<{ interpretation: string; importance: number }>;
@@ -582,18 +637,26 @@ export async function buildNarrativeContext(
   // 1. 관계 상태 가져오기
   const relationship = await getOrCreateRelationship(sessionId, characterId, characterName);
 
-  // 2. 최근 기억 검색
+  // 2. 유저 입력 임베딩 생성 (있을 때만)
+  let queryEmbedding: number[] | undefined;
+  if (userMessage) {
+    queryEmbedding = await generateEmbedding(userMessage);
+    if (queryEmbedding.length === 0) queryEmbedding = undefined; // 실패 시 폴백
+  }
+
+  // 3. 기억 검색 (임베딩 기반 또는 importance 폴백)
   const recentMemories = await searchCharacterMemories({
     sessionId,
     characterId,
+    queryEmbedding,
     limit: 5,
     minImportance: 0.3,
   });
 
-  // 3. 현재 장면 정보
+  // 4. 현재 장면 정보
   const sceneContext = await getActiveScene(sessionId);
 
-  // 4. 서사 프롬프트 생성
+  // 5. 서사 프롬프트 생성
   const narrativePrompt = generateNarrativePrompt(
     characterName,
     relationship,
