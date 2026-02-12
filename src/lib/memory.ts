@@ -1,355 +1,279 @@
 /**
- * Mem0 기반 장기 기억 시스템 (최적화 버전 v2)
+ * Mem0 Cloud 기반 장기 기억 시스템
  *
- * 기능:
- * - 캐릭터별 유저 기억 관리 (agentId로 분리)
- * - 의미 기반 기억 검색
- * - 다중 캐릭터 병렬 검색 지원
+ * 격리 구조:
+ * - user_id: 유저 간 격리 (인증된 userId)
+ * - agent_id: 캐릭터 간 격리 (characterId UUID)
+ * → 다른 작품의 동명이인이라도 UUID가 달라 기억 충돌 없음
  *
- * 최적화 (429 에러 해결):
- * - infer: false 사용 → LLM 호출 제거 (Embedding만 사용)
- * - 병렬 검색으로 다중 캐릭터 동시 처리
- * - Rate Limit 감지 및 자동 쿨다운
- *
- * 참고: Mem0 공식 문서 (https://docs.mem0.ai)
- * - agentId: 캐릭터별 기억 분리
- * - parallel_search: 다중 쿼리 동시 처리
+ * 데이터 흐름:
+ * [유저 메시지 + AI 응답] → mem0.add() → Cloud에서 자동 fact 추출/중복 제거/저장
+ * [유저 메시지] → mem0.search() → 관련 기억 검색 → 프롬프트에 주입
  */
 
-import { Memory } from 'mem0ai/oss';
+import MemoryClient from 'mem0ai';
 
+// ============================================================
 // Rate Limit 관리
+// ============================================================
+
 let isRateLimited = false;
 let rateLimitResetTime = 0;
 const RATE_LIMIT_COOLDOWN = 60000; // 1분 쿨다운
 
-// 환경변수로 저장소 타입 설정 (기본: memory, 프로덕션: qdrant)
-const VECTOR_STORE_PROVIDER = process.env.VECTOR_STORE_PROVIDER || 'memory';
-
-// Mem0 설정 - Embedder만 사용 (LLM 호출 제거로 429 에러 방지)
-const mem0Config = {
-  // Embedder: 의미 기반 검색에만 사용 (API 호출 최소화)
-  embedder: {
-    provider: "google" as const,
-    config: {
-      apiKey: process.env.GOOGLE_API_KEY,
-      model: "gemini-embedding-001",
-      embeddingDims: 1536,
-    }
-  },
-  // Vector Store: 환경변수에 따라 설정
-  // - memory: 개발용 (휘발성)
-  // - qdrant: 프로덕션용 (영구 저장)
-  vectorStore: VECTOR_STORE_PROVIDER === 'qdrant'
-    ? {
-        provider: "qdrant" as const,
-        config: {
-          collectionName: "character-memories",
-          host: process.env.QDRANT_HOST || "localhost",
-          port: parseInt(process.env.QDRANT_PORT || "6333"),
-        }
-      }
-    : {
-        provider: "memory" as const,
-        config: {
-          collectionName: "character-memories",
-        }
-      }
-  // LLM 설정 제거 - infer: false 사용으로 불필요
-};
-
-// 싱글톤 Memory 인스턴스
-let memoryInstance: Memory | null = null;
-
-/**
- * Rate Limit 상태 확인
- */
 function checkRateLimit(): boolean {
-  if (isRateLimited && Date.now() < rateLimitResetTime) {
-    return true; // 아직 쿨다운 중
-  }
-  if (isRateLimited && Date.now() >= rateLimitResetTime) {
-    isRateLimited = false; // 쿨다운 해제
-  }
+  if (isRateLimited && Date.now() < rateLimitResetTime) return true;
+  if (isRateLimited) isRateLimited = false;
   return false;
 }
 
-/**
- * Rate Limit 활성화
- */
 function setRateLimited(): void {
   isRateLimited = true;
   rateLimitResetTime = Date.now() + RATE_LIMIT_COOLDOWN;
-  console.warn('[Memory] Rate Limit - 1분 쿨다운');
+  console.warn('[Mem0] Rate limit 감지 — 1분 쿨다운');
 }
 
-/**
- * Memory 인스턴스 가져오기 (싱글톤)
- */
-export function getMemory(): Memory {
-  if (!memoryInstance) {
-    memoryInstance = new Memory(mem0Config);
+// ============================================================
+// 클라이언트 싱글톤
+// ============================================================
+
+let client: MemoryClient | null = null;
+
+function getClient(): MemoryClient | null {
+  if (!process.env.MEM0_API_KEY) return null;
+  if (!client) {
+    client = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
   }
-  return memoryInstance;
+  return client;
 }
 
 /**
- * 특정 유저의 모든 기억 조회
+ * mem0 사용 가능 여부
  */
-export async function getAllMemories(
+export function isMem0Available(): boolean {
+  return !!process.env.MEM0_API_KEY;
+}
+
+// ============================================================
+// 핵심 API
+// ============================================================
+
+/**
+ * 대화 기억 저장 (Cloud에서 자동 fact 추출 + 중복 제거)
+ *
+ * @param messages - 대화 내용 [{role, content}]
+ * @param userId - 인증된 유저 ID
+ * @param characterId - 캐릭터 UUID (격리 키)
+ * @param metadata - 추가 메타데이터 (work_id 등)
+ */
+export async function addMemory(
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   userId: string,
-  characterId?: string
-): Promise<any[]> {
+  characterId: string,
+  metadata?: Record<string, string>,
+): Promise<void> {
+  const mem0 = getClient();
+  if (!mem0 || checkRateLimit()) return;
+
   try {
-    const memory = getMemory();
+    await mem0.add(messages, {
+      user_id: `user_${userId}`,
+      agent_id: `char_${characterId}`,
+      metadata: { ...metadata, timestamp: new Date().toISOString() },
+    });
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    if (err?.status === 429 || err?.message?.includes('429')) setRateLimited();
+    console.error('[Mem0] add failed:', err?.message || error);
+  }
+}
 
-    const options: any = { userId };
-    if (characterId) {
-      options.agentId = characterId;
+/**
+ * 의미 기반 기억 검색 (단일 캐릭터)
+ */
+export async function searchMemories(
+  query: string,
+  userId: string,
+  characterId: string,
+  limit: number = 5,
+): Promise<string[]> {
+  const mem0 = getClient();
+  if (!mem0 || checkRateLimit()) return [];
+
+  try {
+    const results = await mem0.search(query, {
+      user_id: `user_${userId}`,
+      agent_id: `char_${characterId}`,
+      limit,
+    });
+    // Cloud API 응답 형식: { results: [{ memory: string, ... }] } 또는 배열
+    if (Array.isArray(results)) {
+      return results.map((r: { memory?: string }) => r.memory).filter((m): m is string => !!m);
     }
-
-    const allMemories = await memory.getAll(options);
-    return allMemories.results || [];
-  } catch (error) {
-    console.error('[Memory] 전체 조회 실패:', error);
+    const res = results as { results?: Array<{ memory: string }> };
+    return res.results?.map(r => r.memory).filter(Boolean) as string[] || [];
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    if (err?.status === 429 || err?.message?.includes('429')) setRateLimited();
+    console.error('[Mem0] search failed:', err?.message || error);
     return [];
   }
 }
 
 /**
- * 기억을 시스템 프롬프트용 컨텍스트로 포맷팅
+ * 다중 캐릭터 기억 병렬 검색
  *
- * @param memories - 기억 목록
- * @param characterName - 캐릭터 이름
- * @returns 포맷팅된 기억 컨텍스트
+ * @returns Map<characterId, memories[]>
  */
-export function formatMemoriesForPrompt(
-  memories: string[],
-  characterName: string
-): string {
-  if (memories.length === 0) {
-    return '';
-  }
-
-  const memoriesText = memories
-    .map((m, i) => `${i + 1}. ${m}`)
-    .join('\n');
-
-  return `
-[${characterName}의 유저에 대한 기억]
-${memoriesText}
-
-[중요 지시]
-- 위 기억들을 자연스럽게 대화에 녹여내세요
-- 유저가 물어보지 않아도, 맥락에 맞으면 과거 기억을 먼저 언급해도 좋습니다
-- 기억을 억지로 끼워넣지 말고, 자연스러운 흐름일 때만 언급하세요
-- 기억에 없는 내용은 지어내지 마세요
-`;
-}
-
-/**
- * 기억 시스템 상태 확인
- */
-export async function getMemoryStatus(): Promise<{
-  initialized: boolean;
-  totalMemories: number;
-  provider: string;
-}> {
-  try {
-    const memory = getMemory();
-    // 간단한 테스트 쿼리로 상태 확인
-    const testResult = await memory.getAll({ userId: '__test__' });
-    return {
-      initialized: true,
-      totalMemories: testResult.results?.length || 0,
-      provider: VECTOR_STORE_PROVIDER,
-    };
-  } catch (error) {
-    return {
-      initialized: false,
-      totalMemories: 0,
-      provider: VECTOR_STORE_PROVIDER,
-    };
-  }
-}
-
-/**
- * 다중 캐릭터 기억 병렬 검색 (공식 문서 권장 패턴)
- *
- * @param query - 검색 쿼리
- * @param userId - 유저 ID
- * @param characterIds - 캐릭터 ID 배열
- * @param limit - 캐릭터당 최대 검색 결과 수
- * @returns 캐릭터별 기억 맵
- */
-export async function searchMemoriesForMultipleCharacters(
+export async function searchMemoriesForCharacters(
   query: string,
   userId: string,
-  characterIds: string[],
-  limit: number = 5
+  characters: Array<{ id: string; name: string }>,
+  limit: number = 5,
 ): Promise<Map<string, string[]>> {
   const results = new Map<string, string[]>();
+  const mem0 = getClient();
 
-  // Rate Limit 체크
-  if (checkRateLimit()) {
-    characterIds.forEach(id => results.set(id, []));
+  if (!mem0 || checkRateLimit()) {
+    characters.forEach(c => results.set(c.id, []));
     return results;
   }
 
-  try {
-    const memory = getMemory();
-
-    // 병렬 검색 (공식 문서 패턴)
-    const searchPromises = characterIds.map(async (characterId) => {
-      try {
-        const searchResult = await memory.search(query, {
-          userId: userId,
-          agentId: characterId,
-          limit: limit,
-        });
-        const memories = searchResult.results?.map((r: any) => r.memory) || [];
-        return { characterId, memories };
-      } catch (error) {
-        console.error(`[Memory] 캐릭터 ${characterId} 검색 실패:`, error);
-        return { characterId, memories: [] as string[] };
+  const searches = characters.map(async ({ id, name }) => {
+    try {
+      const searchResult = await mem0.search(query, {
+        user_id: `user_${userId}`,
+        agent_id: `char_${id}`,
+        limit,
+      });
+      let memories: string[] = [];
+      if (Array.isArray(searchResult)) {
+        memories = searchResult.map((r: { memory?: string }) => r.memory).filter((m): m is string => !!m);
+      } else {
+        const res = searchResult as { results?: Array<{ memory: string }> };
+        memories = res.results?.map(r => r.memory).filter(Boolean) as string[] || [];
       }
-    });
-
-    const searchResults = await Promise.all(searchPromises);
-
-    searchResults.forEach(({ characterId, memories }) => {
-      results.set(characterId, memories);
-    });
-
-    // 개발환경에서만 상세 로그
-    if (process.env.NODE_ENV === 'development') {
-      const totalMemories = searchResults.reduce((sum, r) => sum + r.memories.length, 0);
-      console.log(`[Memory] 검색: ${characterIds.length}캐릭터, ${totalMemories}기억`);
+      return { id, name, memories };
+    } catch (error) {
+      console.error(`[Mem0] search failed for ${name}:`, error);
+      return { id, name, memories: [] as string[] };
     }
+  });
 
-  } catch (error: any) {
-    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('Resource exhausted')) {
-      setRateLimited();
-    }
-    console.error('[Memory] 다중 검색 실패:', error?.message || error);
-    characterIds.forEach(id => results.set(id, []));
+  const searchResults = await Promise.all(searches);
+  searchResults.forEach(({ id, memories }) => results.set(id, memories));
+
+  const totalMemories = searchResults.reduce((sum, r) => sum + r.memories.length, 0);
+  if (totalMemories > 0) {
+    console.log(`[Mem0] 검색 완료: ${characters.length}캐릭터, ${totalMemories}기억`);
   }
 
   return results;
 }
 
+// ============================================================
+// 프롬프트 포맷팅
+// ============================================================
+
 /**
- * 다중 캐릭터 대화 병렬 저장
+ * mem0 기억을 프롬프트용 텍스트로 변환
  *
- * @param conversations - 캐릭터별 대화 배열
- * @param userId - 유저 ID
+ * @param memoriesMap - Map<characterId, memories[]>
+ * @param characterNames - Map<characterId, characterName>
+ * @returns 프롬프트에 주입할 텍스트 (비어있으면 빈 문자열)
  */
-export async function saveConversationsForMultipleCharacters(
-  conversations: Array<{
-    characterId: string;
-    messages: Array<{ role: string; content: string }>;
-  }>,
-  userId: string
-): Promise<void> {
-  // Rate Limit 체크
-  if (checkRateLimit()) {
-    return;
-  }
+export function formatMem0ForPrompt(
+  memoriesMap: Map<string, string[]>,
+  characterNames: Map<string, string>,
+): string {
+  const sections: string[] = [];
+
+  memoriesMap.forEach((memories, charId) => {
+    if (memories.length === 0) return;
+    const name = characterNames.get(charId) || '캐릭터';
+    const memText = memories.map((m, i) => `${i + 1}. ${m}`).join('\n');
+    sections.push(`[${name}의 유저에 대한 장기 기억]\n${memText}`);
+  });
+
+  if (sections.length === 0) return '';
+
+  return sections.join('\n\n') +
+    '\n\n[중요 지시] 위 기억은 캐릭터가 유저에 대해 알고 있는 사실입니다. ' +
+    '자연스러운 맥락에서 활용하되, 억지로 끼워넣지 마세요. ' +
+    '기억에 없는 내용은 절대 지어내지 마세요.';
+}
+
+// ============================================================
+// 관리 기능
+// ============================================================
+
+/**
+ * 특정 캐릭터의 모든 기억 조회
+ */
+export async function getAllMemories(
+  userId: string,
+  characterId: string,
+): Promise<Array<{ id: string; memory: string; created_at?: string }>> {
+  const mem0 = getClient();
+  if (!mem0 || checkRateLimit()) return [];
 
   try {
-    const memory = getMemory();
-
-    // 병렬 저장
-    const savePromises = conversations.map(async ({ characterId, messages }) => {
-      try {
-        await memory.add(messages, {
-          userId: userId,
-          agentId: characterId,
-          metadata: {
-            timestamp: new Date().toISOString(),
-            characterId: characterId,
-          },
-          infer: false,
-        });
-        return { characterId, success: true };
-      } catch (error) {
-        console.error(`[Memory] 캐릭터 ${characterId} 저장 실패:`, error);
-        return { characterId, success: false };
-      }
+    const result = await mem0.getAll({
+      user_id: `user_${userId}`,
+      agent_id: `char_${characterId}`,
     });
-
-    const saveResults = await Promise.all(savePromises);
-
-    // 개발환경에서만 상세 로그
-    if (process.env.NODE_ENV === 'development') {
-      const successCount = saveResults.filter(r => r.success).length;
-      console.log(`[Memory] 저장: ${successCount}/${conversations.length}캐릭터`);
-    }
-
-  } catch (error: any) {
-    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('Resource exhausted')) {
-      setRateLimited();
-    }
-    console.error('[Memory] 다중 저장 실패:', error?.message || error);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const memories = Array.isArray(result) ? result : (result as any).results || [];
+    return memories.map((m: any) => ({
+      id: m.id || '',
+      memory: m.memory || '',
+      created_at: m.created_at,
+    }));
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    if (err?.status === 429 || err?.message?.includes('429')) setRateLimited();
+    console.error('[Mem0] getAll failed:', err?.message || error);
+    return [];
   }
 }
 
 /**
- * Mem0 메모리 Pruning (오래된 기억 정리)
- *
- * 캐릭터당 최대 기억 수를 초과하면 오래된 기억을 삭제하여
- * 벡터 검색 품질 유지 및 비용 절감
- *
- * @param userId - 유저 ID
- * @param characterId - 캐릭터 ID
- * @param maxMemories - 캐릭터당 최대 기억 수 (기본: 50)
- * @returns 삭제된 기억 수
+ * 오래된 기억 정리 (캐릭터당 최대 기억 수 초과 시)
  */
 export async function pruneMemories(
   userId: string,
   characterId: string,
-  maxMemories: number = 50
+  maxMemories: number = 100,
 ): Promise<number> {
-  if (checkRateLimit()) return 0;
+  const mem0 = getClient();
+  if (!mem0 || checkRateLimit()) return 0;
 
   try {
-    const memory = getMemory();
-    const allMemories = await memory.getAll({
-      userId,
-      agentId: characterId,
-    });
-
-    const memories = allMemories.results || [];
-    if (memories.length <= maxMemories) return 0;
+    const all = await getAllMemories(userId, characterId);
+    if (all.length <= maxMemories) return 0;
 
     // 오래된 것부터 삭제
-    const sorted = [...memories].sort(
-      (a: any, b: any) =>
-        new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+    const sorted = [...all].sort(
+      (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
     );
-
-    const toDelete = sorted.slice(0, memories.length - maxMemories);
+    const toDelete = sorted.slice(0, all.length - maxMemories);
     let deleted = 0;
 
     for (const mem of toDelete) {
       try {
-        await memory.delete(mem.id);
+        await mem0.delete(mem.id);
         deleted++;
-      } catch {
-        // 개별 삭제 실패는 무시
-      }
+      } catch { /* 개별 삭제 실패 무시 */ }
     }
 
     if (deleted > 0) {
-      console.log(`[Memory] Pruned ${deleted}/${memories.length} memories for character ${characterId}`);
+      console.log(`[Mem0] Pruned ${deleted}/${all.length} memories for character ${characterId}`);
     }
-
     return deleted;
-  } catch (error: any) {
-    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('Resource exhausted')) {
-      setRateLimited();
-    }
-    console.error('[Memory] Pruning 실패:', error?.message || error);
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    if (err?.status === 429 || err?.message?.includes('429')) setRateLimited();
+    console.error('[Mem0] pruning failed:', err?.message || error);
     return 0;
   }
 }

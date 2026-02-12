@@ -25,6 +25,13 @@ import {
   promoteMemories,
   getActiveScene,
 } from '@/lib/narrative-memory';
+import {
+  searchMemoriesForCharacters,
+  formatMem0ForPrompt,
+  addMemory,
+  isMem0Available,
+  pruneMemories as pruneMem0Memories,
+} from '@/lib/memory';
 import { auth } from '@/lib/auth';
 
 // 요약 Race Condition 방지
@@ -286,7 +293,7 @@ export async function PUT(request: NextRequest) {
           presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
         );
 
-        const [narrativeContexts, activeScene] = await Promise.all([
+        const [narrativeContexts, activeScene, mem0Results] = await Promise.all([
           Promise.all(
             presentChars.map(c =>
               buildNarrativeContext(sessionId, c.id, c.name, content)
@@ -294,12 +301,26 @@ export async function PUT(request: NextRequest) {
             )
           ),
           getActiveScene(sessionId).catch(() => null),
+          // mem0 장기 기억 검색 (병렬)
+          isMem0Available()
+            ? searchMemoriesForCharacters(
+                content,
+                authSession.user!.id!,
+                presentChars.map(c => ({ id: c.id, name: c.name })),
+              ).catch(() => new Map<string, string[]>())
+            : Promise.resolve(new Map<string, string[]>()),
         ]);
         const memoryPrompts = narrativeContexts
           .map(ctx => ctx.narrativePrompt)
           .filter(p => p.length > 0);
+
+        // mem0 기억을 프롬프트 텍스트로 변환
+        const charNameMap = new Map(presentChars.map(c => [c.id, c.name]));
+        const mem0Context = formatMem0ForPrompt(mem0Results, charNameMap);
+
         const t1 = Date.now();
-        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts)`);
+        const mem0MemCount = Array.from(mem0Results.values()).reduce((s, m) => s + m.length, 0);
+        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts, mem0: ${mem0MemCount} memories)`);
 
         // [4] systemInstruction 빌드 (작품별 고정 → 캐시됨)
         const systemInstruction = buildSystemInstruction({
@@ -313,6 +334,7 @@ export async function PUT(request: NextRequest) {
         const contents = buildContents({
           userPersona,
           narrativeContexts: memoryPrompts,
+          mem0Context: mem0Context || undefined,
           sessionSummary: session.sessionSummary || undefined,
           proAnalysis: session.proAnalysis || undefined,
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
@@ -514,6 +536,22 @@ export async function PUT(request: NextRequest) {
           ),
         }).catch(e => console.error('[NarrativeMemory] processConversation failed:', e));
 
+        // [A-2] mem0 장기 기억 저장 (캐릭터별, fire-and-forget)
+        if (isMem0Available() && dialogueTurns.length > 0) {
+          const userId = authSession.user!.id!;
+          dialogueTurns.forEach(t => {
+            addMemory(
+              [
+                { role: 'user', content },
+                { role: 'assistant', content: `[${t.characterName}] ${t.content}` },
+              ],
+              userId,
+              t.characterId,
+              { work_id: session.workId, character_name: t.characterName },
+            ).catch(e => console.error(`[Mem0] save failed for ${t.characterName}:`, e));
+          });
+        }
+
         // [B] 5턴마다: 세션 요약 + 기억 감쇠 (비동기)
         const newTurnCount = session.turnCount + 1;
         if (newTurnCount % 5 === 0) {
@@ -533,6 +571,14 @@ export async function PUT(request: NextRequest) {
         if (newTurnCount % 25 === 0) {
           pruneWeakMemories(sessionId)
             .catch(() => {});
+
+          // mem0 기억 정리 (캐릭터당 최대 100개)
+          if (isMem0Available()) {
+            const userId = authSession.user!.id!;
+            presentChars.forEach(c => {
+              pruneMem0Memories(userId, c.id, 100).catch(() => {});
+            });
+          }
         }
       } catch (error) {
         console.error('메시지 전송 에러:', error);
