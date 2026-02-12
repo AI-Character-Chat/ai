@@ -449,6 +449,13 @@ model UserCharacterRelationship {
   intimacyLevel  String  @default("stranger")
   intimacyScore  Float   @default(0)  // 0.0 ~ 100.0
 
+  // === 다축 관계 그래프 (Multi-Axis) ===
+  trust       Float @default(50)  // 신뢰도: 약속/비밀 이행 (0-100)
+  affection   Float @default(30)  // 호감도: 정서적 친밀감 (0-100)
+  respect     Float @default(50)  // 존경도: 능력/인품 인정 (0-100)
+  rivalry     Float @default(10)  // 경쟁심: 대립/라이벌 의식 (0-100)
+  familiarity Float @default(0)   // 친숙도: 함께한 경험량 (0-100)
+
   // 관계 유형 (캐릭터가 유저를 어떻게 보는가)
   // "동물 좋아하는 따뜻한 사람", "장난꾸러기", "신뢰할 수 있는 친구"
   relationshipLabel String?

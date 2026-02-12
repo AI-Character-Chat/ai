@@ -66,6 +66,11 @@ export interface RelationshipState {
   characterName: string;
   intimacyLevel: string;
   intimacyScore: number;
+  trust: number;
+  affection: number;
+  respect: number;
+  rivalry: number;
+  familiarity: number;
   relationshipLabel?: string;
   speechStyle: string;
   nicknameForUser?: string;
@@ -254,6 +259,11 @@ export async function getOrCreateRelationship(
     characterName,
     intimacyLevel: relationship.intimacyLevel,
     intimacyScore: relationship.intimacyScore,
+    trust: relationship.trust,
+    affection: relationship.affection,
+    respect: relationship.respect,
+    rivalry: relationship.rivalry,
+    familiarity: relationship.familiarity,
     relationshipLabel: relationship.relationshipLabel || undefined,
     speechStyle: relationship.speechStyle,
     nicknameForUser: relationship.nicknameForUser || undefined,
@@ -271,6 +281,11 @@ export async function updateRelationship(
   sceneId: string | undefined,
   updates: {
     intimacyDelta?: number;
+    trustDelta?: number;
+    affectionDelta?: number;
+    respectDelta?: number;
+    rivalryDelta?: number;
+    familiarityDelta?: number;
     newLabel?: string;
     newFacts?: string[];
     newExperience?: string;
@@ -289,28 +304,58 @@ export async function updateRelationship(
     lastInteraction: new Date(),
   };
 
-  // 친밀도 변화
-  if (updates.intimacyDelta) {
-    const newScore = Math.max(0, Math.min(100, relationship.intimacyScore + updates.intimacyDelta));
-    data.intimacyScore = newScore;
+  // 다축 관계 업데이트
+  const axes = [
+    { key: 'trust', delta: updates.trustDelta, current: relationship.trust },
+    { key: 'affection', delta: updates.affectionDelta, current: relationship.affection },
+    { key: 'respect', delta: updates.respectDelta, current: relationship.respect },
+    { key: 'rivalry', delta: updates.rivalryDelta, current: relationship.rivalry },
+    { key: 'familiarity', delta: updates.familiarityDelta, current: relationship.familiarity },
+  ];
 
-    // 친밀도 레벨 자동 업데이트
-    const newLevel = getIntimacyLevel(newScore);
-    if (newLevel !== relationship.intimacyLevel) {
-      data.intimacyLevel = newLevel;
+  const axisValues: Record<string, number> = {};
+  for (const axis of axes) {
+    if (axis.delta) {
+      const newVal = Math.max(0, Math.min(100, axis.current + axis.delta));
+      data[axis.key] = newVal;
+      axisValues[axis.key] = newVal;
+    } else {
+      axisValues[axis.key] = axis.current;
+    }
+  }
 
-      // 관계 변화 기록
-      if (sceneId) {
-        await prisma.relationshipChange.create({
-          data: {
-            relationshipId: relationship.id,
-            sceneId,
-            changeType: 'intimacy_up',
-            previousValue: relationship.intimacyLevel,
-            newValue: newLevel,
-          },
-        });
-      }
+  // intimacyScore 자동 계산 (5축 가중 평균)
+  const newScore = Math.max(0, Math.min(100,
+    axisValues.affection * 0.35 +
+    axisValues.trust * 0.25 +
+    axisValues.familiarity * 0.25 +
+    axisValues.respect * 0.15 -
+    axisValues.rivalry * 0.1
+  ));
+  data.intimacyScore = newScore;
+
+  // 레거시 intimacyDelta 지원 (다축이 없을 때 폴백)
+  if (updates.intimacyDelta && !updates.affectionDelta && !updates.trustDelta) {
+    data.intimacyScore = Math.max(0, Math.min(100, relationship.intimacyScore + updates.intimacyDelta));
+  }
+
+  // 친밀도 레벨 자동 업데이트
+  const finalScore = data.intimacyScore as number;
+  const newLevel = getIntimacyLevel(finalScore);
+  if (newLevel !== relationship.intimacyLevel) {
+    data.intimacyLevel = newLevel;
+
+    // 관계 변화 기록
+    if (sceneId) {
+      await prisma.relationshipChange.create({
+        data: {
+          relationshipId: relationship.id,
+          sceneId,
+          changeType: finalScore > relationship.intimacyScore ? 'intimacy_up' : 'intimacy_down',
+          previousValue: relationship.intimacyLevel,
+          newValue: newLevel,
+        },
+      });
     }
   }
 
@@ -387,6 +432,11 @@ export async function getAllRelationships(sessionId: string): Promise<Relationsh
     characterName: r.character.name,
     intimacyLevel: r.intimacyLevel,
     intimacyScore: r.intimacyScore,
+    trust: r.trust,
+    affection: r.affection,
+    respect: r.respect,
+    rivalry: r.rivalry,
+    familiarity: r.familiarity,
     relationshipLabel: r.relationshipLabel || undefined,
     speechStyle: r.speechStyle,
     nicknameForUser: r.nicknameForUser || undefined,
@@ -683,10 +733,19 @@ function generateNarrativePrompt(
 ): string {
   const lines: string[] = [];
 
-  // 관계 상태
+  // 관계 상태 (다축)
   lines.push(`[${characterName}의 유저에 대한 인식]`);
-  lines.push(`- 관계: ${translateIntimacyLevel(relationship.intimacyLevel)}`);
-  lines.push(`- 친밀도: ${relationship.intimacyScore.toFixed(0)}/100`);
+  lines.push(`- 관계 단계: ${translateIntimacyLevel(relationship.intimacyLevel)}`);
+  lines.push(`- 신뢰: ${relationship.trust.toFixed(0)} | 호감: ${relationship.affection.toFixed(0)} | 존경: ${relationship.respect.toFixed(0)} | 경쟁심: ${relationship.rivalry.toFixed(0)} | 친숙도: ${relationship.familiarity.toFixed(0)}`);
+
+  // 관계 특성 요약 (높은/낮은 축 강조)
+  const traits: string[] = [];
+  if (relationship.trust >= 70) traits.push('깊이 신뢰함');
+  else if (relationship.trust <= 30) traits.push('불신');
+  if (relationship.affection >= 70) traits.push('강한 애착');
+  if (relationship.respect >= 70) traits.push('높은 존경');
+  if (relationship.rivalry >= 50) traits.push('라이벌 의식');
+  if (traits.length > 0) lines.push(`- 핵심 감정: ${traits.join(', ')}`);
 
   if (relationship.relationshipLabel) {
     lines.push(`- 유저를 "${relationship.relationshipLabel}"(으)로 인식`);
@@ -772,6 +831,13 @@ export async function processConversationForMemory(params: {
     characterName: string;
     content: string;
     emotion?: { primary: string; intensity: number };
+    relationshipDelta?: {
+      trust?: number;
+      affection?: number;
+      respect?: number;
+      rivalry?: number;
+      familiarity?: number;
+    };
   }>;
   extractedFacts?: string[]; // AI가 추출한 새로운 정보들
   emotionalMoment?: boolean; // 감정적으로 중요한 순간인지
@@ -780,9 +846,14 @@ export async function processConversationForMemory(params: {
     params;
 
   for (const response of characterResponses) {
-    // 1. 관계 업데이트
+    // 1. 관계 업데이트 (다축)
+    const delta = response.relationshipDelta || {};
     await updateRelationship(sessionId, response.characterId, sceneId, {
-      intimacyDelta: emotionalMoment ? 2 : 0.5, // 감정적 순간이면 친밀도 더 상승
+      trustDelta: delta.trust || 0,
+      affectionDelta: delta.affection || (emotionalMoment ? 3 : 1),
+      respectDelta: delta.respect || 0,
+      rivalryDelta: delta.rivalry || 0,
+      familiarityDelta: delta.familiarity || 0.5,
       newFacts: extractedFacts,
     });
 

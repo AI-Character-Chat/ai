@@ -807,6 +807,17 @@ export async function generateProAnalysis(params: {
 2. 캐릭터 내면 상태: 각 캐릭터(${characterNames.join(', ')})가 지금 느끼는 감정과 다음에 취할 태도
 3. 미해결 복선: 아직 풀리지 않은 갈등이나 떡밥
 4. 금지 사항: 이전 턴에서 이미 사용된 표현/대사 중 절대 반복하면 안 되는 것들
+5. 관계 변화 분석: 이번 대화에서 각 캐릭터와 유저 사이의 관계 변화를 아래 JSON 형식으로 반드시 포함하세요.
+변화가 없는 축은 0으로 표기. 값 범위: -10 ~ +10.
+- trust(신뢰): 약속 이행/위반, 비밀 공유 시 변화
+- affection(호감): 따뜻한/차가운 대화 시 변화
+- respect(존경): 현명한 조언/무례한 행동 시 변화
+- rivalry(경쟁심): 도전적/양보적 발언 시 변화
+- familiarity(친숙도): 대화할 때마다 +0.5~1 기본 증가
+
+\`\`\`json
+{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 1, "respect": 0, "rivalry": 0, "familiarity": 0.5}}}
+\`\`\`
 
 ## 현재 장면
 장소: ${sceneState.location}, 시간: ${sceneState.time}

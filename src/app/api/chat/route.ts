@@ -432,6 +432,24 @@ export async function PUT(request: NextRequest) {
 
         // [A] 캐릭터 기억 업데이트 (매 턴)
         const dialogueTurns = allTurns.filter(t => t.type === 'dialogue');
+
+        // Pro 분석에서 다축 관계 델타 추출
+        let relationshipDeltas: Record<string, {
+          trust?: number; affection?: number; respect?: number;
+          rivalry?: number; familiarity?: number;
+        }> = {};
+        if (session.proAnalysis) {
+          try {
+            const jsonMatch = session.proAnalysis.match(/```json\s*([\s\S]*?)```/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[1]);
+              if (parsed.relationshipDeltas) {
+                relationshipDeltas = parsed.relationshipDeltas;
+              }
+            }
+          } catch { /* 파싱 실패 시 기본 델타 사용 */ }
+        }
+
         processConversationForMemory({
           sessionId,
           sceneId: activeScene?.sceneId,
@@ -441,6 +459,7 @@ export async function PUT(request: NextRequest) {
             characterName: t.characterName,
             content: t.content,
             emotion: t.emotion ? { primary: t.emotion.primary, intensity: t.emotion.intensity } : undefined,
+            relationshipDelta: relationshipDeltas[t.characterName] || undefined,
           })),
           emotionalMoment: dialogueTurns.some(t =>
             ['sad', 'angry', 'surprised', 'happy'].includes(t.emotion.primary) && t.emotion.intensity > 0.7
