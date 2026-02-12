@@ -422,6 +422,20 @@ export async function PUT(request: NextRequest) {
         });
 
         // 메타데이터 전송 (done 직전)
+        const dialogueTurnsForMeta = allTurns.filter(t => t.type === 'dialogue');
+        const emotionsSummary = dialogueTurnsForMeta.map(t =>
+          `${t.characterName}: ${t.emotion.primary}(${(t.emotion.intensity * 100).toFixed(0)}%)`
+        );
+        const lorebookActivated = lorebookContext ? lorebookContext.split('\n\n').length : 0;
+
+        const extraMeta = {
+          emotions: emotionsSummary,
+          lorebookActivated,
+          selectiveHistory: relevantHistory.length > 0,
+          relevantHistoryCount: relevantHistory.length,
+          turnNumber: session.turnCount + 1,
+        };
+
         if (responseMetadataFromAI) {
           send('response_metadata', {
             ...responseMetadataFromAI,
@@ -431,6 +445,7 @@ export async function PUT(request: NextRequest) {
             turnsCount: allTurns.length,
             systemInstructionLength: systemInstruction.length,
             proAnalysis: session.proAnalysis || '',
+            ...extraMeta,
           });
         }
 
@@ -444,6 +459,7 @@ export async function PUT(request: NextRequest) {
             turnsCount: allTurns.length,
             systemInstructionLength: systemInstruction.length,
             proAnalysis: session.proAnalysis || '',
+            ...extraMeta,
           };
           prisma.message.update({
             where: { id: lastAiMessageId },

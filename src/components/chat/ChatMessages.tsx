@@ -176,6 +176,38 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
           </div>
         </div>
 
+        {/* 감정 & 컨텍스트 (새 기능) */}
+        {(metadata.emotions || metadata.lorebookActivated !== undefined) && (
+          <div className="border-b border-gray-100 dark:border-gray-700 pb-2">
+            {metadata.emotions && metadata.emotions.length > 0 && (
+              <div>
+                <span className="text-xs font-medium text-purple-500">감정 분석</span>
+                {metadata.emotions.map((e: string, i: number) => (
+                  <div key={i} className="text-xs text-gray-500 dark:text-gray-400 ml-1">{e}</div>
+                ))}
+              </div>
+            )}
+            {metadata.lorebookActivated !== undefined && (
+              <div className="flex justify-between mt-1">
+                <span>로어북 활성화</span>
+                <span className="text-gray-900 dark:text-white font-medium">{metadata.lorebookActivated}개</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span>선별적 히스토리</span>
+              <span className={`font-medium ${metadata.selectiveHistory ? 'text-green-500' : 'text-gray-400'}`}>
+                {metadata.selectiveHistory ? `ON (${metadata.relevantHistoryCount}개)` : 'OFF'}
+              </span>
+            </div>
+            {metadata.turnNumber && (
+              <div className="flex justify-between">
+                <span>턴 번호</span>
+                <span className="text-gray-900 dark:text-white">{metadata.turnNumber}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 기타 */}
         <div className="flex justify-between">
           <span>turns: {metadata.turnsCount}개</span>

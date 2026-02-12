@@ -89,6 +89,11 @@ export interface ResponseMetadata {
   systemInstructionLength: number;
   proAnalysis: string;
   proAnalysisMetrics?: ProAnalysisMetrics;
+  emotions?: string[];
+  lorebookActivated?: number;
+  selectiveHistory?: boolean;
+  relevantHistoryCount?: number;
+  turnNumber?: number;
 }
 
 // ============================================================
