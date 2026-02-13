@@ -9,11 +9,15 @@ export async function GET(
 ) {
   try {
     const workId = params.workId;
+    const { searchParams } = new URL(request.url);
+    const lite = searchParams.get('lite') === 'true'; // 채팅용 경량 모드
 
     const work = await prisma.work.findUnique({
       where: { id: workId },
       include: {
-        characters: true,
+        characters: lite
+          ? { select: { id: true, name: true, profileImage: true } }
+          : true,  // 스튜디오는 prompt 포함 전체 필드
         openings: {
           orderBy: { order: 'asc' },
         },

@@ -27,7 +27,15 @@ export async function GET(
         },
         messages: {
           orderBy: { createdAt: 'asc' },
-          include: {
+          select: {
+            id: true,
+            characterId: true,
+            content: true,
+            messageType: true,
+            imageUrl: true,
+            metadata: true,
+            createdAt: true,
+            // embedding 제외 — 256차원 벡터(~3KB/msg)는 서버 전용
             character: {
               select: {
                 id: true,

@@ -171,7 +171,7 @@ export default function ChatContainer() {
   // ─── 작품 데이터 로드 ───
   const fetchWork = useCallback(async (targetWorkId: string, targetSessionId: string | null) => {
     try {
-      const response = await fetch(`/api/works/${targetWorkId}`);
+      const response = await fetch(`/api/works/${targetWorkId}?lite=true`);
       if (!response.ok) throw new Error('Work not found');
       if (activeWorkIdRef.current !== targetWorkId) return;
 
