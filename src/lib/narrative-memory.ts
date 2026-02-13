@@ -833,7 +833,9 @@ export async function buildNarrativeContext(
   sessionId: string,
   characterId: string,
   characterName: string,
-  userMessage?: string
+  userMessage?: string,
+  cachedEmbedding?: number[],
+  cachedScene?: SceneContext | null,
 ): Promise<{
   relationship: RelationshipState;
   recentMemories: Array<{ interpretation: string; importance: number }>;
@@ -843,11 +845,13 @@ export async function buildNarrativeContext(
   // 1. 관계 상태 가져오기
   const relationship = await getOrCreateRelationship(sessionId, characterId, characterName);
 
-  // 2. 유저 입력 임베딩 생성 (있을 때만)
-  let queryEmbedding: number[] | undefined;
-  if (userMessage) {
+  // 2. 임베딩: 캐시된 것 사용, 없으면 생성 (1회만)
+  let queryEmbedding: number[] | undefined = cachedEmbedding && cachedEmbedding.length > 0
+    ? cachedEmbedding
+    : undefined;
+  if (!queryEmbedding && userMessage) {
     queryEmbedding = await generateEmbedding(userMessage);
-    if (queryEmbedding.length === 0) queryEmbedding = undefined; // 실패 시 폴백
+    if (queryEmbedding.length === 0) queryEmbedding = undefined;
   }
 
   // 3. 기억 검색 (임베딩 기반 또는 importance 폴백)
@@ -859,8 +863,8 @@ export async function buildNarrativeContext(
     minImportance: 0.3,
   });
 
-  // 4. 현재 장면 정보
-  const sceneContext = await getActiveScene(sessionId);
+  // 4. 장면 정보: 캐시된 것 사용, 없으면 조회
+  const sceneContext = cachedScene !== undefined ? cachedScene : await getActiveScene(sessionId);
 
   // 5. 서사 프롬프트 생성
   const narrativePrompt = generateNarrativePrompt(

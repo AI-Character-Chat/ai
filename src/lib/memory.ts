@@ -139,13 +139,19 @@ export async function searchMemoriesForCharacters(
     return results;
   }
 
+  const MEM0_TIMEOUT = 2000; // 2초 타임아웃
   const searches = characters.map(async ({ id, name }) => {
     try {
-      const searchResult = await mem0.search(query, {
-        user_id: `user_${userId}`,
-        agent_id: `char_${id}`,
-        limit,
-      });
+      const searchResult = await Promise.race([
+        mem0.search(query, {
+          user_id: `user_${userId}`,
+          agent_id: `char_${id}`,
+          limit,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Mem0 timeout')), MEM0_TIMEOUT)
+        ),
+      ]);
       let memories: string[] = [];
       if (Array.isArray(searchResult)) {
         memories = searchResult.map((r: { memory?: string }) => r.memory).filter((m): m is string => !!m);

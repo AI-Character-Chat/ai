@@ -293,15 +293,16 @@ export async function PUT(request: NextRequest) {
           presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
         );
 
+        // activeScene을 1번만 조회, 임베딩도 재사용 (캐릭터별 중복 방지)
         const mem0SearchStart = Date.now();
-        const [narrativeContexts, activeScene, mem0Results] = await Promise.all([
+        const preScene = await getActiveScene(sessionId).catch(() => null);
+        const [narrativeContexts, mem0Results] = await Promise.all([
           Promise.all(
             presentChars.map(c =>
-              buildNarrativeContext(sessionId, c.id, c.name, content)
+              buildNarrativeContext(sessionId, c.id, c.name, content, queryEmbedding, preScene)
                 .catch(() => ({ narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null }))
             )
           ),
-          getActiveScene(sessionId).catch(() => null),
           // mem0 장기 기억 검색 (병렬)
           isMem0Available()
             ? searchMemoriesForCharacters(
@@ -530,7 +531,7 @@ export async function PUT(request: NextRequest) {
 
         processConversationForMemory({
           sessionId,
-          sceneId: activeScene?.sceneId,
+          sceneId: preScene?.sceneId,
           userMessage: content,
           characterResponses: dialogueTurns.map(t => ({
             characterId: t.characterId,
