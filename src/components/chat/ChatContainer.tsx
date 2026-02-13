@@ -168,27 +168,21 @@ export default function ChatContainer() {
     }
   }, [workId, chatCache]);
 
-  // ─── 작품 데이터 로드 ───
-  const fetchWork = useCallback(async (targetWorkId: string, targetSessionId: string | null) => {
+  // ─── 작품 데이터 로드 (세션 로딩과 분리 — 병렬 실행 가능) ───
+  const fetchWork = useCallback(async (targetWorkId: string) => {
     try {
       const response = await fetch(`/api/works/${targetWorkId}?lite=true`);
       if (!response.ok) throw new Error('Work not found');
-      if (activeWorkIdRef.current !== targetWorkId) return;
+      if (activeWorkIdRef.current !== targetWorkId) return null;
 
       const data: ChatWork = await response.json();
       dispatch({ type: 'LOAD_WORK', work: data });
-
-      if (targetSessionId) {
-        loadExistingSession(targetSessionId, data);
-      }
+      return data;
     } catch (error) {
       console.error('Failed to fetch work:', error);
-    } finally {
-      if (activeWorkIdRef.current === targetWorkId && state.phase === 'loading') {
-        // 캐시 히트가 없었을 때만 phase 업데이트
-      }
+      return null;
     }
-  }, [loadExistingSession, state.phase]);
+  }, []);
 
   // ─── Effect 1: workId 변경 → 전체 리셋 + 데이터 로드 ───
   useEffect(() => {
@@ -220,7 +214,21 @@ export default function ChatContainer() {
       dispatch({ type: 'LOAD_SESSION', session: cached.session, messages: cached.messages });
     }
 
-    fetchWork(workId, existingSessionId);
+    // 병렬 실행: work + session + personas 동시 요청 (워터폴 제거)
+    if (existingSessionId) {
+      // 3개 API 동시 시작 — 세션이 work 완료를 기다리지 않음
+      const workP = fetchWork(workId);
+      loadExistingSession(existingSessionId, null);
+      // work 도착 후 캐시 보강
+      workP.then(w => {
+        if (w && existingSessionId) {
+          const c = chatCache.getCache(existingSessionId);
+          if (c) chatCache.setCache(existingSessionId, { ...c, work: w });
+        }
+      });
+    } else {
+      fetchWork(workId);
+    }
     if (authSession?.user) fetchPersonas();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workId]);

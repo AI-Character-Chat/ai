@@ -45,7 +45,10 @@ export async function GET(
       })),
     };
 
-    return NextResponse.json(workWithParsedData);
+    // stale-while-revalidate: CDN에서 60초 캐시 + 5분간 stale 허용
+    const res = NextResponse.json(workWithParsedData);
+    res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    return res;
   } catch (error) {
     console.error('Error fetching work:', error);
     return NextResponse.json(
