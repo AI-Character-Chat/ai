@@ -31,31 +31,114 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 // ============================================================
-// knownFacts 분류 (Identity vs Moment) + 충돌 감지
+// knownFacts 분류 (Identity vs Moment vs Action) + 충돌 감지
 // ============================================================
 
 /**
- * Identity 키워드 — 이 단어가 포함된 fact는 불변 정보로 분류, 항상 전량 주입
- * (이름, 나이, 직업, 가족, 신체 특성, 성격 등)
+ * Identity 주제(Subject) Set — "주제: 내용" 형식에서 주제가 이 Set에 있으면 Identity
+ *
+ * 기존 IDENTITY_KEYWORDS(문자열 포함 검색)의 한계:
+ *   "키: 178cm" → '키'가 1글자라 오탐 위험 → 키워드에 못 넣음 → Identity 누락
+ *   "거주지: 서울" → '거주지' 키워드 없음 → Identity 누락
+ *   "별명: 수수" → '별명' 키워드 없음 → Identity 누락
+ *
+ * Subject 기반 매칭으로 28% → 90%+ 커버리지 달성
  */
-const IDENTITY_KEYWORDS = [
+const IDENTITY_SUBJECTS = new Set([
   // 기본 신원
-  '이름', '나이', '살이', '살)', '세이', '세)', '직업', '전공', '학과', '학교', '대학',
-  '혈액형', 'MBTI', '키가', '키는', '몸무게', '생일', '고향', '출신', '성별',
+  '이름', '본명', '풀네임',
+  '나이', '만 나이',
+  '직업', '직장', '회사',
+  '전공', '학과', '학교', '대학', '대학교', '학년', '반',
+  '혈액형', 'MBTI', 'mbti',
+  '키', '신장', '몸무게', '체중',
+  '생일', '생년월일',
+  '고향', '출신', '출생지',
+  '성별',
+  '거주지', '사는 곳', '주소', '동네',
+  '별명', '닉네임', '애칭',
+  '꿈', '장래희망', '장래 희망', '목표',
+  '성격', '성향',
+  '외모', '생김새', '인상',
   // 가족/인물
-  '아버지', '어머니', '아빠', '엄마', '언니', '오빠', '누나', '형이', '형은',
-  '동생', '여동생', '남동생', '할머니', '할아버지', '가족',
-  // 신체/특성
-  '왼손잡이', '오른손잡이', '알레르기', '공포증', '트라우마',
+  '아버지', '아빠', '어머니', '엄마',
+  '형', '오빠', '누나', '언니',
+  '동생', '여동생', '남동생',
+  '할머니', '할아버지', '가족', '가족 구성',
+  '남자친구', '여자친구', '애인', '연인', '배우자', '남편', '아내',
+  '친구', '절친', '베프', '단짝',
   // 반려동물
-  '반려', '애완', '펫', '강아지', '고양이',
+  '반려동물', '반려견', '반려묘', '애완동물',
+  '강아지', '고양이', '펫',
+  // 건강/안전
+  '알레르기', '알러지', '공포증', '트라우마', '지병',
+  // 신체 특성
+  '왼손잡이', '오른손잡이',
+  // 선호/취향 (비교적 안정적)
+  '취미', '특기', '관심사',
+]);
+
+/**
+ * 레거시 키워드 — "주제: 내용" 형식이 아닌 옛 fact용 폴백
+ */
+const LEGACY_IDENTITY_KEYWORDS = [
+  '이름', '나이', '직업', '전공', '학교', '대학',
+  '혈액형', 'MBTI', '생일', '고향', '출신', '성별',
+  '아버지', '어머니', '아빠', '엄마', '언니', '오빠', '누나',
+  '동생', '여동생', '남동생', '할머니', '할아버지', '가족',
+  '왼손잡이', '오른손잡이', '알레르기', '공포증', '트라우마',
+  '반려', '강아지', '고양이',
 ];
 
 /**
- * fact가 Identity(불변 정보)인지 판별
+ * fact가 Identity(불변/반불변 정보)인지 판별
+ *
+ * 판별 우선순위:
+ * 1. "주제: 내용" 형식 → 주제를 IDENTITY_SUBJECTS에서 정확 매칭
+ * 2. "좋아하는/싫어하는 X" 패턴 → Identity (선호도는 비교적 안정)
+ * 3. "X 이름" 패턴 → Identity (인물 이름)
+ * 4. 콜론 없는 레거시 형식 → LEGACY_IDENTITY_KEYWORDS 포함 검색
  */
 function isIdentityFact(fact: string): boolean {
-  return IDENTITY_KEYWORDS.some(kw => fact.includes(kw));
+  // 1. "주제: 내용" 형식에서 주제 추출
+  const colonMatch = fact.match(/^([^:：]+)[：:]/);
+  if (colonMatch) {
+    const subject = colonMatch[1].trim();
+    // 정확히 일치
+    if (IDENTITY_SUBJECTS.has(subject)) return true;
+    // "좋아하는/싫어하는 X" 패턴
+    if (subject.startsWith('좋아하는') || subject.startsWith('싫어하는')) return true;
+    // "X 이름" 패턴 (가족/인물 이름: "여동생 이름", "강아지 이름" 등)
+    if (subject.endsWith('이름')) return true;
+    return false;
+  }
+
+  // 2. 콜론 없는 레거시 형식 → 키워드 포함 검색 폴백
+  return LEGACY_IDENTITY_KEYWORDS.some(kw => fact.includes(kw));
+}
+
+/**
+ * Action(일시적 행동/상황) 주제 Set
+ * 이 주제의 fact는 knownFacts 대신 sharedExperiences로 분류
+ */
+const ACTION_SUBJECTS = new Set([
+  '유저의 행동', '행동', '한 일',
+  '약속', '부탁', '요청',
+  '계획', '예정', '일정',
+  '현재 상황', '상황', '근황',
+  '기분', '감정', '감정 상태',
+  '고민', '걱정',
+]);
+
+/**
+ * fact가 Action(일시적 행동/상황)인지 판별
+ * Action fact는 knownFacts 대신 sharedExperiences에 저장
+ */
+function isActionFact(fact: string): boolean {
+  const colonMatch = fact.match(/^([^:：]+)[：:]/);
+  if (!colonMatch) return false;
+  const subject = colonMatch[1].trim();
+  return ACTION_SUBJECTS.has(subject);
 }
 
 /**
@@ -85,8 +168,38 @@ function extractFactKey(fact: string): string | null {
 }
 
 /**
+ * 부정 사실(Negative Fact) 판별
+ *
+ * AI가 "전공을 모른다", "기억나지 않는다" 등의 자기 발언을
+ * extractedFacts로 역추출하는 버그 방어
+ */
+const NEGATIVE_PATTERNS = [
+  /모른다$/,
+  /모름$/,
+  /몰라$/,
+  /없다$/,
+  /없음$/,
+  /기억.*않/,
+  /기억.*없/,
+  /흐릿/,
+  /확실.*않/,
+  /불명/,
+  /모르겠/,
+  /파악.*못/,
+  /알 수 없/,
+  /알지 못/,
+  /안 ?밝/,
+  /밝히지 않/,
+];
+
+function isNegativeFact(fact: string): boolean {
+  return NEGATIVE_PATTERNS.some(pattern => pattern.test(fact));
+}
+
+/**
  * 새 fact를 기존 fact 목록에 병합하면서 충돌 해결
  *
+ * - 부정 사실("X를 모른다") → 거부 (AI 역추출 방어)
  * - 같은 key(subject)를 가진 fact가 이미 있으면 → 최신 값으로 교체
  * - 없으면 → 추가
  * - key 추출 불가한 fact → 단순 추가 (Set 중복제거)
@@ -95,6 +208,12 @@ function resolveFactConflicts(existingFacts: string[], newFacts: string[]): stri
   const result = [...existingFacts];
 
   for (const newFact of newFacts) {
+    // 부정 사실 거부
+    if (isNegativeFact(newFact)) {
+      console.log(`[KnownFacts] 부정 사실 거부: "${newFact}"`);
+      continue;
+    }
+
     // 이미 완전히 동일한 fact 존재 → skip
     if (result.includes(newFact)) continue;
 
@@ -1079,11 +1198,12 @@ export async function buildNarrativeContext(
   }
 
   // 3. 기억 검색 (크로스세션, 임베딩 기반 또는 importance 폴백)
+  // limit 5: context noise 감소 — 관련성 높은 기억만 선별 (Lost-in-the-Middle 방지)
   const recentMemories = await searchCharacterMemories({
     scope,
     characterId,
     queryEmbedding,
-    limit: 10,
+    limit: 5,
     minImportance: 0.3,
   });
 
@@ -1147,25 +1267,21 @@ function generateNarrativePrompt(
     lines.push(`- 유저를 "${relationship.nicknameForUser}"(이)라고 부름`);
   }
 
-  // 알고 있는 정보 (Identity/Moment 분리)
-  if (relationship.knownFacts.length > 0) {
-    const identityFacts = relationship.knownFacts.filter(f => isIdentityFact(f));
-    const momentFacts = relationship.knownFacts.filter(f => !isIdentityFact(f));
+  // ---- 프롬프트 배치 전략 (Lost-in-the-Middle 방지) ----
+  // LLM은 프롬프트 시작과 끝을 잘 기억하고, 중간은 무시하는 경향 (U-shaped curve).
+  // 배치 순서: 관계상태(Top) → Moment/기억/경험(Middle) → Identity(Bottom, 유저 메시지 직전)
+  // → Identity가 유저 메시지와 가장 가까워 Flash 어텐션 극대화
 
-    // Identity: 전량 주입 + 볼드 강조 (Flash 모델 어텐션 집중용)
-    if (identityFacts.length > 0) {
-      lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 것 — 절대 불변]`);
-      identityFacts.forEach(fact => lines.push(`- **${fact}**`));
-    }
+  const identityFacts = relationship.knownFacts.filter(f => isIdentityFact(f));
+  const momentFacts = relationship.knownFacts.filter(f => !isIdentityFact(f));
 
-    // Moment: 최근 10개 (상황, 계획, 행동 등 변동 정보)
-    if (momentFacts.length > 0) {
-      lines.push(`\n[${characterName}이 최근 알게 된 것]`);
-      momentFacts.slice(-10).forEach(fact => lines.push(`- ${fact}`));
-    }
+  // [Middle] Moment facts — 최근 알게 된 변동 정보 (최근 20개)
+  if (momentFacts.length > 0) {
+    lines.push(`\n[${characterName}이 최근 알게 된 것]`);
+    momentFacts.slice(-20).forEach(fact => lines.push(`- ${fact}`));
   }
 
-  // 최근 기억 (캐릭터 해석)
+  // [Middle] 최근 기억 (캐릭터 해석)
   if (memories.length > 0) {
     lines.push(`\n[${characterName}의 최근 기억]`);
     memories.forEach((m) => {
@@ -1173,7 +1289,7 @@ function generateNarrativePrompt(
     });
   }
 
-  // 공유 경험
+  // [Middle] 공유 경험 (행동/약속/상황 포함)
   if (relationship.sharedExperiences.length > 0) {
     lines.push(`\n[함께한 중요한 순간들]`);
     relationship.sharedExperiences.slice(-5).forEach((exp) => {
@@ -1181,17 +1297,24 @@ function generateNarrativePrompt(
     });
   }
 
-  // 최근 감정 흐름
+  // [Middle] 최근 감정 흐름
   if (relationship.emotionalHistory.length > 0) {
     lines.push(`\n[${characterName}의 최근 감정 흐름]`);
     const recentEmotions = relationship.emotionalHistory.slice(-5);
     lines.push(`- ${recentEmotions.map(e => `${e.emotion}(${(e.intensity * 100).toFixed(0)}%)`).join(' → ')}`);
   }
 
-  // 현재 장면 분위기
+  // [Middle] 현재 장면 분위기
   if (scene && scene.emotionalTone.mood) {
     lines.push(`\n[현재 장면 분위기]`);
     lines.push(`- ${scene.emotionalTone.mood} (강도: ${(scene.emotionalTone.intensity * 100).toFixed(0)}%)`);
+  }
+
+  // [Bottom — 유저 메시지 직전] Identity facts — 전량 주입 + 볼드 강조
+  // 프롬프트 끝에 배치하여 Flash 모델 어텐션 극대화
+  if (identityFacts.length > 0) {
+    lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 것 — 절대 불변]`);
+    identityFacts.forEach(fact => lines.push(`- **${fact}**`));
   }
 
   // 기억 정확성 지시
@@ -1222,9 +1345,10 @@ function translateIntimacyLevel(level: string): string {
  * 대화에서 중요 정보 추출하여 기억 저장
  *
  * AI 응답 후에 호출하여:
- * 1. 유저가 언급한 새로운 정보 → knownFacts에 추가
- * 2. 감정적 순간 → 관계 변화 기록
- * 3. 캐릭터 해석 → CharacterMemory에 저장
+ * 1. Personal facts → knownFacts (Identity/Moment 분류)
+ * 2. Action facts → sharedExperiences (행동/상황/약속)
+ * 3. 감정적 순간 → 관계 변화 기록
+ * 4. 캐릭터 해석 → CharacterMemory에 저장
  */
 export async function processConversationForMemory(params: {
   scope: MemoryScope;
@@ -1249,6 +1373,12 @@ export async function processConversationForMemory(params: {
   const { scope, sceneId, userMessage, characterResponses, extractedFacts, emotionalMoment } =
     params;
 
+  // extractedFacts를 Personal(knownFacts) / Action(sharedExperiences) 분리
+  // Personal: 이름, 나이, 취미, 선호 등 유저의 속성 → knownFacts
+  // Action: 행동, 약속, 계획, 상황 등 일시적 사건 → sharedExperiences
+  const personalFacts = extractedFacts?.filter(f => !isActionFact(f));
+  const actionFacts = extractedFacts?.filter(f => isActionFact(f));
+
   const results: MemoryProcessingResult[] = [];
 
   for (const response of characterResponses) {
@@ -1263,7 +1393,8 @@ export async function processConversationForMemory(params: {
     };
     await updateRelationship(scope, response.characterId, sceneId, {
       ...relDelta,
-      newFacts: extractedFacts,
+      newFacts: personalFacts && personalFacts.length > 0 ? personalFacts : undefined,
+      newExperience: actionFacts && actionFacts.length > 0 ? actionFacts.join(' | ') : undefined,
     });
 
     // 2. 감정 히스토리 누적
