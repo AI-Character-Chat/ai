@@ -31,6 +31,98 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 // ============================================================
+// knownFacts 분류 (Identity vs Moment) + 충돌 감지
+// ============================================================
+
+/**
+ * Identity 키워드 — 이 단어가 포함된 fact는 불변 정보로 분류, 항상 전량 주입
+ * (이름, 나이, 직업, 가족, 신체 특성, 성격 등)
+ */
+const IDENTITY_KEYWORDS = [
+  // 기본 신원
+  '이름', '나이', '살이', '살)', '세이', '세)', '직업', '전공', '학과', '학교', '대학',
+  '혈액형', 'MBTI', '키가', '키는', '몸무게', '생일', '고향', '출신', '성별',
+  // 가족/인물
+  '아버지', '어머니', '아빠', '엄마', '언니', '오빠', '누나', '형이', '형은',
+  '동생', '여동생', '남동생', '할머니', '할아버지', '가족',
+  // 신체/특성
+  '왼손잡이', '오른손잡이', '알레르기', '공포증', '트라우마',
+  // 반려동물
+  '반려', '애완', '펫', '강아지', '고양이',
+];
+
+/**
+ * fact가 Identity(불변 정보)인지 판별
+ */
+function isIdentityFact(fact: string): boolean {
+  return IDENTITY_KEYWORDS.some(kw => fact.includes(kw));
+}
+
+/**
+ * fact에서 충돌 감지용 키(subject) 추출
+ *
+ * 패턴:
+ *   "직업: 개발자"        → "직업"
+ *   "나이는 25살"         → "나이"
+ *   "여동생 이름은 수아"  → "여동생 이름"
+ *   "MBTI는 INFJ"        → "MBTI"
+ *   "왼손잡이이다"        → "_손잡이"  (binary opposite)
+ */
+function extractFactKey(fact: string): string | null {
+  // 1. "subject: value" 형식
+  const colonMatch = fact.match(/^([^:：]+)[：:]/);
+  if (colonMatch) return colonMatch[1].trim();
+
+  // 2. "subject은/는 value" 형식
+  const topicMatch = fact.match(/^(.+?)(?:은|는)\s/);
+  if (topicMatch) return topicMatch[1].trim();
+
+  // 3. Binary opposite 패턴
+  if (fact.includes('왼손잡이') || fact.includes('오른손잡이')) return '_손잡이';
+  if (fact.includes('남성') || fact.includes('여성')) return '_성별';
+
+  return null;
+}
+
+/**
+ * 새 fact를 기존 fact 목록에 병합하면서 충돌 해결
+ *
+ * - 같은 key(subject)를 가진 fact가 이미 있으면 → 최신 값으로 교체
+ * - 없으면 → 추가
+ * - key 추출 불가한 fact → 단순 추가 (Set 중복제거)
+ */
+function resolveFactConflicts(existingFacts: string[], newFacts: string[]): string[] {
+  const result = [...existingFacts];
+
+  for (const newFact of newFacts) {
+    // 이미 완전히 동일한 fact 존재 → skip
+    if (result.includes(newFact)) continue;
+
+    const newKey = extractFactKey(newFact);
+
+    if (newKey) {
+      // 같은 key를 가진 기존 fact 검색
+      const conflictIdx = result.findIndex(existing => {
+        const existingKey = extractFactKey(existing);
+        return existingKey === newKey;
+      });
+
+      if (conflictIdx !== -1) {
+        // 충돌 감지 → 최신 fact로 교체
+        console.log(`[KnownFacts] 충돌 해결: "${result[conflictIdx]}" → "${newFact}"`);
+        result[conflictIdx] = newFact;
+        continue;
+      }
+    }
+
+    // 충돌 없음 → 추가
+    result.push(newFact);
+  }
+
+  return result;
+}
+
+// ============================================================
 // 크로스세션 메모리 스코프
 // ============================================================
 
@@ -434,12 +526,11 @@ export async function updateRelationship(
     data.relationshipLabel = updates.newLabel;
   }
 
-  // 새로 알게 된 사실
+  // 새로 알게 된 사실 (충돌 감지 적용 — 같은 주제의 기존 fact는 최신 값으로 교체)
   if (updates.newFacts && updates.newFacts.length > 0) {
     const existingFacts: string[] = JSON.parse(relationship.knownFacts);
-    const combinedFacts = existingFacts.concat(updates.newFacts);
-    const allFacts = Array.from(new Set(combinedFacts));
-    data.knownFacts = JSON.stringify(allFacts);
+    const resolvedFacts = resolveFactConflicts(existingFacts, updates.newFacts);
+    data.knownFacts = JSON.stringify(resolvedFacts);
   }
 
   // 공유 경험 추가
@@ -1056,12 +1147,22 @@ function generateNarrativePrompt(
     lines.push(`- 유저를 "${relationship.nicknameForUser}"(이)라고 부름`);
   }
 
-  // 알고 있는 정보
+  // 알고 있는 정보 (Identity/Moment 분리)
   if (relationship.knownFacts.length > 0) {
-    lines.push(`\n[${characterName}이 유저에 대해 알고 있는 것]`);
-    relationship.knownFacts.slice(-15).forEach((fact) => {
-      lines.push(`- ${fact}`);
-    });
+    const identityFacts = relationship.knownFacts.filter(f => isIdentityFact(f));
+    const momentFacts = relationship.knownFacts.filter(f => !isIdentityFact(f));
+
+    // Identity: 전량 주입 (이름, 나이, 가족 등 불변 정보 — 절대 잘리면 안 됨)
+    if (identityFacts.length > 0) {
+      lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 것]`);
+      identityFacts.forEach(fact => lines.push(`- ${fact}`));
+    }
+
+    // Moment: 최근 10개 (상황, 계획, 행동 등 변동 정보)
+    if (momentFacts.length > 0) {
+      lines.push(`\n[${characterName}이 최근 알게 된 것]`);
+      momentFacts.slice(-10).forEach(fact => lines.push(`- ${fact}`));
+    }
   }
 
   // 최근 기억 (캐릭터 해석)
