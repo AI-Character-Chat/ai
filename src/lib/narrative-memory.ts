@@ -648,13 +648,19 @@ export async function markMemoryMentioned(memoryId: string) {
 }
 
 /**
- * 기억 강도 자연 감소 (Memory Decay)
+ * 기억 강도 자연 감소 (Emotion-Weighted Memory Decay)
  *
- * 매 턴마다 호출하여 기억 강도를 자연스럽게 감소시킴
- * - episodic (일화적): factor 0.95 (빠르게 감소)
- * - semantic (의미적): factor 0.98 (느리게 감소)
- * - emotional (감정적): factor 0.97 (중간)
+ * Ebbinghaus 곡선 + 감정 강도 반영:
+ * - 기본 감쇠: episodic 0.95, semantic 0.98, emotional 0.97
+ * - 감정 보정: emotionalResponse.intensity가 높을수록 감쇠 느림 (x0.4 가중)
+ * - 중요도 보정: importance가 높을수록 감쇠 느림 (x0.3 가중)
+ * - 최대 factor: 0.995 (아무리 중요해도 미세하게는 감쇠)
  * - strength가 0.1 이하이면 감소하지 않음 (최소값 보장)
+ *
+ * 예시 (episodic, base=0.95):
+ *   감정 없음, importance=0.5 → factor 0.9575 (일반 감쇠)
+ *   감정 0.8,  importance=0.5 → factor 0.9735 (느린 감쇠)
+ *   감정 1.0,  importance=0.8 → factor 0.982  (아주 느린 감쇠)
  */
 export async function decayMemoryStrength(scope: MemoryScope) {
   const decayFactors: Record<string, number> = {
@@ -665,7 +671,17 @@ export async function decayMemoryStrength(scope: MemoryScope) {
 
   for (const [memoryType, factor] of Object.entries(decayFactors)) {
     await prisma.$executeRawUnsafe(
-      `UPDATE "CharacterMemory" SET strength = strength * $1 WHERE "userId" = $2 AND "workId" = $3 AND "memoryType" = $4 AND strength > 0.1`,
+      `UPDATE "CharacterMemory"
+       SET strength = strength * LEAST(0.995,
+         $1 + (1.0 - $1) * (
+           CASE WHEN "emotionalResponse" IS NOT NULL AND "emotionalResponse" != ''
+             THEN COALESCE(("emotionalResponse"::json->>'intensity')::float, 0) * 0.4
+             ELSE 0
+           END
+           + importance * 0.3
+         )
+       )
+       WHERE "userId" = $2 AND "workId" = $3 AND "memoryType" = $4 AND strength > 0.1`,
       factor,
       scope.userId,
       scope.workId,

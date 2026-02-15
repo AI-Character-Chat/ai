@@ -710,7 +710,7 @@ export async function* generateStoryResponseStream(params: {
 
       // 스트리밍 중 누락된 turn 보완
       const allTurns = (parsed.turns || [])
-        .map((raw: { type: string; character: string; content: string; emotion: string }) => parseSingleTurn(raw, characters))
+        .map((raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
         .filter((t: StoryTurn | null): t is StoryTurn => t !== null);
 
       for (let i = emittedTurns.length; i < allTurns.length; i++) {
@@ -734,7 +734,7 @@ export async function* generateStoryResponseStream(params: {
       }
       const repaired = repairTruncatedJson(fullText, sceneState);
       const repairedTurns = (repaired.turns || [])
-        .map((raw: { type: string; character: string; content: string; emotion: string }) => parseSingleTurn(raw, characters))
+        .map((raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
         .filter((t: StoryTurn | null): t is StoryTurn => t !== null);
 
       for (let i = emittedTurns.length; i < repairedTurns.length; i++) {
