@@ -570,7 +570,7 @@ function parseSingleTurn(
  * 스트리밍 JSON 버퍼에서 완성된 turn 객체를 점진적으로 추출
  * brace depth tracking으로 JSON 문자열 내 중괄호와 실제 구분자를 구별
  */
-function extractNewTurnsFromBuffer(
+export function extractNewTurnsFromBuffer(
   buffer: string,
   alreadyProcessed: number,
   characters: Array<{ id: string; name: string }>,
