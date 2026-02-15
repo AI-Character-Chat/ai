@@ -478,17 +478,27 @@ export async function getAllRelationships(scope: MemoryScope): Promise<Relations
 // ============================================================
 
 /**
- * 유사 기억 강화 (A-MEM: Reinforcement)
- * 새 기억과 유사한 기존 기억이 있으면 강화하고 새 저장 생략
+ * Surprise-based 기억 신선도 평가 (Titans 개념 적용)
+ *
+ * 새 기억이 기존 기억 대비 얼마나 "놀라운지" 평가하여 3단계 행동 결정:
+ *
+ * | 유사도       | 판정     | 행동                                     |
+ * |-------------|---------|------------------------------------------|
+ * | >= 0.85     | 기존과 동일 | 기존 기억 강화 (A-MEM reinforcement)       |
+ * | 0.6 ~ 0.85  | 뻔한 정보  | 중요도 낮으면 skip, 높으면 낮은 importance로 저장 |
+ * | < 0.6       | 놀라운 정보 | surprise boost로 importance 상향 저장      |
+ *
+ * @returns action: 'reinforce'(강화됨) | 'skip'(저장 불필요) | 'save'(저장 필요)
  */
-async function reinforceMemory(
+async function evaluateMemoryNovelty(
   scope: MemoryScope,
   characterId: string,
   newEmbedding: number[],
   newImportance: number,
-  similarityThreshold: number = 0.85
-): Promise<boolean> {
-  if (newEmbedding.length === 0) return false;
+): Promise<{ action: 'reinforce' | 'skip' | 'save'; surpriseScore: number; adjustedImportance: number }> {
+  if (newEmbedding.length === 0) {
+    return { action: 'save', surpriseScore: 1.0, adjustedImportance: newImportance };
+  }
 
   const memories = await prisma.characterMemory.findMany({
     where: { userId: scope.userId, workId: scope.workId, characterId },
@@ -496,31 +506,64 @@ async function reinforceMemory(
     take: 50,
   });
 
+  if (memories.length === 0) {
+    // 첫 기억은 항상 놀라움
+    return { action: 'save', surpriseScore: 1.0, adjustedImportance: Math.min(1.0, newImportance + 0.2) };
+  }
+
+  let maxSimilarity = 0;
+  let mostSimilarMemory: typeof memories[0] | null = null;
+
   for (const mem of memories) {
     const emb = JSON.parse(mem.embedding || '[]') as number[];
     if (emb.length === 0) continue;
     const sim = cosineSimilarity(newEmbedding, emb);
-    if (sim >= similarityThreshold) {
-      await prisma.characterMemory.update({
-        where: { id: mem.id },
-        data: {
-          strength: Math.min(1.0, mem.strength + 0.2),
-          importance: Math.min(1.0, Math.max(mem.importance, newImportance)),
-          mentionedCount: { increment: 1 },
-          lastMentioned: new Date(),
-        },
-      });
-      return true;
+    if (sim > maxSimilarity) {
+      maxSimilarity = sim;
+      mostSimilarMemory = mem;
     }
   }
-  return false;
+
+  const surpriseScore = 1.0 - maxSimilarity;
+
+  // [1] 거의 동일한 기억 (>=0.85): 기존 강화, 새 저장 생략
+  if (maxSimilarity >= 0.85 && mostSimilarMemory) {
+    await prisma.characterMemory.update({
+      where: { id: mostSimilarMemory.id },
+      data: {
+        strength: Math.min(1.0, mostSimilarMemory.strength + 0.2),
+        importance: Math.min(1.0, Math.max(mostSimilarMemory.importance, newImportance)),
+        mentionedCount: { increment: 1 },
+        lastMentioned: new Date(),
+      },
+    });
+    return { action: 'reinforce', surpriseScore, adjustedImportance: newImportance };
+  }
+
+  // [2] 비슷한 기억 (0.6~0.85): 놀랍지 않음
+  if (maxSimilarity >= 0.6) {
+    // 감정적으로 중요하거나 importance가 높으면 그래도 저장 (감쇠된 importance)
+    if (newImportance >= 0.7) {
+      const dampened = newImportance * 0.7; // 중복성 감안 30% 감쇠
+      return { action: 'save', surpriseScore, adjustedImportance: dampened };
+    }
+    // 일반적인 정보 → skip
+    return { action: 'skip', surpriseScore, adjustedImportance: newImportance };
+  }
+
+  // [3] 놀라운 정보 (<0.6): surprise boost로 importance 상향
+  const surpriseBoost = surpriseScore * 0.3; // 최대 +0.3
+  const adjustedImportance = Math.min(1.0, newImportance + surpriseBoost);
+  return { action: 'save', surpriseScore, adjustedImportance };
 }
 
 /**
- * 캐릭터의 기억 저장 (캐릭터 성격 필터 적용)
+ * 캐릭터의 기억 저장 (Surprise-based 필터링 적용)
  *
- * 같은 사건이라도 캐릭터마다 다르게 해석하여 저장
- * A-MEM: 유사 기억이 있으면 강화, 없으면 새로 저장
+ * 저장 전 evaluateMemoryNovelty로 신선도 평가:
+ * - 기존과 동일 → 강화 (A-MEM)
+ * - 뻔한 정보 → skip
+ * - 놀라운 정보 → surprise boost로 중요도 상향 저장
  */
 export async function saveCharacterMemory(params: {
   scope: MemoryScope;
@@ -536,11 +579,12 @@ export async function saveCharacterMemory(params: {
   // 임베딩 생성 (interpretation 기반 — 캐릭터 관점의 해석이 검색 키)
   const embedding = await generateEmbedding(params.interpretation);
 
-  // A-MEM: 유사 기억이 있으면 강화하고 새 저장 생략
-  const reinforced = await reinforceMemory(
+  // Surprise-based 신선도 평가
+  const { action, adjustedImportance } = await evaluateMemoryNovelty(
     params.scope, params.characterId, embedding, params.importance || 0.5
   );
-  if (reinforced) return null;
+
+  if (action === 'reinforce' || action === 'skip') return null;
 
   return await prisma.characterMemory.create({
     data: {
@@ -555,7 +599,7 @@ export async function saveCharacterMemory(params: {
         ? JSON.stringify(params.emotionalResponse)
         : null,
       memoryType: params.memoryType || 'episodic',
-      importance: params.importance || 0.5,
+      importance: adjustedImportance,
       keywords: JSON.stringify(params.keywords || []),
       embedding: JSON.stringify(embedding),
     },
