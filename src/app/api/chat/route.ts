@@ -145,7 +145,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: '메시지는 5000자 이하여야 합니다.' }, { status: 400 });
   }
 
-  // 세션 + 즉시 컨텍스트 (최근 10개) + 검색용 과거 메시지 (100개)
+  // 세션 + 즉시 컨텍스트 (최근 30개) + 검색용 과거 메시지 (100개)
   const [session, olderMessages] = await Promise.all([
     prisma.chatSession.findUnique({
       where: { id: sessionId },
@@ -154,7 +154,7 @@ export async function PUT(request: NextRequest) {
         messages: {
           include: { character: true },
           orderBy: { createdAt: 'desc' },
-          take: 10,
+          take: 30,
         },
       },
     }),
