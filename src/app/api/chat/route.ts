@@ -5,63 +5,12 @@ import {
   buildSystemInstruction,
   buildContents,
   generateStoryResponseStream,
-  generateSessionSummary,
   generateEmbedding,
   type StoryTurn,
 } from '@/lib/gemini';
-import {
-  formatConversationHistory,
-  filterActiveLorebookEntries,
-  extractRecentText,
-  findRelevantMessages,
-  buildSelectiveHistory,
-} from '@/lib/prompt-builder';
-import {
-  buildNarrativeContext,
-  processConversationForMemory,
-  decayMemoryStrength,
-  pruneWeakMemories,
-  consolidateMemories,
-  promoteMemories,
-  getActiveScene,
-} from '@/lib/narrative-memory';
-import {
-  searchMemoriesForCharacters,
-  formatMem0ForPrompt,
-  addMemory,
-  isMem0Available,
-  pruneMemories as pruneMem0Memories,
-} from '@/lib/memory';
+import { isMem0Available } from '@/lib/memory';
 import { auth } from '@/lib/auth';
-
-// 요약 Race Condition 방지
-const summarizingSessionIds = new Set<string>();
-
-async function triggerSummary(
-  sessionId: string,
-  messages: Array<{ messageType: string; content: string; character?: { name: string } | null }>,
-  existingSummary?: string
-) {
-  if (summarizingSessionIds.has(sessionId)) return;
-  summarizingSessionIds.add(sessionId);
-
-  try {
-    const summaryMessages = messages.map(m => ({
-      role: m.messageType,
-      content: m.content,
-      characterName: m.character?.name,
-    }));
-    const summary = await generateSessionSummary(summaryMessages, existingSummary);
-    if (summary) {
-      await prisma.chatSession.update({
-        where: { id: sessionId },
-        data: { sessionSummary: summary },
-      });
-    }
-  } finally {
-    summarizingSessionIds.delete(sessionId);
-  }
-}
+import { buildChatContext, processBackgroundTasks } from '@/lib/chat-service';
 
 // 새 채팅 세션 생성
 export async function POST(request: NextRequest) {
@@ -250,82 +199,42 @@ export async function PUT(request: NextRequest) {
           }).catch(() => {});
         }
 
-        // [2] 컨텍스트 수집
         const presentCharacters = JSON.parse(session.presentCharacters) as string[];
         const recentEvents = JSON.parse(session.recentEvents) as string[];
 
-        const appearedCharactersInHistory = new Set<string>();
-        recentMessages.forEach(msg => {
-          if (msg.character?.name) appearedCharactersInHistory.add(msg.character.name);
-        });
-        const previousPresentCharacters = Array.from(appearedCharactersInHistory);
-
-        // 유저 페르소나
-        let userPersona: { name: string; age: number | null; gender: string; description: string | null } | undefined;
-        try {
-          const parsed = JSON.parse(session.userPersona || '{}');
-          if (parsed.name) userPersona = parsed;
-        } catch { /* ignore */ }
-
-        // 페르소나 이름 우선, 없으면 세션 이름 사용
-        const effectiveUserName = userPersona?.name || session.userName;
-
-        // [2.5] 선별적 대화 히스토리 빌드
-        const immediateIds = new Set(recentMessages.map(m => m.id));
-        const relevantHistory = findRelevantMessages(
-          olderMessages, immediateIds, queryEmbedding, 5
-        );
-        const conversationHistory = relevantHistory.length > 0
-          ? buildSelectiveHistory(relevantHistory, recentMessages, effectiveUserName)
-          : formatConversationHistory(recentMessages, effectiveUserName);
-        const recentText = extractRecentText(recentMessages, content);
-        const lorebookContext = filterActiveLorebookEntries(
-          session.work.lorebook, recentText, session.intimacy, session.turnCount, presentCharacters
-        );
-
-        // [3] narrative-memory: 캐릭터별 기억 수집 + 장면 정보 (병렬)
+        // [2] 컨텍스트 수집 (chat-service)
         send('status', { step: 'generating' });
         const t0 = Date.now();
 
-        // presentCharacters에 해당하는 캐릭터만 기억 조회 (집중 + 성능)
-        const presentChars = characters.filter(c =>
-          presentCharacters.includes(c.name) ||
-          presentCharacters.some(pc => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
-        );
-
-        // activeScene을 1번만 조회, 임베딩도 재사용 (캐릭터별 중복 방지)
-        const mem0SearchStart = Date.now();
-        const preScene = await getActiveScene(sessionId).catch(() => null);
-        const [narrativeContexts, mem0Results] = await Promise.all([
-          Promise.all(
-            presentChars.map(c =>
-              buildNarrativeContext(sessionId, c.id, c.name, content, queryEmbedding, preScene)
-                .catch(() => ({ narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null }))
-            )
-          ),
-          // mem0 장기 기억 검색 (병렬)
-          isMem0Available()
-            ? searchMemoriesForCharacters(
-                content,
-                authSession.user!.id!,
-                presentChars.map(c => ({ id: c.id, name: c.name })),
-              ).catch(() => new Map<string, string[]>())
-            : Promise.resolve(new Map<string, string[]>()),
-        ]);
-        const mem0SearchMs = Date.now() - mem0SearchStart;
-        const memoryPrompts = narrativeContexts
-          .map(ctx => ctx.narrativePrompt)
-          .filter(p => p.length > 0);
-
-        // mem0 기억을 프롬프트 텍스트로 변환
-        const charNameMap = new Map(presentChars.map(c => [c.id, c.name]));
-        const mem0Context = formatMem0ForPrompt(mem0Results, charNameMap);
-        const mem0MemoriesFound = Array.from(mem0Results.values()).reduce((s, m) => s + m.length, 0);
+        const {
+          conversationHistory,
+          lorebookContext,
+          memoryPrompts,
+          mem0Context,
+          mem0SearchMs,
+          mem0MemoriesFound,
+          presentChars,
+          relevantHistory,
+          preScene,
+          effectiveUserName,
+          userPersona,
+          previousPresentCharacters,
+        } = await buildChatContext({
+          sessionId,
+          content,
+          session,
+          olderMessages,
+          recentMessages,
+          presentCharacters,
+          characters,
+          queryEmbedding,
+          authUserId: authSession.user!.id!,
+        });
 
         const t1 = Date.now();
         console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts, mem0: ${mem0MemoriesFound} memories in ${mem0SearchMs}ms)`);
 
-        // [4] systemInstruction 빌드 (작품별 고정 → 캐시됨)
+        // [3] systemInstruction + contents 빌드
         const systemInstruction = buildSystemInstruction({
           worldSetting: session.work.worldSetting || '',
           characters: characters.map(c => ({ name: c.name, prompt: c.prompt })),
@@ -333,7 +242,6 @@ export async function PUT(request: NextRequest) {
           userName: effectiveUserName,
         });
 
-        // [5] contents 빌드 (매 턴 변경)
         const contents = buildContents({
           userPersona,
           narrativeContexts: memoryPrompts,
@@ -356,6 +264,7 @@ export async function PUT(request: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseMetadataFromAI: any = null;
         let lastAiMessageId = '';
+        let extractedFacts: string[] = [];
 
         for await (const event of generateStoryResponseStream({
           systemInstruction,
@@ -385,6 +294,9 @@ export async function PUT(request: NextRequest) {
             }
             case 'scene':
               updatedScene = event.scene;
+              break;
+            case 'extractedFacts':
+              extractedFacts = event.facts;
               break;
             case 'metadata':
               responseMetadataFromAI = event.metadata;
@@ -446,52 +358,36 @@ export async function PUT(request: NextRequest) {
           sceneUpdate: updatedScene,
         });
 
-        // 메타데이터 전송 (done 직전)
+        // 메타데이터 빌드 (SSE 전송 + DB 저장 공용)
         const dialogueTurnsForMeta = allTurns.filter(t => t.type === 'dialogue');
-        const emotionsSummary = dialogueTurnsForMeta.map(t =>
-          `${t.characterName}: ${t.emotion.primary}(${(t.emotion.intensity * 100).toFixed(0)}%)`
-        );
-        const lorebookActivated = lorebookContext ? lorebookContext.split('\n\n').length : 0;
-
-        const mem0SaveCount = isMem0Available() ? dialogueTurnsForMeta.length : 0;
-        const extraMeta = {
-          emotions: emotionsSummary,
-          lorebookActivated,
+        const fullMetadata = responseMetadataFromAI ? {
+          ...responseMetadataFromAI,
+          narrativeMemoryMs: t1 - t0,
+          promptBuildMs: t2 - t1,
+          totalMs: t3 - t0,
+          turnsCount: allTurns.length,
+          systemInstructionLength: systemInstruction.length,
+          proAnalysis: session.proAnalysis || '',
+          emotions: dialogueTurnsForMeta.map(t =>
+            `${t.characterName}: ${t.emotion.primary}(${(t.emotion.intensity * 100).toFixed(0)}%)`
+          ),
+          lorebookActivated: lorebookContext ? lorebookContext.split('\n\n').length : 0,
           selectiveHistory: relevantHistory.length > 0,
           relevantHistoryCount: relevantHistory.length,
           turnNumber: session.turnCount + 1,
-          // mem0 메트릭
           mem0Available: isMem0Available(),
           mem0SearchMs,
           mem0MemoriesFound,
-          mem0MemoriesSaved: mem0SaveCount,
-        };
+          mem0MemoriesSaved: isMem0Available() ? dialogueTurnsForMeta.length : 0,
+          extractedFactsCount: extractedFacts.length,
+        } : null;
 
-        if (responseMetadataFromAI) {
-          send('response_metadata', {
-            ...responseMetadataFromAI,
-            narrativeMemoryMs: t1 - t0,
-            promptBuildMs: t2 - t1,
-            totalMs: t3 - t0,
-            turnsCount: allTurns.length,
-            systemInstructionLength: systemInstruction.length,
-            proAnalysis: session.proAnalysis || '',
-            ...extraMeta,
-          });
+        if (fullMetadata) {
+          send('response_metadata', fullMetadata);
         }
 
-        // [7] 메타데이터 DB 저장 (새로고침 시에도 유지)
-        if (lastAiMessageId && responseMetadataFromAI) {
-          const fullMetadata = {
-            ...responseMetadataFromAI,
-            narrativeMemoryMs: t1 - t0,
-            promptBuildMs: t2 - t1,
-            totalMs: t3 - t0,
-            turnsCount: allTurns.length,
-            systemInstructionLength: systemInstruction.length,
-            proAnalysis: session.proAnalysis || '',
-            ...extraMeta,
-          };
+        // DB 저장 (새로고침 시에도 유지, fire-and-forget)
+        if (lastAiMessageId && fullMetadata) {
           prisma.message.update({
             where: { id: lastAiMessageId },
             data: { metadata: JSON.stringify(fullMetadata) },
@@ -509,86 +405,23 @@ export async function PUT(request: NextRequest) {
 
         // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
 
-        // [A] 캐릭터 기억 업데이트 (매 턴)
-        const dialogueTurns = allTurns.filter(t => t.type === 'dialogue');
-
-        // Pro 분석에서 다축 관계 델타 추출
-        let relationshipDeltas: Record<string, {
-          trust?: number; affection?: number; respect?: number;
-          rivalry?: number; familiarity?: number;
-        }> = {};
-        if (session.proAnalysis) {
-          try {
-            const jsonMatch = session.proAnalysis.match(/```json\s*([\s\S]*?)```/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[1]);
-              if (parsed.relationshipDeltas) {
-                relationshipDeltas = parsed.relationshipDeltas;
-              }
-            }
-          } catch { /* 파싱 실패 시 기본 델타 사용 */ }
-        }
-
-        processConversationForMemory({
+        processBackgroundTasks({
           sessionId,
-          sceneId: preScene?.sceneId,
-          userMessage: content,
-          characterResponses: dialogueTurns.map(t => ({
-            characterId: t.characterId,
-            characterName: t.characterName,
-            content: t.content,
-            emotion: t.emotion ? { primary: t.emotion.primary, intensity: t.emotion.intensity } : undefined,
-            relationshipDelta: relationshipDeltas[t.characterName] || undefined,
-          })),
-          emotionalMoment: dialogueTurns.some(t =>
-            ['sad', 'angry', 'surprised', 'happy'].includes(t.emotion.primary) && t.emotion.intensity > 0.7
-          ),
-        }).catch(e => console.error('[NarrativeMemory] processConversation failed:', e));
+          preSceneId: preScene?.sceneId,
+          content,
+          allTurns,
+          session: {
+            workId: session.workId,
+            turnCount: session.turnCount,
+            sessionSummary: session.sessionSummary,
+            proAnalysis: session.proAnalysis,
+          },
+          authUserId: authSession.user!.id!,
+          presentChars,
+          recentMessages,
+          extractedFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
+        }).catch(e => console.error('[BackgroundTasks] process failed:', e));
 
-        // [A-2] mem0 장기 기억 저장 (캐릭터별, fire-and-forget)
-        if (isMem0Available() && dialogueTurns.length > 0) {
-          const userId = authSession.user!.id!;
-          dialogueTurns.forEach(t => {
-            addMemory(
-              [
-                { role: 'user', content },
-                { role: 'assistant', content: `[${t.characterName}] ${t.content}` },
-              ],
-              userId,
-              t.characterId,
-              { work_id: session.workId, character_name: t.characterName },
-            ).catch(e => console.error(`[Mem0] save failed for ${t.characterName}:`, e));
-          });
-        }
-
-        // [B] 5턴마다: 세션 요약 + 기억 감쇠 (비동기)
-        const newTurnCount = session.turnCount + 1;
-        if (newTurnCount % 5 === 0) {
-          triggerSummary(sessionId, recentMessages, session.sessionSummary || undefined)
-            .catch(() => {});
-          decayMemoryStrength(sessionId)
-            .catch(() => {});
-        }
-
-        // [D] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
-        if (newTurnCount % 10 === 0) {
-          consolidateMemories(sessionId).catch(() => {});
-          promoteMemories(sessionId).catch(() => {});
-        }
-
-        // [C] 25턴마다: 약한 기억 정리 (비동기)
-        if (newTurnCount % 25 === 0) {
-          pruneWeakMemories(sessionId)
-            .catch(() => {});
-
-          // mem0 기억 정리 (캐릭터당 최대 100개)
-          if (isMem0Available()) {
-            const userId = authSession.user!.id!;
-            presentChars.forEach(c => {
-              pruneMem0Memories(userId, c.id, 100).catch(() => {});
-            });
-          }
-        }
       } catch (error) {
         console.error('메시지 전송 에러:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);

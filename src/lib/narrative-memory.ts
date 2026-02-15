@@ -237,23 +237,19 @@ export async function getOrCreateRelationship(
   characterId: string,
   characterName: string
 ): Promise<RelationshipState> {
-  let relationship = await prisma.userCharacterRelationship.findUnique({
+  const relationship = await prisma.userCharacterRelationship.upsert({
     where: {
       sessionId_characterId: { sessionId, characterId },
     },
+    update: {},
+    create: {
+      sessionId,
+      characterId,
+      intimacyLevel: 'stranger',
+      intimacyScore: 0,
+      speechStyle: 'formal',
+    },
   });
-
-  if (!relationship) {
-    relationship = await prisma.userCharacterRelationship.create({
-      data: {
-        sessionId,
-        characterId,
-        intimacyLevel: 'stranger',
-        intimacyScore: 0,
-        speechStyle: 'formal',
-      },
-    });
-  }
 
   return {
     characterId: relationship.characterId,

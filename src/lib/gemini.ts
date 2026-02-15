@@ -177,8 +177,13 @@ const RESPONSE_SCHEMA = {
       },
       required: ['location', 'time', 'presentCharacters'],
     },
+    extractedFacts: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '유저가 이번 턴에서 새로 밝힌 개인정보나 중요 사실 (이름, 취향, 직업, 감정, 비밀, 과거 경험 등). 유저가 새로운 정보를 밝히지 않았으면 빈 배열.',
+    },
   },
-  required: ['turns', 'scene'],
+  required: ['turns', 'scene', 'extractedFacts'],
 };
 
 // ============================================================
@@ -527,10 +532,11 @@ export async function generateStoryResponse(params: {
 export type StreamEvent =
   | { type: 'turn'; turn: StoryTurn }
   | { type: 'scene'; scene: { location: string; time: string; presentCharacters: string[] } }
+  | { type: 'extractedFacts'; facts: string[] }
   | { type: 'metadata'; metadata: ResponseMetadata };
 
 function parseSingleTurn(
-  raw: { type: string; character: string; content: string; emotion: string },
+  raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number },
   characters: Array<{ id: string; name: string }>,
 ): StoryTurn | null {
   const content = raw.content?.trim() || '';
@@ -554,6 +560,11 @@ function parseSingleTurn(
   );
   if (!char?.id) return null;
 
+  // AI가 반환한 emotionIntensity 사용 (없으면 0.7 폴백)
+  const intensity = typeof raw.emotionIntensity === 'number'
+    ? Math.max(0, Math.min(1, raw.emotionIntensity))
+    : 0.7;
+
   return {
     type: 'dialogue',
     characterId: char.id,
@@ -561,7 +572,7 @@ function parseSingleTurn(
     content,
     emotion: {
       primary: EXPRESSION_TYPES.includes(raw.emotion as typeof EXPRESSION_TYPES[number]) ? raw.emotion : 'neutral',
-      intensity: 0.7,
+      intensity,
     },
   };
 }
@@ -570,7 +581,7 @@ function parseSingleTurn(
  * 스트리밍 JSON 버퍼에서 완성된 turn 객체를 점진적으로 추출
  * brace depth tracking으로 JSON 문자열 내 중괄호와 실제 구분자를 구별
  */
-function extractNewTurnsFromBuffer(
+export function extractNewTurnsFromBuffer(
   buffer: string,
   alreadyProcessed: number,
   characters: Array<{ id: string; name: string }>,
@@ -688,9 +699,10 @@ export async function* generateStoryResponseStream(params: {
     }
   }
 
-  // 스트림 완료 - 누락된 turn + scene 파싱
+  // 스트림 완료 - 누락된 turn + scene + extractedFacts 파싱
   const fullText = buffer.trim();
   let parsedScene: { location: string; time: string; presentCharacters: string[] } | null = null;
+  let parsedFacts: string[] = [];
 
   if (fullText) {
     try {
@@ -711,6 +723,11 @@ export async function* generateStoryResponseStream(params: {
         time: parsed.scene?.time || sceneState.time,
         presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
       };
+
+      // extractedFacts 파싱
+      if (Array.isArray(parsed.extractedFacts)) {
+        parsedFacts = parsed.extractedFacts.filter((f: unknown) => typeof f === 'string' && f.length > 0);
+      }
     } catch {
       if (lastFinishReason === 'MAX_TOKENS') {
         console.warn('⚠️ 스트리밍: MAX_TOKENS로 JSON 잘림, 복구 시도');
@@ -726,6 +743,12 @@ export async function* generateStoryResponseStream(params: {
       }
 
       parsedScene = repaired.scene;
+      // repaired JSON에서도 extractedFacts 시도
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (Array.isArray((repaired as any).extractedFacts)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        parsedFacts = (repaired as any).extractedFacts.filter((f: unknown) => typeof f === 'string' && f.length > 0);
+      }
     }
   }
 
@@ -755,6 +778,12 @@ export async function* generateStoryResponseStream(params: {
       presentCharacters: sceneState.presentCharacters,
     },
   };
+
+  // extractedFacts (유저가 밝힌 새로운 정보)
+  if (parsedFacts.length > 0) {
+    console.log(`   🧠 추출된 사실: ${parsedFacts.join(', ')}`);
+  }
+  yield { type: 'extractedFacts', facts: parsedFacts };
 
   // 메타데이터
   const elapsed = Date.now() - startTime;
