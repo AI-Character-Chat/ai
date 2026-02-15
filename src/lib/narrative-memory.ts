@@ -1152,10 +1152,10 @@ function generateNarrativePrompt(
     const identityFacts = relationship.knownFacts.filter(f => isIdentityFact(f));
     const momentFacts = relationship.knownFacts.filter(f => !isIdentityFact(f));
 
-    // Identity: 전량 주입 (이름, 나이, 가족 등 불변 정보 — 절대 잘리면 안 됨)
+    // Identity: 전량 주입 + 볼드 강조 (Flash 모델 어텐션 집중용)
     if (identityFacts.length > 0) {
-      lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 것]`);
-      identityFacts.forEach(fact => lines.push(`- ${fact}`));
+      lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 것 — 절대 불변]`);
+      identityFacts.forEach(fact => lines.push(`- **${fact}**`));
     }
 
     // Moment: 최근 10개 (상황, 계획, 행동 등 변동 정보)
