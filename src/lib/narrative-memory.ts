@@ -31,6 +31,16 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 // ============================================================
+// 크로스세션 메모리 스코프
+// ============================================================
+
+export interface MemoryScope {
+  userId: string;   // 크로스세션 핵심 — 유저 식별
+  workId: string;   // 크로스세션 핵심 — 작품 식별
+  sessionId: string; // Scene 연결용 (세션별 고유)
+}
+
+// ============================================================
 // 타입 정의
 // ============================================================
 
@@ -230,51 +240,83 @@ export async function endScene(sceneId: string, summary?: string) {
 // ============================================================
 
 /**
+ * 관계 데이터를 RelationshipState로 변환
+ */
+function mapRelationshipToState(
+  r: { characterId: string; intimacyLevel: string; intimacyScore: number; trust: number; affection: number; respect: number; rivalry: number; familiarity: number; relationshipLabel: string | null; speechStyle: string; nicknameForUser: string | null; knownFacts: string; sharedExperiences: string; emotionalHistory: string },
+  characterName: string
+): RelationshipState {
+  return {
+    characterId: r.characterId,
+    characterName,
+    intimacyLevel: r.intimacyLevel,
+    intimacyScore: r.intimacyScore,
+    trust: r.trust,
+    affection: r.affection,
+    respect: r.respect,
+    rivalry: r.rivalry,
+    familiarity: r.familiarity,
+    relationshipLabel: r.relationshipLabel || undefined,
+    speechStyle: r.speechStyle,
+    nicknameForUser: r.nicknameForUser || undefined,
+    knownFacts: JSON.parse(r.knownFacts),
+    sharedExperiences: JSON.parse(r.sharedExperiences),
+    emotionalHistory: JSON.parse(r.emotionalHistory || '[]'),
+  };
+}
+
+/**
  * 캐릭터와의 관계 가져오기 (없으면 생성)
+ * 크로스세션: userId+workId+characterId로 검색, 레거시 폴백 지원
  */
 export async function getOrCreateRelationship(
-  sessionId: string,
+  scope: MemoryScope,
   characterId: string,
   characterName: string
 ): Promise<RelationshipState> {
-  const relationship = await prisma.userCharacterRelationship.upsert({
-    where: {
-      sessionId_characterId: { sessionId, characterId },
-    },
-    update: {},
-    create: {
-      sessionId,
-      characterId,
-      intimacyLevel: 'stranger',
-      intimacyScore: 0,
-      speechStyle: 'formal',
-    },
+  // 1차: 크로스세션 검색 (userId+workId+characterId)
+  let relationship = await prisma.userCharacterRelationship.findFirst({
+    where: { userId: scope.userId, workId: scope.workId, characterId },
   });
 
-  return {
-    characterId: relationship.characterId,
-    characterName,
-    intimacyLevel: relationship.intimacyLevel,
-    intimacyScore: relationship.intimacyScore,
-    trust: relationship.trust,
-    affection: relationship.affection,
-    respect: relationship.respect,
-    rivalry: relationship.rivalry,
-    familiarity: relationship.familiarity,
-    relationshipLabel: relationship.relationshipLabel || undefined,
-    speechStyle: relationship.speechStyle,
-    nicknameForUser: relationship.nicknameForUser || undefined,
-    knownFacts: JSON.parse(relationship.knownFacts),
-    sharedExperiences: JSON.parse(relationship.sharedExperiences),
-    emotionalHistory: JSON.parse(relationship.emotionalHistory || '[]'),
-  };
+  if (!relationship) {
+    // 2차: 레거시 폴백 (sessionId+characterId)
+    relationship = await prisma.userCharacterRelationship.findUnique({
+      where: { sessionId_characterId: { sessionId: scope.sessionId, characterId } },
+    });
+
+    if (relationship && !relationship.userId) {
+      // 레거시 데이터 → userId/workId 백필
+      relationship = await prisma.userCharacterRelationship.update({
+        where: { id: relationship.id },
+        data: { userId: scope.userId, workId: scope.workId },
+      });
+    }
+  }
+
+  if (!relationship) {
+    // 신규 생성 (크로스세션 필드 포함)
+    relationship = await prisma.userCharacterRelationship.create({
+      data: {
+        sessionId: scope.sessionId,
+        userId: scope.userId,
+        workId: scope.workId,
+        characterId,
+        intimacyLevel: 'stranger',
+        intimacyScore: 0,
+        speechStyle: 'formal',
+      },
+    });
+  }
+
+  return mapRelationshipToState(relationship, characterName);
 }
 
 /**
  * 관계 상태 업데이트
  */
 export async function updateRelationship(
-  sessionId: string,
+  scope: MemoryScope,
   characterId: string,
   sceneId: string | undefined,
   updates: {
@@ -291,8 +333,11 @@ export async function updateRelationship(
     nicknameChange?: string;
   }
 ) {
-  const relationship = await prisma.userCharacterRelationship.findUnique({
-    where: { sessionId_characterId: { sessionId, characterId } },
+  // 크로스세션 검색 → 레거시 폴백
+  const relationship = await prisma.userCharacterRelationship.findFirst({
+    where: { userId: scope.userId, workId: scope.workId, characterId },
+  }) || await prisma.userCharacterRelationship.findUnique({
+    where: { sessionId_characterId: { sessionId: scope.sessionId, characterId } },
   });
 
   if (!relationship) return;
@@ -417,31 +462,15 @@ function getIntimacyLevel(score: number): string {
 }
 
 /**
- * 세션의 모든 캐릭터 관계 가져오기
+ * 유저+작품의 모든 캐릭터 관계 가져오기 (크로스세션)
  */
-export async function getAllRelationships(sessionId: string): Promise<RelationshipState[]> {
+export async function getAllRelationships(scope: MemoryScope): Promise<RelationshipState[]> {
   const relationships = await prisma.userCharacterRelationship.findMany({
-    where: { sessionId },
+    where: { userId: scope.userId, workId: scope.workId },
     include: { character: true },
   });
 
-  return relationships.map((r) => ({
-    characterId: r.characterId,
-    characterName: r.character.name,
-    intimacyLevel: r.intimacyLevel,
-    intimacyScore: r.intimacyScore,
-    trust: r.trust,
-    affection: r.affection,
-    respect: r.respect,
-    rivalry: r.rivalry,
-    familiarity: r.familiarity,
-    relationshipLabel: r.relationshipLabel || undefined,
-    speechStyle: r.speechStyle,
-    nicknameForUser: r.nicknameForUser || undefined,
-    knownFacts: JSON.parse(r.knownFacts),
-    sharedExperiences: JSON.parse(r.sharedExperiences),
-    emotionalHistory: JSON.parse(r.emotionalHistory || '[]'),
-  }));
+  return relationships.map((r) => mapRelationshipToState(r, r.character.name));
 }
 
 // ============================================================
@@ -453,7 +482,7 @@ export async function getAllRelationships(sessionId: string): Promise<Relationsh
  * 새 기억과 유사한 기존 기억이 있으면 강화하고 새 저장 생략
  */
 async function reinforceMemory(
-  sessionId: string,
+  scope: MemoryScope,
   characterId: string,
   newEmbedding: number[],
   newImportance: number,
@@ -462,7 +491,7 @@ async function reinforceMemory(
   if (newEmbedding.length === 0) return false;
 
   const memories = await prisma.characterMemory.findMany({
-    where: { sessionId, characterId },
+    where: { userId: scope.userId, workId: scope.workId, characterId },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
@@ -494,7 +523,7 @@ async function reinforceMemory(
  * A-MEM: 유사 기억이 있으면 강화, 없으면 새로 저장
  */
 export async function saveCharacterMemory(params: {
-  sessionId: string;
+  scope: MemoryScope;
   characterId: string;
   sceneId?: string;
   originalEvent: string;
@@ -509,13 +538,15 @@ export async function saveCharacterMemory(params: {
 
   // A-MEM: 유사 기억이 있으면 강화하고 새 저장 생략
   const reinforced = await reinforceMemory(
-    params.sessionId, params.characterId, embedding, params.importance || 0.5
+    params.scope, params.characterId, embedding, params.importance || 0.5
   );
   if (reinforced) return null;
 
   return await prisma.characterMemory.create({
     data: {
-      sessionId: params.sessionId,
+      sessionId: params.scope.sessionId,
+      userId: params.scope.userId,
+      workId: params.scope.workId,
       characterId: params.characterId,
       sceneId: params.sceneId,
       originalEvent: params.originalEvent,
@@ -536,7 +567,7 @@ export async function saveCharacterMemory(params: {
  * queryEmbedding이 있으면 의미 유사도 기반, 없으면 importance 기반 폴백
  */
 export async function searchCharacterMemories(params: {
-  sessionId: string;
+  scope: MemoryScope;
   characterId: string;
   queryEmbedding?: number[];
   keywords?: string[];
@@ -555,7 +586,8 @@ export async function searchCharacterMemories(params: {
 > {
   const memories = await prisma.characterMemory.findMany({
     where: {
-      sessionId: params.sessionId,
+      userId: params.scope.userId,
+      workId: params.scope.workId,
       characterId: params.characterId,
       ...(params.memoryType && { memoryType: params.memoryType }),
       ...(params.minImportance && { importance: { gte: params.minImportance } }),
@@ -624,7 +656,7 @@ export async function markMemoryMentioned(memoryId: string) {
  * - emotional (감정적): factor 0.97 (중간)
  * - strength가 0.1 이하이면 감소하지 않음 (최소값 보장)
  */
-export async function decayMemoryStrength(sessionId: string) {
+export async function decayMemoryStrength(scope: MemoryScope) {
   const decayFactors: Record<string, number> = {
     episodic: 0.95,
     semantic: 0.98,
@@ -633,9 +665,10 @@ export async function decayMemoryStrength(sessionId: string) {
 
   for (const [memoryType, factor] of Object.entries(decayFactors)) {
     await prisma.$executeRawUnsafe(
-      `UPDATE "CharacterMemory" SET strength = strength * $1 WHERE "sessionId" = $2 AND "memoryType" = $3 AND strength > 0.1`,
+      `UPDATE "CharacterMemory" SET strength = strength * $1 WHERE "userId" = $2 AND "workId" = $3 AND "memoryType" = $4 AND strength > 0.1`,
       factor,
-      sessionId,
+      scope.userId,
+      scope.workId,
       memoryType
     );
   }
@@ -648,32 +681,35 @@ export async function decayMemoryStrength(sessionId: string) {
  * 2. 세션당 최대 기억 수 초과 시 중요도/강도 낮은 것부터 삭제
  */
 export async function pruneWeakMemories(
-  sessionId: string,
+  scope: MemoryScope,
   options: {
     minStrength?: number;
-    maxPerSession?: number;
+    maxPerScope?: number;
   } = {}
 ): Promise<number> {
-  const { minStrength = 0.15, maxPerSession = 100 } = options;
+  const { minStrength = 0.15, maxPerScope = 100 } = options;
 
   // 1. 약한 기억 삭제 (strength < 임계값 + 한번도 언급 안됨)
   const deletedWeak = await prisma.characterMemory.deleteMany({
     where: {
-      sessionId,
+      userId: scope.userId,
+      workId: scope.workId,
       strength: { lt: minStrength },
       mentionedCount: 0,
     },
   });
 
-  // 2. 세션당 최대 수 초과 시 오래된 것 삭제
-  const totalCount = await prisma.characterMemory.count({ where: { sessionId } });
+  // 2. 스코프당 최대 수 초과 시 오래된 것 삭제
+  const totalCount = await prisma.characterMemory.count({
+    where: { userId: scope.userId, workId: scope.workId },
+  });
   let deletedOverflow = 0;
 
-  if (totalCount > maxPerSession) {
+  if (totalCount > maxPerScope) {
     const oldMemories = await prisma.characterMemory.findMany({
-      where: { sessionId },
+      where: { userId: scope.userId, workId: scope.workId },
       orderBy: [{ importance: 'asc' }, { strength: 'asc' }, { createdAt: 'asc' }],
-      take: totalCount - maxPerSession,
+      take: totalCount - maxPerScope,
       select: { id: true },
     });
 
@@ -703,9 +739,9 @@ export async function pruneWeakMemories(
  * 유사 기억 통합 (Consolidation)
  * 동일 캐릭터의 유사 episodic 기억 그룹을 하나의 semantic 기억으로 병합
  */
-export async function consolidateMemories(sessionId: string): Promise<number> {
+export async function consolidateMemories(scope: MemoryScope): Promise<number> {
   const characters = await prisma.characterMemory.findMany({
-    where: { sessionId },
+    where: { userId: scope.userId, workId: scope.workId },
     select: { characterId: true },
     distinct: ['characterId'],
   });
@@ -714,7 +750,7 @@ export async function consolidateMemories(sessionId: string): Promise<number> {
 
   for (const { characterId } of characters) {
     const memories = await prisma.characterMemory.findMany({
-      where: { sessionId, characterId, memoryType: 'episodic' },
+      where: { userId: scope.userId, workId: scope.workId, characterId, memoryType: 'episodic' },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -751,7 +787,9 @@ export async function consolidateMemories(sessionId: string): Promise<number> {
 
       await prisma.characterMemory.create({
         data: {
-          sessionId,
+          sessionId: scope.sessionId,
+          userId: scope.userId,
+          workId: scope.workId,
           characterId,
           sceneId: bestMemory.sceneId,
           originalEvent: `[통합] ${group.length}개 관련 기억`,
@@ -783,10 +821,11 @@ export async function consolidateMemories(sessionId: string): Promise<number> {
  * 반복 언급 기억 승격 (Promotion)
  * episodic 중 mentionedCount >= 3인 기억을 semantic으로 승격
  */
-export async function promoteMemories(sessionId: string): Promise<number> {
+export async function promoteMemories(scope: MemoryScope): Promise<number> {
   const result = await prisma.characterMemory.updateMany({
     where: {
-      sessionId,
+      userId: scope.userId,
+      workId: scope.workId,
       memoryType: 'episodic',
       mentionedCount: { gte: 3 },
     },
@@ -826,7 +865,7 @@ export async function cleanExpiredImageCache(): Promise<number> {
  * 캐릭터가 "기억을 바탕으로 대화"할 수 있게 함
  */
 export async function buildNarrativeContext(
-  sessionId: string,
+  scope: MemoryScope,
   characterId: string,
   characterName: string,
   userMessage?: string,
@@ -838,8 +877,8 @@ export async function buildNarrativeContext(
   sceneContext: SceneContext | null;
   narrativePrompt: string;
 }> {
-  // 1. 관계 상태 가져오기
-  const relationship = await getOrCreateRelationship(sessionId, characterId, characterName);
+  // 1. 관계 상태 가져오기 (크로스세션)
+  const relationship = await getOrCreateRelationship(scope, characterId, characterName);
 
   // 2. 임베딩: 캐시된 것 사용, 없으면 생성 (1회만)
   let queryEmbedding: number[] | undefined = cachedEmbedding && cachedEmbedding.length > 0
@@ -850,17 +889,17 @@ export async function buildNarrativeContext(
     if (queryEmbedding.length === 0) queryEmbedding = undefined;
   }
 
-  // 3. 기억 검색 (임베딩 기반 또는 importance 폴백)
+  // 3. 기억 검색 (크로스세션, 임베딩 기반 또는 importance 폴백)
   const recentMemories = await searchCharacterMemories({
-    sessionId,
+    scope,
     characterId,
     queryEmbedding,
     limit: 5,
     minImportance: 0.3,
   });
 
-  // 4. 장면 정보: 캐시된 것 사용, 없으면 조회
-  const sceneContext = cachedScene !== undefined ? cachedScene : await getActiveScene(sessionId);
+  // 4. 장면 정보: 캐시된 것 사용, 없으면 조회 (세션 스코프 유지)
+  const sceneContext = cachedScene !== undefined ? cachedScene : await getActiveScene(scope.sessionId);
 
   // 5. 서사 프롬프트 생성
   const narrativePrompt = generateNarrativePrompt(
@@ -986,7 +1025,7 @@ function translateIntimacyLevel(level: string): string {
  * 3. 캐릭터 해석 → CharacterMemory에 저장
  */
 export async function processConversationForMemory(params: {
-  sessionId: string;
+  scope: MemoryScope;
   sceneId?: string;
   userMessage: string;
   characterResponses: Array<{
@@ -1002,16 +1041,16 @@ export async function processConversationForMemory(params: {
       familiarity?: number;
     };
   }>;
-  extractedFacts?: string[]; // AI가 추출한 새로운 정보들
-  emotionalMoment?: boolean; // 감정적으로 중요한 순간인지
+  extractedFacts?: string[];
+  emotionalMoment?: boolean;
 }) {
-  const { sessionId, sceneId, userMessage, characterResponses, extractedFacts, emotionalMoment } =
+  const { scope, sceneId, userMessage, characterResponses, extractedFacts, emotionalMoment } =
     params;
 
   for (const response of characterResponses) {
-    // 1. 관계 업데이트 (다축)
+    // 1. 관계 업데이트 (다축, 크로스세션)
     const delta = response.relationshipDelta || {};
-    await updateRelationship(sessionId, response.characterId, sceneId, {
+    await updateRelationship(scope, response.characterId, sceneId, {
       trustDelta: delta.trust || 0,
       affectionDelta: delta.affection || (emotionalMoment ? 3 : 1),
       respectDelta: delta.respect || 0,
@@ -1023,8 +1062,8 @@ export async function processConversationForMemory(params: {
     // 2. 감정 히스토리 누적
     if (response.emotion) {
       try {
-        const rel = await prisma.userCharacterRelationship.findUnique({
-          where: { sessionId_characterId: { sessionId, characterId: response.characterId } },
+        const rel = await prisma.userCharacterRelationship.findFirst({
+          where: { userId: scope.userId, workId: scope.workId, characterId: response.characterId },
         });
         if (rel) {
           const history = JSON.parse(rel.emotionalHistory || '[]') as Array<{
@@ -1058,7 +1097,7 @@ export async function processConversationForMemory(params: {
         : undefined;
 
       await saveCharacterMemory({
-        sessionId,
+        scope,
         characterId: response.characterId,
         sceneId,
         originalEvent: userMessage,

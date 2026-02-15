@@ -204,7 +204,7 @@ async function testMemoryDecay(sessionId: string, characterId: string) {
   const { decayMemoryStrength } = await import('../src/lib/narrative-memory');
 
   for (let i = 1; i <= 5; i++) {
-    await decayMemoryStrength(sessionId);
+    await decayMemoryStrength({ userId: 'test-user-001', workId: 'test-work', sessionId });
 
     const updated = await prisma.characterMemory.findMany({
       where: { sessionId },

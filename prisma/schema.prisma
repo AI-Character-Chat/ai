@@ -445,6 +445,10 @@ model UserCharacterRelationship {
   sessionId   String   // 채팅 세션 ID
   characterId String   // 캐릭터 ID
 
+  // 🔄 크로스세션 메모리 (userId+workId로 세션 넘어 관계 유지)
+  userId      String?  // 유저 ID (크로스세션 식별)
+  workId      String?  // 작품 ID (크로스세션 식별)
+
   // === 관계 상태 ===
   // 친밀도 레벨: stranger → acquaintance → friend → close_friend → intimate
   intimacyLevel  String  @default("stranger")
@@ -490,8 +494,10 @@ model UserCharacterRelationship {
   changes     RelationshipChange[]
 
   @@unique([sessionId, characterId])
+  @@unique([userId, workId, characterId])
   @@index([sessionId])
   @@index([characterId])
+  @@index([userId, workId])
 }
 
 // 관계 변화 기록 (Scene으로 인한 변화)
@@ -524,6 +530,10 @@ model CharacterMemory {
   sessionId   String   // 채팅 세션 ID
   characterId String   // 기억하는 캐릭터
   sceneId     String?  // 관련 장면 (선택)
+
+  // 🔄 크로스세션 메모리
+  userId      String?  // 유저 ID (크로스세션 식별)
+  workId      String?  // 작품 ID (크로스세션 식별)
 
   // === 기억 내용 ===
   // 원본 사건
@@ -564,6 +574,7 @@ model CharacterMemory {
   @@index([characterId])
   @@index([sceneId])
   @@index([memoryType])
+  @@index([userId, workId, characterId, memoryType])
 }
 
 // ============================================================

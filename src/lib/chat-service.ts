@@ -20,6 +20,7 @@ import {
   promoteMemories,
   getActiveScene,
   SceneContext,
+  MemoryScope,
 } from '@/lib/narrative-memory';
 import {
   searchMemoriesForCharacters,
@@ -77,6 +78,7 @@ export interface ChatContextParams {
   characters: Character[];
   queryEmbedding: number[];
   authUserId: string;
+  workId: string;
 }
 
 export type UserPersona = { name: string; age: number | null; gender: string; description: string | null };
@@ -107,7 +109,11 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
     characters,
     queryEmbedding,
     authUserId,
+    workId,
   } = params;
+
+  // 크로스세션 메모리 스코프
+  const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
 
   // 유저 페르소나 (한 번만 파싱, route.ts에서도 재사용)
   let userPersona: UserPersona | undefined;
@@ -159,7 +165,7 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
   const [narrativeContexts, mem0Results] = await Promise.all([
     Promise.all(
       presentChars.map((c) =>
-        buildNarrativeContext(sessionId, c.id, c.name, content, queryEmbedding, preScene)
+        buildNarrativeContext(memoryScope, c.id, c.name, content, queryEmbedding, preScene)
           .catch((e) => {
              console.error(`[NarrativeMemory] Build context failed for ${c.name}:`, e);
              return { narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null };
@@ -215,6 +221,7 @@ export interface BackgroundTaskParams {
     proAnalysis: string | null;
   };
   authUserId: string;
+  workId: string;
   presentChars: Character[];
   recentMessages: MessageWithCharacter[];
   extractedFacts?: string[];
@@ -228,10 +235,14 @@ export async function processBackgroundTasks(params: BackgroundTaskParams) {
     allTurns,
     session,
     authUserId,
+    workId,
     presentChars,
     recentMessages,
     extractedFacts,
   } = params;
+
+  // 크로스세션 메모리 스코프
+  const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
 
   // [A] 캐릭터 기억 업데이트 (매 턴)
   const dialogueTurns = allTurns.filter((t) => t.type === 'dialogue');
@@ -254,7 +265,7 @@ export async function processBackgroundTasks(params: BackgroundTaskParams) {
   }
 
   processConversationForMemory({
-    sessionId,
+    scope: memoryScope,
     sceneId: preSceneId,
     userMessage: content,
     characterResponses: dialogueTurns.map((t) => ({
@@ -290,19 +301,19 @@ export async function processBackgroundTasks(params: BackgroundTaskParams) {
   if (newTurnCount % 5 === 0) {
     triggerSummary(sessionId, recentMessages, session.sessionSummary || undefined)
       .catch((e) => console.error('[Summary] Trigger failed:', e));
-    decayMemoryStrength(sessionId)
+    decayMemoryStrength(memoryScope)
       .catch((e) => console.error('[NarrativeMemory] Decay failed:', e));
   }
 
   // [D] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
   if (newTurnCount % 10 === 0) {
-    consolidateMemories(sessionId).catch((e) => console.error('[NarrativeMemory] Consolidate failed:', e));
-    promoteMemories(sessionId).catch((e) => console.error('[NarrativeMemory] Promote failed:', e));
+    consolidateMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Consolidate failed:', e));
+    promoteMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Promote failed:', e));
   }
 
   // [C] 25턴마다: 약한 기억 정리 (비동기)
   if (newTurnCount % 25 === 0) {
-    pruneWeakMemories(sessionId)
+    pruneWeakMemories(memoryScope)
       .catch((e) => console.error('[NarrativeMemory] Prune failed:', e));
 
     // mem0 기억 정리 (캐릭터당 최대 100개)

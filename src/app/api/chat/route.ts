@@ -229,6 +229,7 @@ export async function PUT(request: NextRequest) {
           characters,
           queryEmbedding,
           authUserId: authSession.user!.id!,
+          workId: session.workId,
         });
 
         const t1 = Date.now();
@@ -417,6 +418,7 @@ export async function PUT(request: NextRequest) {
             proAnalysis: session.proAnalysis,
           },
           authUserId: authSession.user!.id!,
+          workId: session.workId,
           presentChars,
           recentMessages,
           extractedFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
