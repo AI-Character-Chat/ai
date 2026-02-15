@@ -992,7 +992,7 @@ export async function buildNarrativeContext(
     scope,
     characterId,
     queryEmbedding,
-    limit: 5,
+    limit: 10,
     minImportance: 0.3,
   });
 
@@ -1059,7 +1059,7 @@ function generateNarrativePrompt(
   // 알고 있는 정보
   if (relationship.knownFacts.length > 0) {
     lines.push(`\n[${characterName}이 유저에 대해 알고 있는 것]`);
-    relationship.knownFacts.slice(-5).forEach((fact) => {
+    relationship.knownFacts.slice(-15).forEach((fact) => {
       lines.push(`- ${fact}`);
     });
   }
@@ -1075,7 +1075,7 @@ function generateNarrativePrompt(
   // 공유 경험
   if (relationship.sharedExperiences.length > 0) {
     lines.push(`\n[함께한 중요한 순간들]`);
-    relationship.sharedExperiences.slice(-3).forEach((exp) => {
+    relationship.sharedExperiences.slice(-5).forEach((exp) => {
       lines.push(`- ${exp}`);
     });
   }
@@ -1092,6 +1092,9 @@ function generateNarrativePrompt(
     lines.push(`\n[현재 장면 분위기]`);
     lines.push(`- ${scene.emotionalTone.mood} (강도: ${(scene.emotionalTone.intensity * 100).toFixed(0)}%)`);
   }
+
+  // 기억 정확성 지시
+  lines.push(`\n[중요] 위에 명시된 정보만 활용하세요. 유저의 이름, 나이, 직업 등 구체적 사실을 확실히 기억하지 못하면 추측하지 말고 자연스럽게 다시 물어보거나 "기억이 흐릿하다"고 표현하세요.`);
 
   return lines.join('\n');
 }
