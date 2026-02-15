@@ -651,7 +651,7 @@ function generateReport(
   for (const r of results) {
     r.metadata.memoryDebug?.forEach(md => charNames.add(md.characterName));
   }
-  for (const charName of charNames) {
+  for (const charName of Array.from(charNames)) {
     lines.push(`  ${charName}:`);
     lines.push('    턴 | 단계       | 신뢰 | 호감 | 존경 | 라이벌 | 친밀');
     lines.push('    ---|-----------|------|------|------|--------|------');
