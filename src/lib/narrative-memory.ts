@@ -89,6 +89,22 @@ export interface RelationshipState {
   emotionalHistory: Array<{ emotion: string; intensity: number; at: string }>;
 }
 
+export interface MemoryProcessingResult {
+  characterId: string;
+  characterName: string;
+  surpriseAction: 'reinforce' | 'skip' | 'save' | 'no_facts';
+  surpriseScore: number;
+  adjustedImportance: number;
+  relationshipUpdate: {
+    trustDelta: number;
+    affectionDelta: number;
+    respectDelta: number;
+    rivalryDelta: number;
+    familiarityDelta: number;
+  };
+  newFactsCount: number;
+}
+
 // ============================================================
 // 원본 대화 저장 (데이터 소유권 확보)
 // ============================================================
@@ -575,18 +591,20 @@ export async function saveCharacterMemory(params: {
   memoryType?: 'episodic' | 'semantic' | 'emotional';
   importance?: number;
   keywords?: string[];
-}) {
+}): Promise<{ action: 'reinforce' | 'skip' | 'save'; surpriseScore: number; adjustedImportance: number }> {
   // 임베딩 생성 (interpretation 기반 — 캐릭터 관점의 해석이 검색 키)
   const embedding = await generateEmbedding(params.interpretation);
 
   // Surprise-based 신선도 평가
-  const { action, adjustedImportance } = await evaluateMemoryNovelty(
+  const { action, surpriseScore, adjustedImportance } = await evaluateMemoryNovelty(
     params.scope, params.characterId, embedding, params.importance || 0.5
   );
 
-  if (action === 'reinforce' || action === 'skip') return null;
+  if (action === 'reinforce' || action === 'skip') {
+    return { action, surpriseScore, adjustedImportance };
+  }
 
-  return await prisma.characterMemory.create({
+  await prisma.characterMemory.create({
     data: {
       sessionId: params.scope.sessionId,
       userId: params.scope.userId,
@@ -604,6 +622,8 @@ export async function saveCharacterMemory(params: {
       embedding: JSON.stringify(embedding),
     },
   });
+
+  return { action: 'save', surpriseScore, adjustedImportance };
 }
 
 /**
@@ -1103,19 +1123,24 @@ export async function processConversationForMemory(params: {
   }>;
   extractedFacts?: string[];
   emotionalMoment?: boolean;
-}) {
+}): Promise<MemoryProcessingResult[]> {
   const { scope, sceneId, userMessage, characterResponses, extractedFacts, emotionalMoment } =
     params;
+
+  const results: MemoryProcessingResult[] = [];
 
   for (const response of characterResponses) {
     // 1. 관계 업데이트 (다축, 크로스세션)
     const delta = response.relationshipDelta || {};
-    await updateRelationship(scope, response.characterId, sceneId, {
+    const relDelta = {
       trustDelta: delta.trust || 0,
       affectionDelta: delta.affection || (emotionalMoment ? 3 : 1),
       respectDelta: delta.respect || 0,
       rivalryDelta: delta.rivalry || 0,
       familiarityDelta: delta.familiarity || 0.5,
+    };
+    await updateRelationship(scope, response.characterId, sceneId, {
+      ...relDelta,
       newFacts: extractedFacts,
     });
 
@@ -1147,6 +1172,7 @@ export async function processConversationForMemory(params: {
     }
 
     // 3. 캐릭터 기억 저장 (캐릭터 해석은 추후 AI로 생성)
+    let surpriseResult: { action: 'reinforce' | 'skip' | 'save' | 'no_facts'; surpriseScore: number; adjustedImportance: number } = { action: 'no_facts', surpriseScore: 0, adjustedImportance: 0 };
     if (extractedFacts && extractedFacts.length > 0) {
       // 간단한 해석 생성 (추후 AI로 고도화)
       const interpretation = `유저가 "${extractedFacts.join(', ')}"에 대해 이야기했다`;
@@ -1156,7 +1182,7 @@ export async function processConversationForMemory(params: {
         ? { emotion: response.emotion.primary, intensity: response.emotion.intensity }
         : undefined;
 
-      await saveCharacterMemory({
+      surpriseResult = await saveCharacterMemory({
         scope,
         characterId: response.characterId,
         sceneId,
@@ -1167,12 +1193,24 @@ export async function processConversationForMemory(params: {
         keywords: extractedFacts,
       });
     }
+
+    results.push({
+      characterId: response.characterId,
+      characterName: response.characterName,
+      surpriseAction: surpriseResult.action,
+      surpriseScore: surpriseResult.surpriseScore,
+      adjustedImportance: surpriseResult.adjustedImportance,
+      relationshipUpdate: relDelta,
+      newFactsCount: extractedFacts?.length || 0,
+    });
   }
 
-  // 3. 장면 토픽 업데이트
+  // 4. 장면 토픽 업데이트
   if (sceneId && extractedFacts && extractedFacts.length > 0) {
     await updateScene(sceneId, { topics: extractedFacts });
   }
+
+  return results;
 }
 
 export default {

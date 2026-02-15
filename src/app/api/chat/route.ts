@@ -10,7 +10,7 @@ import {
 } from '@/lib/gemini';
 import { isMem0Available } from '@/lib/memory';
 import { auth } from '@/lib/auth';
-import { buildChatContext, processBackgroundTasks } from '@/lib/chat-service';
+import { buildChatContext, processImmediateMemory, processRemainingBackgroundTasks } from '@/lib/chat-service';
 
 // 새 채팅 세션 생성
 export async function POST(request: NextRequest) {
@@ -26,13 +26,21 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = authSession.user.id;
-    const { workId, userName = '유저', openingId, personaId } = body;
+    const { workId, userName = '유저', openingId, personaId, keepMemory = true } = body;
 
     if (!workId) {
       return NextResponse.json({ error: '작품 ID가 필요합니다.' }, { status: 400 });
     }
 
     const finalUserName = authSession.user.name || userName;
+
+    // 기억 리셋 (keepMemory=false일 때)
+    if (!keepMemory) {
+      await Promise.all([
+        prisma.userCharacterRelationship.deleteMany({ where: { userId, workId } }),
+        prisma.characterMemory.deleteMany({ where: { userId, workId } }),
+      ]);
+    }
 
     // 페르소나 + 작품 조회를 병렬로 (2개 순차 → 1개 병렬)
     const [persona, work] = await Promise.all([
@@ -219,6 +227,7 @@ export async function PUT(request: NextRequest) {
           effectiveUserName,
           userPersona,
           previousPresentCharacters,
+          characterMemoryDebug,
         } = await buildChatContext({
           sessionId,
           content,
@@ -381,6 +390,7 @@ export async function PUT(request: NextRequest) {
           mem0MemoriesFound,
           mem0MemoriesSaved: isMem0Available() ? dialogueTurnsForMeta.length : 0,
           extractedFactsCount: extractedFacts.length,
+          memoryDebug: characterMemoryDebug,
         } : null;
 
         if (fullMetadata) {
@@ -395,6 +405,28 @@ export async function PUT(request: NextRequest) {
           }).catch(e => console.error('[Metadata] save failed:', e));
         }
 
+        // ========== 메모리 처리 (동기 — surprise 결과를 SSE로 전송) ==========
+        const memoryResults = await processImmediateMemory({
+          sessionId,
+          preSceneId: preScene?.sceneId,
+          content,
+          allTurns,
+          session: {
+            workId: session.workId,
+            proAnalysis: session.proAnalysis,
+          },
+          authUserId: authSession.user!.id!,
+          workId: session.workId,
+          extractedFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
+        }).catch(e => {
+          console.error('[ImmediateMemory] process failed:', e);
+          return [];
+        });
+
+        if (memoryResults.length > 0) {
+          send('memory_update', { results: memoryResults });
+        }
+
         // AI 응답 요약 (클라이언트가 Pro 분석 요청 시 전달용)
         const aiResponseSummary = allTurns.map(t =>
           t.type === 'narrator' ? `[나레이션] ${t.content.substring(0, 100)}`
@@ -406,22 +438,19 @@ export async function PUT(request: NextRequest) {
 
         // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
 
-        processBackgroundTasks({
+        processRemainingBackgroundTasks({
           sessionId,
-          preSceneId: preScene?.sceneId,
           content,
           allTurns,
           session: {
             workId: session.workId,
             turnCount: session.turnCount,
             sessionSummary: session.sessionSummary,
-            proAnalysis: session.proAnalysis,
           },
           authUserId: authSession.user!.id!,
           workId: session.workId,
           presentChars,
           recentMessages,
-          extractedFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
         }).catch(e => console.error('[BackgroundTasks] process failed:', e));
 
       } catch (error) {

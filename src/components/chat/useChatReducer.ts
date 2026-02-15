@@ -71,6 +71,33 @@ export interface ProAnalysisMetrics {
   status: 'pending' | 'complete' | 'failed';
 }
 
+export interface CharacterMemoryDebugData {
+  characterId: string;
+  characterName: string;
+  relationship: {
+    intimacyLevel: string;
+    trust: number;
+    affection: number;
+    respect: number;
+    rivalry: number;
+    familiarity: number;
+  };
+  recentMemoriesCount: number;
+  recentMemories: Array<{ interpretation: string; importance: number }>;
+  emotionalHistory: Array<{ emotion: string; intensity: number; at: string }>;
+  knownFacts: string[];
+}
+
+export interface MemoryUpdateResult {
+  characterId: string;
+  characterName: string;
+  surpriseAction: string;
+  surpriseScore: number;
+  adjustedImportance: number;
+  relationshipUpdate: Record<string, number>;
+  newFactsCount: number;
+}
+
 export interface ResponseMetadata {
   model: string;
   thinking: boolean;
@@ -99,6 +126,9 @@ export interface ResponseMetadata {
   mem0SearchMs?: number;
   mem0MemoriesFound?: number;
   mem0MemoriesSaved?: number;
+  // 메모리 디버그
+  memoryDebug?: CharacterMemoryDebugData[];
+  memoryUpdateResults?: MemoryUpdateResult[];
 }
 
 // ============================================================
@@ -155,6 +185,7 @@ export type ChatAction =
   | { type: 'REMOVE_GENERATING_IMAGE'; messageId: string }
   | { type: 'SET_RESPONSE_METADATA'; messageId: string; metadata: ResponseMetadata }
   | { type: 'SET_PRO_ANALYSIS_METRICS'; messageId: string; metrics: ProAnalysisMetrics }
+  | { type: 'SET_MEMORY_UPDATE'; messageId: string; results: MemoryUpdateResult[] }
   | { type: 'RESET' };
 
 // ============================================================
@@ -225,6 +256,18 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         responseMetadata: {
           ...state.responseMetadata,
           [action.messageId]: { ...existing, proAnalysisMetrics: action.metrics },
+        },
+      };
+    }
+
+    case 'SET_MEMORY_UPDATE': {
+      const existing = state.responseMetadata[action.messageId];
+      if (!existing) return state;
+      return {
+        ...state,
+        responseMetadata: {
+          ...state.responseMetadata,
+          [action.messageId]: { ...existing, memoryUpdateResults: action.results },
         },
       };
     }

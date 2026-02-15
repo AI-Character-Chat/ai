@@ -286,7 +286,7 @@ export default function ChatContainer() {
   }, [authSession]);
 
   // ─── 새 채팅 시작 ───
-  const startChat = useCallback(async (openingId: string | null) => {
+  const startChat = useCallback(async (openingId: string | null, keepMemory: boolean = true) => {
     if (!state.work || !workId) return;
 
     const userName = state.selectedPersona?.name || '유저';
@@ -300,6 +300,7 @@ export default function ChatContainer() {
           userName,
           openingId,
           personaId: state.selectedPersona?.id,
+          keepMemory,
         }),
       });
 
@@ -467,6 +468,16 @@ export default function ChatContainer() {
                   const updatedSess = normalizeSession(parsed.session);
                   dispatch({ type: 'UPDATE_SESSION', session: updatedSess });
                   chatCache.updateSession(parsed.session.id, updatedSess);
+                }
+                break;
+
+              case 'memory_update':
+                if (lastAiMessageId && parsed.results) {
+                  dispatch({
+                    type: 'SET_MEMORY_UPDATE',
+                    messageId: lastAiMessageId,
+                    results: parsed.results,
+                  });
                 }
                 break;
 

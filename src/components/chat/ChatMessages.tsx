@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
-import type { ChatWork, ChatMessage, ChatCharacter, ResponseMetadata, ProAnalysisMetrics } from './useChatReducer';
+import type { ChatWork, ChatMessage, ChatCharacter, ResponseMetadata, ProAnalysisMetrics, CharacterMemoryDebugData, MemoryUpdateResult } from './useChatReducer';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -362,6 +362,113 @@ function ProAnalysisPopup({ proAnalysis, proMetrics, onClose }: {
   );
 }
 
+const INTIMACY_LABELS: Record<string, string> = {
+  stranger: '처음 만남',
+  acquaintance: '아는 사이',
+  friend: '친구',
+  close_friend: '절친',
+  intimate: '특별한 사이',
+};
+
+const SURPRISE_LABELS: Record<string, { label: string; color: string }> = {
+  save: { label: 'NEW', color: 'text-green-500' },
+  reinforce: { label: 'REINFORCE', color: 'text-blue-500' },
+  skip: { label: 'SKIP', color: 'text-gray-400' },
+  no_facts: { label: '-', color: 'text-gray-300' },
+};
+
+function MemoryDebugPanel({ memoryDebug, memoryUpdateResults }: {
+  memoryDebug: CharacterMemoryDebugData[];
+  memoryUpdateResults?: MemoryUpdateResult[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (memoryDebug.length === 0) return null;
+
+  // 접힌 상태: 한 줄 요약
+  const totalMemories = memoryDebug.reduce((s, d) => s + d.recentMemoriesCount, 0);
+  const summaryLine = memoryDebug.map(d => {
+    const label = INTIMACY_LABELS[d.relationship.intimacyLevel] || d.relationship.intimacyLevel;
+    return `${d.characterName}: ${label}`;
+  }).join(' | ');
+
+  return (
+    <div className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-xs overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+      >
+        <span className="text-gray-500 dark:text-gray-400">
+          <span className="mr-1">🧠</span>
+          {expanded ? 'Memory' : `${summaryLine} — 기억 ${totalMemories}개`}
+        </span>
+        <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-2 space-y-2 border-t border-gray-200 dark:border-gray-700 pt-2">
+          {memoryDebug.map((char) => {
+            const updateResult = memoryUpdateResults?.find(r => r.characterId === char.characterId);
+            const surprise = updateResult ? SURPRISE_LABELS[updateResult.surpriseAction] || SURPRISE_LABELS.no_facts : null;
+
+            return (
+              <div key={char.characterId} className="space-y-1">
+                <div className="font-medium text-gray-700 dark:text-gray-300">{char.characterName}</div>
+
+                {/* 관계 수치 */}
+                <div className="flex flex-wrap gap-x-2 text-gray-500 dark:text-gray-400">
+                  <span>{INTIMACY_LABELS[char.relationship.intimacyLevel] || char.relationship.intimacyLevel}</span>
+                  <span>|</span>
+                  <span>신뢰 <b className="text-gray-700 dark:text-gray-300">{char.relationship.trust.toFixed(0)}</b></span>
+                  <span>호감 <b className="text-gray-700 dark:text-gray-300">{char.relationship.affection.toFixed(0)}</b></span>
+                  <span>존경 <b className="text-gray-700 dark:text-gray-300">{char.relationship.respect.toFixed(0)}</b></span>
+                  {char.relationship.rivalry > 0 && (
+                    <span>경쟁 <b className="text-orange-500">{char.relationship.rivalry.toFixed(0)}</b></span>
+                  )}
+                  <span>친숙 <b className="text-gray-700 dark:text-gray-300">{char.relationship.familiarity.toFixed(0)}</b></span>
+                </div>
+
+                {/* 감정 흐름 */}
+                {char.emotionalHistory.length > 0 && (
+                  <div className="text-gray-500 dark:text-gray-400">
+                    감정: {char.emotionalHistory.slice(-5).map((e, i) => (
+                      <span key={i}>
+                        {i > 0 && ' → '}
+                        <span className="text-purple-500 dark:text-purple-400">{e.emotion}({(e.intensity * 100).toFixed(0)}%)</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* 기억/정보 카운트 */}
+                <div className="flex gap-x-3 text-gray-500 dark:text-gray-400">
+                  <span>기억 <b className="text-gray-700 dark:text-gray-300">{char.recentMemoriesCount}</b>개</span>
+                  <span>알고있는 정보 <b className="text-gray-700 dark:text-gray-300">{char.knownFacts.length}</b>개</span>
+                </div>
+
+                {/* Surprise 결과 */}
+                {surprise && updateResult && (
+                  <div className="text-gray-500 dark:text-gray-400">
+                    이번 턴: <span className={`font-medium ${surprise.color}`}>{surprise.label}</span>
+                    {updateResult.surpriseScore > 0 && (
+                      <span className="ml-1">(surprise: {updateResult.surpriseScore.toFixed(2)})</span>
+                    )}
+                    {updateResult.newFactsCount > 0 && (
+                      <span className="ml-1">새 정보 {updateResult.newFactsCount}개</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatMessages({
   messages,
   work,
@@ -468,6 +575,9 @@ export default function ChatMessages({
                     )}
                   </div>
                 )}
+                {metadata?.memoryDebug && metadata.memoryDebug.length > 0 && (
+                  <MemoryDebugPanel memoryDebug={metadata.memoryDebug} memoryUpdateResults={metadata.memoryUpdateResults} />
+                )}
               </div>
             );
           }
@@ -544,6 +654,9 @@ export default function ChatMessages({
                     <ProAnalysisPopup proAnalysis={metadata.proAnalysis || ''} proMetrics={metadata.proAnalysisMetrics} onClose={handleClosePopup} />
                   )}
                 </div>
+              )}
+              {metadata?.memoryDebug && metadata.memoryDebug.length > 0 && (
+                <MemoryDebugPanel memoryDebug={metadata.memoryDebug} memoryUpdateResults={metadata.memoryUpdateResults} />
               )}
             </div>
           );

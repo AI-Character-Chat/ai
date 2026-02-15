@@ -14,7 +14,7 @@ interface OpeningScreenProps {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
   onPersonaSelect: (persona: Persona) => void;
-  onStart: (openingId: string | null) => void;
+  onStart: (openingId: string | null, keepMemory: boolean) => void;
   onPersonasRefresh: () => void;
 }
 
@@ -34,6 +34,7 @@ export default function OpeningScreen({
   );
   const [startingChat, setStartingChat] = useState(false);
   const [personaModalOpen, setPersonaModalOpen] = useState(false);
+  const [keepMemory, setKeepMemory] = useState(true);
 
   const sidebarMargin = sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : '';
 
@@ -73,7 +74,7 @@ export default function OpeningScreen({
   const handleStart = async () => {
     setStartingChat(true);
     try {
-      await onStart(selectedOpening);
+      await onStart(selectedOpening, keepMemory);
     } finally {
       setStartingChat(false);
     }
@@ -150,6 +151,31 @@ export default function OpeningScreen({
                 </div>
               </div>
             )}
+
+            {/* 기억 유지 토글 */}
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">기억 유지</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {keepMemory
+                    ? '이전 대화의 기억을 이어갑니다'
+                    : '캐릭터가 처음 만나는 것처럼 시작합니다'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKeepMemory(!keepMemory)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  keepMemory ? 'bg-violet-600' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    keepMemory ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
 
             {/* 시작 버튼 */}
             <button

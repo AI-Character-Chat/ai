@@ -21,6 +21,7 @@ import {
   getActiveScene,
   SceneContext,
   MemoryScope,
+  MemoryProcessingResult,
 } from '@/lib/narrative-memory';
 import {
   searchMemoriesForCharacters,
@@ -83,6 +84,23 @@ export interface ChatContextParams {
 
 export type UserPersona = { name: string; age: number | null; gender: string; description: string | null };
 
+export interface CharacterMemoryDebug {
+  characterId: string;
+  characterName: string;
+  relationship: {
+    intimacyLevel: string;
+    trust: number;
+    affection: number;
+    respect: number;
+    rivalry: number;
+    familiarity: number;
+  };
+  recentMemoriesCount: number;
+  recentMemories: Array<{ interpretation: string; importance: number }>;
+  emotionalHistory: Array<{ emotion: string; intensity: number; at: string }>;
+  knownFacts: string[];
+}
+
 export interface ChatContextResult {
   conversationHistory: string;
   lorebookContext: string;
@@ -96,6 +114,7 @@ export interface ChatContextResult {
   effectiveUserName: string;
   userPersona: UserPersona | undefined;
   previousPresentCharacters: string[];
+  characterMemoryDebug: CharacterMemoryDebug[];
 }
 
 export async function buildChatContext(params: ChatContextParams): Promise<ChatContextResult> {
@@ -193,6 +212,24 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
   const mem0Context = formatMem0ForPrompt(mem0Results, charNameMap);
   const mem0MemoriesFound = Array.from(mem0Results.values()).reduce((s, m) => s + m.length, 0);
 
+  // 메모리 디버그 데이터 수집 (buildNarrativeContext 결과에서 추출)
+  const characterMemoryDebug: CharacterMemoryDebug[] = narrativeContexts.map((ctx, i) => ({
+    characterId: presentChars[i].id,
+    characterName: presentChars[i].name,
+    relationship: ctx.relationship ? {
+      intimacyLevel: ctx.relationship.intimacyLevel,
+      trust: ctx.relationship.trust,
+      affection: ctx.relationship.affection,
+      respect: ctx.relationship.respect,
+      rivalry: ctx.relationship.rivalry,
+      familiarity: ctx.relationship.familiarity,
+    } : { intimacyLevel: 'stranger', trust: 50, affection: 50, respect: 50, rivalry: 0, familiarity: 0 },
+    recentMemoriesCount: ctx.recentMemories.length,
+    recentMemories: ctx.recentMemories,
+    emotionalHistory: ctx.relationship?.emotionalHistory || [],
+    knownFacts: ctx.relationship?.knownFacts || [],
+  }));
+
   return {
     conversationHistory,
     lorebookContext,
@@ -206,45 +243,31 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
     effectiveUserName,
     userPersona,
     previousPresentCharacters,
+    characterMemoryDebug,
   };
 }
 
-export interface BackgroundTaskParams {
+export interface ImmediateMemoryParams {
   sessionId: string;
   preSceneId?: string;
   content: string;
   allTurns: StoryTurn[];
   session: {
     workId: string;
-    turnCount: number;
-    sessionSummary: string | null;
     proAnalysis: string | null;
   };
   authUserId: string;
   workId: string;
-  presentChars: Character[];
-  recentMessages: MessageWithCharacter[];
   extractedFacts?: string[];
 }
 
-export async function processBackgroundTasks(params: BackgroundTaskParams) {
-  const {
-    sessionId,
-    preSceneId,
-    content,
-    allTurns,
-    session,
-    authUserId,
-    workId,
-    presentChars,
-    recentMessages,
-    extractedFacts,
-  } = params;
-
-  // 크로스세션 메모리 스코프
+/**
+ * 즉시 메모리 처리 (동기, surprise 결과 반환)
+ * SSE 종료 전에 호출되어 memory_update 이벤트로 결과 전송
+ */
+export async function processImmediateMemory(params: ImmediateMemoryParams): Promise<MemoryProcessingResult[]> {
+  const { sessionId, preSceneId, content, allTurns, session, authUserId, workId, extractedFacts } = params;
   const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
-
-  // [A] 캐릭터 기억 업데이트 (매 턴)
   const dialogueTurns = allTurns.filter((t) => t.type === 'dialogue');
 
   // Pro 분석에서 다축 관계 델타 추출
@@ -264,7 +287,7 @@ export async function processBackgroundTasks(params: BackgroundTaskParams) {
     } catch { /* 파싱 실패 시 기본 델타 사용 */ }
   }
 
-  processConversationForMemory({
+  return await processConversationForMemory({
     scope: memoryScope,
     sceneId: preSceneId,
     userMessage: content,
@@ -279,9 +302,34 @@ export async function processBackgroundTasks(params: BackgroundTaskParams) {
     emotionalMoment: dialogueTurns.some((t) =>
       ['sad', 'angry', 'surprised', 'happy'].includes(t.emotion.primary) && t.emotion.intensity > 0.7
     ),
-  }).catch((e) => console.error('[NarrativeMemory] processConversation failed:', e));
+  });
+}
 
-  // [A-2] mem0 장기 기억 저장 (캐릭터별, fire-and-forget)
+export interface BackgroundTaskParams {
+  sessionId: string;
+  content: string;
+  allTurns: StoryTurn[];
+  session: {
+    workId: string;
+    turnCount: number;
+    sessionSummary: string | null;
+  };
+  authUserId: string;
+  workId: string;
+  presentChars: Character[];
+  recentMessages: MessageWithCharacter[];
+}
+
+/**
+ * 백그라운드 작업 (fire-and-forget)
+ * mem0 저장, 세션 요약, 기억 감쇠, 통합, 정리 등
+ */
+export async function processRemainingBackgroundTasks(params: BackgroundTaskParams) {
+  const { sessionId, content, allTurns, session, authUserId, workId, presentChars, recentMessages } = params;
+  const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
+  const dialogueTurns = allTurns.filter((t) => t.type === 'dialogue');
+
+  // [A] mem0 장기 기억 저장 (캐릭터별, fire-and-forget)
   if (isMem0Available() && dialogueTurns.length > 0) {
     dialogueTurns.forEach((t) => {
       addMemory(
@@ -305,13 +353,13 @@ export async function processBackgroundTasks(params: BackgroundTaskParams) {
       .catch((e) => console.error('[NarrativeMemory] Decay failed:', e));
   }
 
-  // [D] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
+  // [C] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
   if (newTurnCount % 10 === 0) {
     consolidateMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Consolidate failed:', e));
     promoteMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Promote failed:', e));
   }
 
-  // [C] 25턴마다: 약한 기억 정리 (비동기)
+  // [D] 25턴마다: 약한 기억 정리 (비동기)
   if (newTurnCount % 25 === 0) {
     pruneWeakMemories(memoryScope)
       .catch((e) => console.error('[NarrativeMemory] Prune failed:', e));
