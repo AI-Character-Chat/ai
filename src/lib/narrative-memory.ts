@@ -511,11 +511,8 @@ async function evaluateMemoryNovelty(
   characterId: string,
   newEmbedding: number[],
   newImportance: number,
+  newInterpretation?: string,
 ): Promise<{ action: 'reinforce' | 'skip' | 'save'; surpriseScore: number; adjustedImportance: number }> {
-  if (newEmbedding.length === 0) {
-    return { action: 'save', surpriseScore: 1.0, adjustedImportance: newImportance };
-  }
-
   const memories = await prisma.characterMemory.findMany({
     where: { userId: scope.userId, workId: scope.workId, characterId },
     orderBy: { createdAt: 'desc' },
@@ -530,13 +527,34 @@ async function evaluateMemoryNovelty(
   let maxSimilarity = 0;
   let mostSimilarMemory: typeof memories[0] | null = null;
 
-  for (const mem of memories) {
-    const emb = JSON.parse(mem.embedding || '[]') as number[];
-    if (emb.length === 0) continue;
-    const sim = cosineSimilarity(newEmbedding, emb);
-    if (sim > maxSimilarity) {
-      maxSimilarity = sim;
-      mostSimilarMemory = mem;
+  if (newEmbedding.length > 0) {
+    // 임베딩 기반 비교
+    for (const mem of memories) {
+      const emb = JSON.parse(mem.embedding || '[]') as number[];
+      if (emb.length === 0) continue;
+      const sim = cosineSimilarity(newEmbedding, emb);
+      if (sim > maxSimilarity) {
+        maxSimilarity = sim;
+        mostSimilarMemory = mem;
+      }
+    }
+  }
+
+  // 임베딩 비교 실패 시 (빈 임베딩) 텍스트 기반 폴백
+  if (maxSimilarity === 0 && newInterpretation) {
+    const newWordsArr = newInterpretation.split(/\s+/).filter(w => w.length >= 2);
+    const newWords = new Set(newWordsArr);
+    for (const mem of memories) {
+      const memWordsArr = mem.interpretation.split(/\s+/).filter(w => w.length >= 2);
+      const memWords = new Set(memWordsArr);
+      if (newWords.size === 0 || memWords.size === 0) continue;
+      let overlap = 0;
+      newWordsArr.forEach(w => { if (memWords.has(w)) overlap++; });
+      const sim = overlap / Math.max(newWords.size, memWords.size);
+      if (sim > maxSimilarity) {
+        maxSimilarity = sim;
+        mostSimilarMemory = mem;
+      }
     }
   }
 
@@ -597,7 +615,7 @@ export async function saveCharacterMemory(params: {
 
   // Surprise-based 신선도 평가
   const { action, surpriseScore, adjustedImportance } = await evaluateMemoryNovelty(
-    params.scope, params.characterId, embedding, params.importance || 0.5
+    params.scope, params.characterId, embedding, params.importance || 0.5, params.interpretation
   );
 
   if (action === 'reinforce' || action === 'skip') {

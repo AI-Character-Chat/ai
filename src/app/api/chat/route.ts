@@ -330,6 +330,12 @@ export async function PUT(request: NextRequest) {
           newEvents.push(`${firstDialogue.characterName}: ${firstDialogue.content.substring(0, 40)}...`);
         }
 
+        // dialogue 턴에 등장한 캐릭터를 presentCharacters에 자동 추가
+        const dialogueCharNames = allTurns
+          .filter(t => t.type === 'dialogue' && t.characterName)
+          .map(t => t.characterName);
+        const mergedPresent = Array.from(new Set([...updatedScene.presentCharacters, ...dialogueCharNames]));
+
         const updatedSession = await prisma.chatSession.update({
           where: { id: sessionId },
           data: {
@@ -337,7 +343,7 @@ export async function PUT(request: NextRequest) {
             intimacy: Math.min(session.intimacy + 0.1, 10),
             currentLocation: updatedScene.location,
             currentTime: updatedScene.time,
-            presentCharacters: JSON.stringify(updatedScene.presentCharacters),
+            presentCharacters: JSON.stringify(mergedPresent),
             recentEvents: JSON.stringify([...recentEvents, ...newEvents].slice(-10)),
           },
         });

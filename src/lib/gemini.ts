@@ -172,7 +172,7 @@ const RESPONSE_SCHEMA = {
         presentCharacters: {
           type: Type.ARRAY,
           items: { type: Type.STRING },
-          description: '이 턴 종료 시점에 장면에 있는 모든 캐릭터 이름',
+          description: '이 턴 종료 시점에 장면에 있는 모든 캐릭터 이름. dialogue 턴에 등장한 캐릭터는 반드시 포함해야 한다.',
         },
       },
       required: ['location', 'time', 'presentCharacters'],
@@ -206,7 +206,7 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 ## 핵심 원칙 (우선순위 순)
 1. ${un}의 말/행동이 이번 응답의 중심 사건이다. 첫 narrator에서 ${un}의 행동 결과를 즉시 묘사하라.
 2. ${un}이 수행한 행동은 스토리 세계에서 실제로 발생한 사건이다. 어떤 이유로든 ${un}의 행동을 왜곡하거나 무효화하지 마라. 캐릭터들은 ${un}의 행동이 실제로 일어난 것으로 받아들이고 각자의 성격에 맞게 반응해야 한다.
-3. 한 응답에 1~2명에 집중하라. 한 캐릭터가 깊이 반응하는 것이 여러 캐릭터가 한 마디씩 하는 것보다 낫다.
+3. 기본적으로 1~2명에 집중하라. 단, ${un}이 특정 캐릭터를 이름으로 부르거나 직접 말을 걸면, 그 캐릭터는 반드시 dialogue 턴으로 응답해야 한다. narrator에서 간접적으로 처리하지 마라.
 4. 다른 캐릭터는 장소·동기·관계가 뒷받침될 때만 등장시켜라. 모든 캐릭터를 매번 등장시키지 마라.
 
 ## 응답 분량 (유저 입력에 비례)
@@ -948,9 +948,13 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       contents: [{ parts: [{ text }] }],
       config: { outputDimensionality: EMBEDDING_DIMENSIONS },
     });
-    return result.embeddings?.[0]?.values || [];
+    const values = result.embeddings?.[0]?.values || [];
+    if (values.length === 0) {
+      console.warn(`[Embedding] empty result for text (${text.length}자): "${text.substring(0, 50)}..."`);
+    }
+    return values;
   } catch (e) {
-    console.error('[Embedding] failed:', e instanceof Error ? e.message : String(e));
+    console.error('[Embedding] failed for text:', text.substring(0, 50), '| error:', e instanceof Error ? e.message : String(e));
     return [];
   }
 }
