@@ -23,13 +23,6 @@ import {
   MemoryScope,
   MemoryProcessingResult,
 } from '@/lib/narrative-memory';
-import {
-  searchMemoriesForCharacters,
-  formatMem0ForPrompt,
-  addMemory,
-  isMem0Available,
-  pruneMemories as pruneMem0Memories,
-} from '@/lib/memory';
 import { LorebookEntry, Character } from '@prisma/client';
 
 // 요약 Race Condition 방지
@@ -105,9 +98,6 @@ export interface ChatContextResult {
   conversationHistory: string;
   lorebookContext: string;
   memoryPrompts: string[];
-  mem0Context: string;
-  mem0SearchMs: number;
-  mem0MemoriesFound: number;
   presentChars: Character[];
   relevantHistory: MessageWithCharacter[];
   preScene: SceneContext | null;
@@ -178,39 +168,21 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
     presentCharacters.some((pc) => c.name.includes(pc) || pc.includes(c.name.split(' ')[0]))
   );
 
-  const mem0SearchStart = Date.now();
   const preScene = await getActiveScene(sessionId).catch(() => null);
 
-  const [narrativeContexts, mem0Results] = await Promise.all([
-    Promise.all(
-      presentChars.map((c) =>
-        buildNarrativeContext(memoryScope, c.id, c.name, content, queryEmbedding, preScene)
-          .catch((e) => {
-             console.error(`[NarrativeMemory] Build context failed for ${c.name}:`, e);
-             return { narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null };
-          })
-      )
-    ),
-    isMem0Available()
-      ? searchMemoriesForCharacters(
-          content,
-          authUserId,
-          presentChars.map((c) => ({ id: c.id, name: c.name })),
-        ).catch((e) => {
-          console.error('[Mem0] Search failed:', e);
-          return new Map<string, string[]>();
+  const narrativeContexts = await Promise.all(
+    presentChars.map((c) =>
+      buildNarrativeContext(memoryScope, c.id, c.name, content, queryEmbedding, preScene)
+        .catch((e) => {
+           console.error(`[NarrativeMemory] Build context failed for ${c.name}:`, e);
+           return { narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null };
         })
-      : Promise.resolve(new Map<string, string[]>()),
-  ]);
+    )
+  );
 
-  const mem0SearchMs = Date.now() - mem0SearchStart;
   const memoryPrompts = narrativeContexts
     .map((ctx) => ctx.narrativePrompt)
     .filter((p) => p.length > 0);
-
-  const charNameMap = new Map(presentChars.map((c) => [c.id, c.name]));
-  const mem0Context = formatMem0ForPrompt(mem0Results, charNameMap);
-  const mem0MemoriesFound = Array.from(mem0Results.values()).reduce((s, m) => s + m.length, 0);
 
   // 메모리 디버그 데이터 수집 (buildNarrativeContext 결과에서 추출)
   const characterMemoryDebug: CharacterMemoryDebug[] = narrativeContexts.map((ctx, i) => ({
@@ -234,9 +206,6 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
     conversationHistory,
     lorebookContext,
     memoryPrompts,
-    mem0Context,
-    mem0SearchMs,
-    mem0MemoriesFound,
     presentChars,
     relevantHistory,
     preScene,
@@ -307,8 +276,6 @@ export async function processImmediateMemory(params: ImmediateMemoryParams): Pro
 
 export interface BackgroundTaskParams {
   sessionId: string;
-  content: string;
-  allTurns: StoryTurn[];
   session: {
     workId: string;
     turnCount: number;
@@ -316,35 +283,18 @@ export interface BackgroundTaskParams {
   };
   authUserId: string;
   workId: string;
-  presentChars: Character[];
   recentMessages: MessageWithCharacter[];
 }
 
 /**
  * 백그라운드 작업 (fire-and-forget)
- * mem0 저장, 세션 요약, 기억 감쇠, 통합, 정리 등
+ * 세션 요약, 기억 감쇠, 통합, 정리 등
  */
 export async function processRemainingBackgroundTasks(params: BackgroundTaskParams) {
-  const { sessionId, content, allTurns, session, authUserId, workId, presentChars, recentMessages } = params;
+  const { sessionId, session, authUserId, workId, recentMessages } = params;
   const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
-  const dialogueTurns = allTurns.filter((t) => t.type === 'dialogue');
 
-  // [A] mem0 장기 기억 저장 (캐릭터별, fire-and-forget)
-  if (isMem0Available() && dialogueTurns.length > 0) {
-    dialogueTurns.forEach((t) => {
-      addMemory(
-        [
-          { role: 'user', content },
-          { role: 'assistant', content: `[${t.characterName}] ${t.content}` },
-        ],
-        authUserId,
-        t.characterId,
-        { work_id: session.workId, character_name: t.characterName },
-      ).catch((e) => console.error(`[Mem0] save failed for ${t.characterName}:`, e));
-    });
-  }
-
-  // [B] 5턴마다: 세션 요약 + 기억 감쇠 (비동기)
+  // [A] 5턴마다: 세션 요약 + 기억 감쇠 (비동기)
   const newTurnCount = session.turnCount + 1;
   if (newTurnCount % 5 === 0) {
     triggerSummary(sessionId, recentMessages, session.sessionSummary || undefined)
@@ -353,22 +303,15 @@ export async function processRemainingBackgroundTasks(params: BackgroundTaskPara
       .catch((e) => console.error('[NarrativeMemory] Decay failed:', e));
   }
 
-  // [C] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
+  // [B] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
   if (newTurnCount % 10 === 0) {
     consolidateMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Consolidate failed:', e));
     promoteMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Promote failed:', e));
   }
 
-  // [D] 25턴마다: 약한 기억 정리 (비동기)
+  // [C] 25턴마다: 약한 기억 정리 (비동기)
   if (newTurnCount % 25 === 0) {
     pruneWeakMemories(memoryScope)
       .catch((e) => console.error('[NarrativeMemory] Prune failed:', e));
-
-    // mem0 기억 정리 (캐릭터당 최대 100개)
-    if (isMem0Available()) {
-      presentChars.forEach((c) => {
-        pruneMem0Memories(authUserId, c.id, 100).catch((e) => console.error(`[Mem0] Prune failed for ${c.name}:`, e));
-      });
-    }
   }
 }

@@ -301,7 +301,6 @@ interface TurnResult {
     totalMs?: number;
     emotions?: string[];
     extractedFactsCount?: number;
-    mem0MemoriesFound?: number;
     memoryDebug?: Array<{
       characterName: string;
       relationship: {
@@ -389,7 +388,6 @@ async function parseSSEStream(
                 totalMs: data.totalMs,
                 emotions: data.emotions,
                 extractedFactsCount: data.extractedFactsCount,
-                mem0MemoriesFound: data.mem0MemoriesFound,
                 memoryDebug: data.memoryDebug,
               };
               break;

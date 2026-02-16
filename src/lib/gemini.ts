@@ -305,7 +305,6 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 export function buildContents(params: {
   userPersona?: UserPersona;
   narrativeContexts: string[];
-  mem0Context?: string;
   sessionSummary?: string;
   proAnalysis?: string;
   sceneState: SceneState;
@@ -328,11 +327,6 @@ export function buildContents(params: {
       personaParts.push(params.userPersona.description);
     }
     sections.push(`## 유저 (${params.userPersona.name})\n${personaParts.join('\n')}`);
-  }
-
-  // 캐릭터별 장기 기억 (mem0 Cloud — 최우선)
-  if (params.mem0Context) {
-    sections.push(`## 캐릭터 장기 기억 (유저에 대한 사실)\n${params.mem0Context}`);
   }
 
   // 캐릭터별 기억 (narrative-memory 결과)

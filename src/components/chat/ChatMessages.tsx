@@ -146,34 +146,6 @@ function MetadataPopup({ metadata, onClose }: { metadata: ResponseMetadata; onCl
           </div>
         </div>
 
-        {/* mem0 장기 기억 */}
-        <div className="border-b border-gray-100 dark:border-gray-700 pb-2">
-          <div className="flex justify-between items-center mb-1">
-            <span className="font-medium text-cyan-600 dark:text-cyan-400">mem0 장기 기억</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${metadata.mem0Available ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-              {metadata.mem0Available ? 'ON' : 'OFF'}
-            </span>
-          </div>
-          {metadata.mem0Available && (
-            <>
-              <div className="flex justify-between">
-                <span>검색된 기억</span>
-                <span className={`font-medium ${(metadata.mem0MemoriesFound ?? 0) > 0 ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-400'}`}>
-                  {metadata.mem0MemoriesFound ?? 0}개
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>저장 (이번 턴)</span>
-                <span className="text-gray-900 dark:text-white">{metadata.mem0MemoriesSaved ?? 0}개</span>
-              </div>
-              <div className="flex justify-between">
-                <span>검색 시간</span>
-                <span className="text-gray-900 dark:text-white">{fmt(metadata.mem0SearchMs)}ms</span>
-              </div>
-            </>
-          )}
-        </div>
-
         {/* Pro 디렉터 노트 포함 여부 */}
         <div className="border-b border-gray-100 dark:border-gray-700 pb-2">
           <div className="flex justify-between">

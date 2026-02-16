@@ -8,7 +8,6 @@ import {
   generateEmbedding,
   type StoryTurn,
 } from '@/lib/gemini';
-import { isMem0Available } from '@/lib/memory';
 import { auth } from '@/lib/auth';
 import { buildChatContext, processImmediateMemory, processRemainingBackgroundTasks } from '@/lib/chat-service';
 
@@ -218,9 +217,6 @@ export async function PUT(request: NextRequest) {
           conversationHistory,
           lorebookContext,
           memoryPrompts,
-          mem0Context,
-          mem0SearchMs,
-          mem0MemoriesFound,
           presentChars,
           relevantHistory,
           preScene,
@@ -242,7 +238,7 @@ export async function PUT(request: NextRequest) {
         });
 
         const t1 = Date.now();
-        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts, mem0: ${mem0MemoriesFound} memories in ${mem0SearchMs}ms)`);
+        console.log(`[PERF] narrative-memory: ${t1 - t0}ms (${memoryPrompts.length} contexts)`);
 
         // [3] systemInstruction + contents 빌드
         const systemInstruction = buildSystemInstruction({
@@ -255,7 +251,6 @@ export async function PUT(request: NextRequest) {
         const contents = buildContents({
           userPersona,
           narrativeContexts: memoryPrompts,
-          mem0Context: mem0Context || undefined,
           sessionSummary: session.sessionSummary || undefined,
           proAnalysis: session.proAnalysis || undefined,
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
@@ -391,10 +386,6 @@ export async function PUT(request: NextRequest) {
           selectiveHistory: relevantHistory.length > 0,
           relevantHistoryCount: relevantHistory.length,
           turnNumber: session.turnCount + 1,
-          mem0Available: isMem0Available(),
-          mem0SearchMs,
-          mem0MemoriesFound,
-          mem0MemoriesSaved: isMem0Available() ? dialogueTurnsForMeta.length : 0,
           extractedFactsCount: extractedFacts.length,
           memoryDebug: characterMemoryDebug,
         } : null;
@@ -446,8 +437,6 @@ export async function PUT(request: NextRequest) {
 
         processRemainingBackgroundTasks({
           sessionId,
-          content,
-          allTurns,
           session: {
             workId: session.workId,
             turnCount: session.turnCount,
@@ -455,7 +444,6 @@ export async function PUT(request: NextRequest) {
           },
           authUserId: authSession.user!.id!,
           workId: session.workId,
-          presentChars,
           recentMessages,
         }).catch(e => console.error('[BackgroundTasks] process failed:', e));
 
