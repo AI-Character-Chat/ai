@@ -12,61 +12,114 @@
   ],
   "files_changed": ["src/lib/narrative-memory.ts"],
   "commit": "bfef4c4",
-  "baseline": {
-    "code": "이전 (0.85/0.6)",
+  "stage1": {
     "scenario": "default-60",
     "keep_memory": false,
-    "runs": [
-      {
-        "run": 1,
-        "date": "2026-02-19T23:17:00+09:00",
-        "report_file": "memory-test-report-1771510642364.txt",
-        "pass_rate": 74.1,
-        "passed": 43,
-        "total": 58,
-        "save": 41,
-        "reinforce": 6,
-        "skip": 0,
-        "avg_response_ms": 8731
-      }
-    ],
-    "median_pass_rate": 74.1
+    "baseline": {
+      "code": "이전 (0.85/0.6)",
+      "runs": [
+        {
+          "run": 1,
+          "date": "2026-02-19T23:17:00+09:00",
+          "report_file": "memory-test-report-1771510642364.txt",
+          "pass_rate": 74.1,
+          "passed": 43,
+          "total": 58,
+          "save": 41,
+          "reinforce": 6,
+          "skip": 0,
+          "avg_response_ms": 8731
+        }
+      ],
+      "median_pass_rate": 74.1
+    },
+    "results": {
+      "code": "새 코드 (0.90/0.75)",
+      "runs": [
+        {
+          "run": 1,
+          "date": "2026-02-19T23:41:00+09:00",
+          "report_file": "memory-test-report-1771512062811.txt",
+          "pass_rate": 79.3,
+          "passed": 46,
+          "total": 58,
+          "save": 40,
+          "reinforce": 1,
+          "skip": 2,
+          "avg_response_ms": 8947
+        },
+        {
+          "run": 2,
+          "date": "2026-02-19T23:57:00+09:00",
+          "report_file": "memory-test-report-1771513036549.txt",
+          "pass_rate": 81.0,
+          "passed": 47,
+          "total": 58,
+          "save": 42,
+          "reinforce": 1,
+          "skip": 3,
+          "avg_response_ms": 8658
+        }
+      ],
+      "median_pass_rate": 80.2,
+      "improvement_pp": 6.1
+    },
+    "passed": true
   },
-  "results": {
-    "code": "새 코드 (0.90/0.75)",
-    "scenario": "default-60",
+  "stage2": {
+    "scenario": "v5-150",
     "keep_memory": false,
-    "runs": [
-      {
-        "run": 1,
-        "date": "2026-02-19T23:41:00+09:00",
-        "report_file": "memory-test-report-1771512062811.txt",
-        "pass_rate": 79.3,
-        "passed": 46,
-        "total": 58,
-        "save": 40,
-        "reinforce": 1,
-        "skip": 2,
-        "avg_response_ms": 8947
-      },
-      {
-        "run": 2,
-        "date": "2026-02-19T23:57:00+09:00",
-        "report_file": "memory-test-report-1771513036549.txt",
-        "pass_rate": 81.0,
-        "passed": 47,
-        "total": 58,
-        "save": 42,
-        "reinforce": 1,
-        "skip": 3,
-        "avg_response_ms": 8658
-      }
-    ],
-    "median_pass_rate": 80.2,
-    "improvement_pp": 6.1
+    "baseline": {
+      "code": "이전 (0.85/0.6)",
+      "runs": [
+        {
+          "run": 1,
+          "date": "2026-02-20T01:58:00+09:00",
+          "report_file": "memory-test-report-1771520259165.txt",
+          "pass_rate": 45.5,
+          "passed": 71,
+          "total": 156,
+          "save": 70,
+          "reinforce": 1,
+          "skip": 6,
+          "avg_response_ms": 8602
+        }
+      ],
+      "median_pass_rate": 45.5
+    },
+    "results": {
+      "code": "새 코드 (0.90/0.75)",
+      "runs": [
+        {
+          "run": 1,
+          "date": "2026-02-20T00:30:00+09:00",
+          "report_file": "stage2-run1",
+          "pass_rate": 70.5,
+          "passed": 110,
+          "total": 156,
+          "save": 68,
+          "reinforce": 2,
+          "skip": 2,
+          "avg_response_ms": null
+        },
+        {
+          "run": 2,
+          "date": "2026-02-20T01:00:00+09:00",
+          "report_file": "stage2-run2",
+          "pass_rate": 71.8,
+          "passed": 112,
+          "total": 156,
+          "save": 60,
+          "reinforce": 7,
+          "skip": 11,
+          "avg_response_ms": null
+        }
+      ],
+      "median_pass_rate": 71.2,
+      "improvement_pp": 25.7
+    },
+    "passed": true
   },
-  "stage1_passed": true,
-  "stage2_pending": true,
   "conclusion": "confirmed",
-  "notes": "60턴 clean start 2회 모두 기준선(74.1%) 초과. 중앙값 80.2%로 +6.1pp 개선 확인. Stage 2 (150턴) 미실행."
+  "notes": "Stage 1 (60턴): 기준선 74.1% → 새코드 80.2% (+6.1pp). Stage 2 (150턴): 기준선 45.5% → 새코드 71.2% (+25.7pp). 장기 대화에서 개선 효과가 더 극대화됨."
 }
