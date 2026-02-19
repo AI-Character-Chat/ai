@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SYNK Memory Test Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+  h1 { font-size: 24px; margin-bottom: 8px; color: #f8fafc; }
+  .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+  .card-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+  .card-value { font-size: 32px; font-weight: 700; margin-top: 4px; }
+  .card-delta { font-size: 14px; margin-top: 4px; }
+  .up { color: #4ade80; }
+  .down { color: #f87171; }
+  .neutral { color: #94a3b8; }
+  .bar-chart { display: flex; align-items: end; gap: 12px; height: 220px; margin-bottom: 32px; padding: 16px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
+  .bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .bar { width: 100%; border-radius: 6px 6px 0 0; min-height: 4px; transition: height 0.5s; }
+  .bar-label { font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center; }
+  .bar-value { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+  th { background: #1e293b; padding: 10px 12px; text-align: left; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155; position: sticky; top: 0; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 13px; }
+  tr:hover td { background: #1e293b; }
+  .pass { color: #4ade80; font-weight: 600; }
+  .fail { color: #f87171; font-weight: 600; }
+  .partial { color: #fbbf24; font-weight: 600; }
+  .na { color: #475569; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tag-identity { background: #1e3a5f; color: #60a5fa; }
+  .tag-health { background: #3b1f1f; color: #f87171; }
+  .tag-family { background: #1f3b2f; color: #4ade80; }
+  .tag-hobby { background: #3b3b1f; color: #fbbf24; }
+  .tag-preference { background: #2d1f3b; color: #c084fc; }
+  .tag-plan { background: #1f2f3b; color: #67e8f9; }
+  .tag-relationship { background: #3b1f2f; color: #fb7185; }
+  .section-title { font-size: 18px; font-weight: 600; margin: 24px 0 12px; color: #f8fafc; }
+  .failure-type { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid; }
+  .failure-type.a { border-color: #4ade80; }
+  .failure-type.b { border-color: #fbbf24; }
+  .failure-type.c { border-color: #fb923c; }
+  .failure-type.d { border-color: #94a3b8; }
+  .improved { background: #0d2818; }
+  .regressed { background: #2d0f0f; }
+  .trend-table td:first-child { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>SYNK Memory Test Dashboard</h1>
+<p class="subtitle">v5/v6 150-turn memory retention test (30 facts, 156 checks) | v6-run1 completed: 2026-02-19</p>
+
+<div class="summary-grid">
+  <div class="card">
+    <div class="card-label">현재 통과율 (v6-run1)</div>
+    <div class="card-value up">73.7%</div>
+    <div class="card-delta up">+41.0pp vs baseline | +3.2pp vs v5-run4</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Baseline (v5-run1)</div>
+    <div class="card-value neutral">32.7%</div>
+    <div class="card-delta neutral">51/156 (Fix 적용 전)</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Skip 횟수</div>
+    <div class="card-value up">0</div>
+    <div class="card-delta up">-100% vs v5-run4 (8→0)</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Reinforce 횟수</div>
+    <div class="card-value up">61</div>
+    <div class="card-delta up">+510% vs v5-run4 (10→61)</div>
+  </div>
+</div>
+
+<div class="section-title">테스트 이력 비교</div>
+<div class="bar-chart">
+  <div class="bar-group">
+    <div class="bar-value down">32.7%</div>
+    <div class="bar" style="height: 65px; background: linear-gradient(180deg, #f87171, #991b1b);"></div>
+    <div class="bar-label">v5-run1<br><small>Baseline</small></div>
+  </div>
+  <div class="bar-group">
+    <div class="bar-value partial">62.8%</div>
+    <div class="bar" style="height: 126px; background: linear-gradient(180deg, #fbbf24, #92400e);"></div>
+    <div class="bar-label">v5-run2<br><small>Fix 1-4</small></div>
+  </div>
+  <div class="bar-group">
+    <div class="bar-value up">70.5%</div>
+    <div class="bar" style="height: 141px; background: linear-gradient(180deg, #4ade80, #166534);"></div>
+    <div class="bar-label">v5-run3<br><small>P1+P2</small></div>
+  </div>
+  <div class="bar-group">
+    <div class="bar-value up">70.5%</div>
+    <div class="bar" style="height: 141px; background: linear-gradient(180deg, #60a5fa, #1e3a5f);"></div>
+    <div class="bar-label">v5-run4<br><small>Phase2</small></div>
+  </div>
+  <div class="bar-group">
+    <div class="bar-value up">73.7%</div>
+    <div class="bar" style="height: 147px; background: linear-gradient(180deg, #a78bfa, #5b21b6);"></div>
+    <div class="bar-label">v6-run1<br><small>영구기억</small></div>
+  </div>
+</div>
+
+<div class="section-title">개선 추이</div>
+<table class="trend-table" style="max-width: 700px;">
+  <thead><tr><th>버전</th><th>통과율</th><th>개선폭</th><th>누적</th><th>핵심 변경</th></tr></thead>
+  <tbody>
+    <tr><td>v5-run1</td><td class="fail">32.7%</td><td class="na">-</td><td class="na">-</td><td>원본 (baseline)</td></tr>
+    <tr><td>v5-run2</td><td class="partial">62.8%</td><td class="up">+30.1pp</td><td class="up">+30.1pp</td><td>노이즈 필터 + AI 지시 + limit 확장</td></tr>
+    <tr><td>v5-run3</td><td class="pass">70.5%</td><td class="up">+7.7pp</td><td class="up">+37.8pp</td><td>Plan/Health 추출 개선</td></tr>
+    <tr><td>v5-run4</td><td class="pass">70.5%</td><td class="neutral">+0.0pp</td><td class="up">+37.8pp</td><td>MULTI_VALUE_KEYS + 종합나열 + IDENTITY확장</td></tr>
+    <tr><td>v6-run1</td><td class="pass">73.7%</td><td class="up">+3.2pp</td><td class="up">+41.0pp</td><td>영구기억 (decay/pruning 제거, 검색 확대)</td></tr>
+  </tbody>
+</table>
+
+<div class="section-title">팩트별 회상 결과 (30 Facts)</div>
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>내용</th>
+      <th>카테고리</th>
+      <th>v5-run3</th>
+      <th>v5-run4</th>
+      <th>v6-run1</th>
+      <th>변화</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>F1</td><td>이름: 김민수</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F2</td><td>나이: 25->26</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F3</td><td>직업: 게임개발자</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr class="improved"><td>F4</td><td>고양이 나비(검은)</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">보충PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
+    <tr class="improved"><td>F5</td><td>고양이 초코(치즈태비)</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">보충PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
+    <tr><td>F6</td><td>초콜릿 알레르기</td><td><span class="tag tag-health">Health</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr class="improved"><td>F7</td><td>고소공포증</td><td><span class="tag tag-health">Health</span></td><td class="fail">FAIL(혼동)</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">해결</td></tr>
+    <tr><td>F8</td><td>여동생 수진/심리학</td><td><span class="tag tag-family">Family</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F9</td><td>게임장르 RPG->로그라이크</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">교정OK</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+    <tr class="improved"><td>F10</td><td>일본여행(도쿄/교토)</td><td><span class="tag tag-plan">Plan</span></td><td class="partial">개별PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
+    <tr><td>F11</td><td>밴드/기타</td><td><span class="tag tag-hobby">Hobby</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F12</td><td>김치찌개</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F13</td><td>왼손잡이</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">개별PASS</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+    <tr><td>F14</td><td>미국 3년</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">개별PASS</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+    <tr><td>F15</td><td>러닝/한강 5km</td><td><span class="tag tag-hobby">Hobby</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F16</td><td>MBTI: INFP</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F17</td><td>적녹색약</td><td><span class="tag tag-health">Health</span></td><td class="partial">개별PASS</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+    <tr><td>F18</td><td>전여친 3년 이별</td><td><span class="tag tag-relationship">Relationship</span></td><td class="na">미테스트</td><td class="na">미테스트</td><td class="na">미테스트</td><td class="na">-</td></tr>
+    <tr class="improved"><td>F19</td><td>피아노/쇼팽</td><td><span class="tag tag-hobby">Hobby</span></td><td class="partial">보충PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
+    <tr><td>F20</td><td>강아지 무서움</td><td><span class="tag tag-health">Health</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F21</td><td>파란색</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F22</td><td>아이스아메리카노</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F23</td><td>수학 싫어</td><td><span class="tag tag-preference">Preference</span></td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="neutral">유지</td></tr>
+    <tr><td>F24</td><td>드럼 배우고싶음</td><td><span class="tag tag-plan">Plan</span></td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="neutral">유지</td></tr>
+    <tr><td>F25</td><td>생일 9/23</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F26</td><td>고향 부산</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">개별PASS</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+    <tr><td>F27</td><td>형 민호/의사</td><td><span class="tag tag-family">Family</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
+    <tr><td>F28</td><td>가을</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="down">퇴보</td></tr>
+    <tr><td>F29</td><td>졸업작품 게임</td><td><span class="tag tag-plan">Plan</span></td><td class="partial">보충PASS</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="down">퇴보</td></tr>
+    <tr><td>F30</td><td>신라면</td><td><span class="tag tag-preference">Preference</span></td><td class="partial">언급</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+  </tbody>
+</table>
+
+<div class="section-title">실패 유형 분류 (v6-run1 기준)</div>
+
+<div class="failure-type a">
+  <div class="failure-title">Type A: 완전실패 -> 해결 (1건)</div>
+  <div class="failure-desc">
+    <strong>F7(고소공포증)</strong> - v5-run3에서 "강아지 공포증"과 혼동 (데이터 유실) -> MULTI_VALUE_KEYS로 v5-run4부터 완전 PASS.<br>
+    원인: resolveFactConflicts()에서 동일 key "공포증" 값을 덮어쓰기. 해결: 다중값 카테고리는 APPEND.
+  </div>
+</div>
+
+<div class="failure-type b">
+  <div class="failure-title">Type B: 종합실패 - 개별 OK / 종합 FAIL (3건)</div>
+  <div class="failure-desc">
+    <strong>F13(왼손), F14(미국), F26(부산)</strong> - 개별 질문 시 PASS하지만, "아는 거 전부 말해봐" 종합 질문 시 누락됨.<br>
+    v5-run4에서 F4/F5/F10/F19는 종합PASS로 개선되었으나 이 3건은 여전히 종합FAIL.<br>
+    Flash 모델이 30+개 팩트 중 일부를 선택적으로 생략하는 어텐션 한계.
+  </div>
+</div>
+
+<div class="failure-type c">
+  <div class="failure-title">Type C: 부분실패 - 핵심 OK / 디테일 누락 (3건)</div>
+  <div class="failure-desc">
+    <strong>F9(로그라이크)</strong> - 교정 후 PASS하나 종합에서 누락.<br>
+    <strong>F17(적녹색약)</strong> - 개별 PASS / 종합 FAIL.<br>
+    <strong>F30(신라면)</strong> - 종합에서 언급은 되나 키워드 매칭 문제.
+  </div>
+</div>
+
+<div class="failure-type d">
+  <div class="failure-title">Type D: 지속실패 - 추출/회상 안 됨 (4건)</div>
+  <div class="failure-desc">
+    <strong>F24(드럼)</strong> - Fix3 적용에도 추출 자체 안됨. AI가 "배우고 싶은 것:" 형식으로 추출 안 하는 문제.<br>
+    <strong>F23(수학)</strong> - 추출/검증 모두 불안정.<br>
+    <strong>F28(가을)</strong> - v5-run3 PASS -> v5-run4부터 FAIL (퇴보).<br>
+    <strong>F29(졸업작품)</strong> - v5-run3 보충PASS -> v5-run4부터 FAIL (퇴보).
+  </div>
+</div>
+
+<div class="section-title">v6 영구기억 전환 핵심 지표</div>
+<table style="max-width: 600px;">
+  <thead><tr><th>지표</th><th>v5-run4</th><th>v6-run1</th><th>변화</th></tr></thead>
+  <tbody>
+    <tr><td>통과율</td><td class="pass">70.5% (110/156)</td><td class="pass">73.7% (115/156)</td><td class="up">+3.2pp</td></tr>
+    <tr><td>save</td><td>60</td><td>16</td><td class="neutral">-73%</td></tr>
+    <tr><td>skip</td><td>8</td><td class="pass">0</td><td class="up">-100%</td></tr>
+    <tr><td>reinforce</td><td>10</td><td class="pass">61</td><td class="up">+510%</td></tr>
+    <tr><td>Decay/Pruning</td><td>활성</td><td class="pass">비활성</td><td class="up">영구보존</td></tr>
+    <tr><td>왜곡(distortion)</td><td>0건</td><td class="pass">0건</td><td class="neutral">없음</td></tr>
+  </tbody>
+</table>
+
+<p style="margin-top: 32px; color: #64748b; font-size: 12px;">
+  Generated: 2026-02-19 | SYNK Character Chat Memory Test Dashboard<br>
+  v6-run1: 115/156 (73.7%) | save: 16 | reinforce: 61 | skip: 0 | 영구기억 전환 완료<br>
+  왜곡 사례: 0건 (모든 실패는 "잊음"이지 "틀린 정보" 아님)
+</p>
+
+</body>
+</html>
