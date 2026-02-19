@@ -76,6 +76,10 @@ const IDENTITY_SUBJECTS = new Set([
   '왼손잡이', '오른손잡이',
   // 선호/취향 (비교적 안정적)
   '취미', '특기', '관심사',
+  // 열망/목표 (안정적 의지)
+  '배우고 싶은 것', '하고 싶은 것', '되고 싶은 것',
+  '여행 계획', '여행 예정', '가고 싶은 곳',
+  '해보고 싶은 것', '도전하고 싶은 것',
 ]);
 
 /**
@@ -108,6 +112,9 @@ function isIdentityFact(fact: string): boolean {
     if (IDENTITY_SUBJECTS.has(subject)) return true;
     // "좋아하는/싫어하는 X" 패턴
     if (subject.startsWith('좋아하는') || subject.startsWith('싫어하는')) return true;
+    // "배우고 싶은/하고 싶은/되고 싶은/해보고 싶은 X" 패턴 → Identity (안정적 열망)
+    if (subject.startsWith('배우고 싶') || subject.startsWith('하고 싶') ||
+        subject.startsWith('되고 싶') || subject.startsWith('해보고 싶')) return true;
     // "X 이름" 패턴 (가족/인물 이름: "여동생 이름", "강아지 이름" 등)
     if (subject.endsWith('이름')) return true;
     return false;
@@ -122,12 +129,22 @@ function isIdentityFact(fact: string): boolean {
  * 이 주제의 fact는 knownFacts 대신 sharedExperiences로 분류
  */
 const ACTION_SUBJECTS = new Set([
+  // 행동/상황
   '유저의 행동', '행동', '한 일',
   '약속', '부탁', '요청',
-  '계획', '예정', '일정',
   '현재 상황', '상황', '근황',
   '기분', '감정', '감정 상태',
   '고민', '걱정',
+  // 일시적/상황적 정보
+  '과거 경험', '경험', '최근 경험',
+  '의견', '생각', '느낌',
+  '소유물', '물건',
+  '신체 상태', '컨디션', '건강 상태',
+  '기억 상태',
+  '습관', '버릇',
+  '욕구', '바람',
+  '활동', '최근 활동',
+  '현재 행동',
 ]);
 
 /**
@@ -136,9 +153,18 @@ const ACTION_SUBJECTS = new Set([
  */
 function isActionFact(fact: string): boolean {
   const colonMatch = fact.match(/^([^:：]+)[：:]/);
-  if (!colonMatch) return false;
-  const subject = colonMatch[1].trim();
-  return ACTION_SUBJECTS.has(subject);
+  if (colonMatch) {
+    const subject = colonMatch[1].trim();
+    if (ACTION_SUBJECTS.has(subject)) return true;
+    // "정호의 X" 패턴에서 X 추출 후 재확인
+    const possessiveMatch = subject.match(/^.+?의\s*(.+)$/);
+    if (possessiveMatch && ACTION_SUBJECTS.has(possessiveMatch[1].trim())) return true;
+    return false;
+  }
+  // 콜론 없는 팩트: 키워드로 action 감지
+  const ACTION_KEYWORDS = ['사왔다', '갔다', '했다', '먹었다', '봤다', '샀다',
+    '불편하다', '힘들었다', '안 먹', '기억하지 못', '취소됨', '준비를 하지'];
+  return ACTION_KEYWORDS.some(kw => fact.includes(kw));
 }
 
 /**
@@ -197,10 +223,32 @@ function isNegativeFact(fact: string): boolean {
 }
 
 /**
+ * 다중값을 허용하는 카테고리 — 같은 key라도 값이 다르면 추가(APPEND)
+ * 예: "공포증: 고소공포증" + "공포증: 강아지 공포증" → 둘 다 보존
+ */
+const MULTI_VALUE_KEYS = new Set([
+  '공포증', '알레르기', '알러지', '트라우마',
+  '취미', '특기', '관심사',
+  '반려동물', '반려견', '반려묘', '고양이', '강아지', '펫',
+  '좋아하는 음식', '좋아하는 색', '좋아하는 계절',
+  '싫어하는 것', '좋아하는 것',
+  '외국어', '언어',
+]);
+
+/**
+ * fact에서 값(value) 부분 추출 — "주제: 값" → "값"
+ */
+function extractFactValue(fact: string): string | null {
+  const colonMatch = fact.match(/^[^:：]+[：:]\s*(.+)/);
+  return colonMatch ? colonMatch[1].trim() : null;
+}
+
+/**
  * 새 fact를 기존 fact 목록에 병합하면서 충돌 해결
  *
  * - 부정 사실("X를 모른다") → 거부 (AI 역추출 방어)
- * - 같은 key(subject)를 가진 fact가 이미 있으면 → 최신 값으로 교체
+ * - MULTI_VALUE_KEYS 카테고리 → 값이 다르면 추가, 같으면 skip
+ * - 그 외 같은 key(subject)를 가진 fact가 이미 있으면 → 최신 값으로 교체
  * - 없으면 → 추가
  * - key 추출 불가한 fact → 단순 추가 (Set 중복제거)
  */
@@ -227,9 +275,19 @@ function resolveFactConflicts(existingFacts: string[], newFacts: string[]): stri
       });
 
       if (conflictIdx !== -1) {
-        // 충돌 감지 → 최신 fact로 교체
-        console.log(`[KnownFacts] 충돌 해결: "${result[conflictIdx]}" → "${newFact}"`);
-        result[conflictIdx] = newFact;
+        if (MULTI_VALUE_KEYS.has(newKey)) {
+          // 다중값 카테고리: 값이 다르면 추가, 같으면 skip
+          const existingValue = extractFactValue(result[conflictIdx]);
+          const newValue = extractFactValue(newFact);
+          if (existingValue !== newValue) {
+            console.log(`[KnownFacts] 다중값 추가: "${result[conflictIdx]}" + "${newFact}"`);
+            result.push(newFact);
+          }
+        } else {
+          // 단일값 카테고리: 최신 값으로 교체 (기존 동작)
+          console.log(`[KnownFacts] 충돌 해결: "${result[conflictIdx]}" → "${newFact}"`);
+          result[conflictIdx] = newFact;
+        }
         continue;
       }
     }
@@ -656,8 +714,8 @@ export async function updateRelationship(
   if (updates.newExperience) {
     const experiences: string[] = JSON.parse(relationship.sharedExperiences);
     experiences.push(updates.newExperience);
-    // 최근 20개만 유지
-    data.sharedExperiences = JSON.stringify(experiences.slice(-20));
+    // 영구 기억: 모든 경험 보존
+    data.sharedExperiences = JSON.stringify(experiences);
   }
 
   // 말투 변화
@@ -726,7 +784,7 @@ async function evaluateMemoryNovelty(
   const memories = await prisma.characterMemory.findMany({
     where: { userId: scope.userId, workId: scope.workId, characterId },
     orderBy: { createdAt: 'desc' },
-    take: 50,
+    take: 200,
   });
 
   if (memories.length === 0) {
@@ -885,8 +943,8 @@ export async function searchCharacterMemories(params: {
       ...(params.minImportance && { importance: { gte: params.minImportance } }),
     },
     orderBy: [{ importance: 'desc' }, { createdAt: 'desc' }],
-    // 임베딩 검색 시 전체 로드 후 인메모리 정렬 (최대 100개)
-    take: params.queryEmbedding?.length ? 100 : (params.limit || 10),
+    // 임베딩 검색 시 전체 로드 후 인메모리 정렬 (최대 300개)
+    take: params.queryEmbedding?.length ? 300 : (params.limit || 10),
   });
 
   // 임베딩 기반 정렬
@@ -955,31 +1013,8 @@ export async function markMemoryMentioned(memoryId: string) {
  *   감정 1.0,  importance=0.8 → factor 0.982  (아주 느린 감쇠)
  */
 export async function decayMemoryStrength(scope: MemoryScope) {
-  const decayFactors: Record<string, number> = {
-    episodic: 0.95,
-    semantic: 0.98,
-    emotional: 0.97,
-  };
-
-  for (const [memoryType, factor] of Object.entries(decayFactors)) {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "CharacterMemory"
-       SET strength = strength * LEAST(0.995,
-         $1 + (1.0 - $1) * (
-           CASE WHEN "emotionalResponse" IS NOT NULL AND "emotionalResponse" != ''
-             THEN COALESCE(("emotionalResponse"::json->>'intensity')::float, 0) * 0.4
-             ELSE 0
-           END
-           + importance * 0.3
-         )
-       )
-       WHERE "userId" = $2 AND "workId" = $3 AND "memoryType" = $4 AND strength > 0.1`,
-      factor,
-      scope.userId,
-      scope.workId,
-      memoryType
-    );
-  }
+  // 영구 기억: decay 비활성화 — 모든 기억의 강도를 유지
+  return;
 }
 
 /**
@@ -995,48 +1030,8 @@ export async function pruneWeakMemories(
     maxPerScope?: number;
   } = {}
 ): Promise<number> {
-  const { minStrength = 0.15, maxPerScope = 100 } = options;
-
-  // 1. 약한 기억 삭제 (strength < 임계값 + 한번도 언급 안됨)
-  const deletedWeak = await prisma.characterMemory.deleteMany({
-    where: {
-      userId: scope.userId,
-      workId: scope.workId,
-      strength: { lt: minStrength },
-      mentionedCount: 0,
-    },
-  });
-
-  // 2. 스코프당 최대 수 초과 시 오래된 것 삭제
-  const totalCount = await prisma.characterMemory.count({
-    where: { userId: scope.userId, workId: scope.workId },
-  });
-  let deletedOverflow = 0;
-
-  if (totalCount > maxPerScope) {
-    const oldMemories = await prisma.characterMemory.findMany({
-      where: { userId: scope.userId, workId: scope.workId },
-      orderBy: [{ importance: 'asc' }, { strength: 'asc' }, { createdAt: 'asc' }],
-      take: totalCount - maxPerScope,
-      select: { id: true },
-    });
-
-    if (oldMemories.length > 0) {
-      const result = await prisma.characterMemory.deleteMany({
-        where: { id: { in: oldMemories.map((m) => m.id) } },
-      });
-      deletedOverflow = result.count;
-    }
-  }
-
-  const totalDeleted = deletedWeak.count + deletedOverflow;
-  if (totalDeleted > 0) {
-    console.log(
-      `[NarrativeMemory] Pruned ${totalDeleted} memories (weak: ${deletedWeak.count}, overflow: ${deletedOverflow})`
-    );
-  }
-
-  return totalDeleted;
+  // 영구 기억: 삭제 비활성화 — 모든 기억을 DB에 보존
+  return 0;
 }
 
 // ============================================================
@@ -1060,7 +1055,7 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
     const memories = await prisma.characterMemory.findMany({
       where: { userId: scope.userId, workId: scope.workId, characterId, memoryType: 'episodic' },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 200,
     });
 
     const used = new Set<string>();
@@ -1111,9 +1106,7 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
         },
       });
 
-      await prisma.characterMemory.deleteMany({
-        where: { id: { in: group.map(m => m.id) } },
-      });
+      // 영구 기억: 원본 에피소드 삭제하지 않음 (semantic 통합본만 추가)
 
       totalConsolidated += group.length;
     }
@@ -1198,12 +1191,11 @@ export async function buildNarrativeContext(
   }
 
   // 3. 기억 검색 (크로스세션, 임베딩 기반 또는 importance 폴백)
-  // limit 5: context noise 감소 — 관련성 높은 기억만 선별 (Lost-in-the-Middle 방지)
   const recentMemories = await searchCharacterMemories({
     scope,
     characterId,
     queryEmbedding,
-    limit: 5,
+    limit: 10,
     minImportance: 0.3,
   });
 
@@ -1278,7 +1270,7 @@ function generateNarrativePrompt(
   // [Middle] Moment facts — 최근 알게 된 변동 정보 (최근 20개)
   if (momentFacts.length > 0) {
     lines.push(`\n[${characterName}이 최근 알게 된 것]`);
-    momentFacts.slice(-20).forEach(fact => lines.push(`- ${fact}`));
+    momentFacts.forEach(fact => lines.push(`- ${fact}`));
   }
 
   // [Middle] 최근 기억 (캐릭터 해석)
@@ -1292,7 +1284,7 @@ function generateNarrativePrompt(
   // [Middle] 공유 경험 (행동/약속/상황 포함)
   if (relationship.sharedExperiences.length > 0) {
     lines.push(`\n[함께한 중요한 순간들]`);
-    relationship.sharedExperiences.slice(-5).forEach((exp) => {
+    relationship.sharedExperiences.slice(-15).forEach((exp) => {
       lines.push(`- ${exp}`);
     });
   }
@@ -1313,7 +1305,7 @@ function generateNarrativePrompt(
   // [Bottom — 유저 메시지 직전] Identity facts — 전량 주입 + 볼드 강조
   // 프롬프트 끝에 배치하여 Flash 모델 어텐션 극대화
   if (identityFacts.length > 0) {
-    lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 것 — 절대 불변]`);
+    lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 사실 — 유저가 물으면 반드시 이 정보로 대답할 것]`);
     identityFacts.forEach(fact => lines.push(`- **${fact}**`));
   }
 
