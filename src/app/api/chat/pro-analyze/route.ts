@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-import { buildSystemInstruction, generateProAnalysis } from '@/lib/gemini';
-import { getAllRelationships, type MemoryScope } from '@/lib/narrative-memory';
+import { buildSystemInstruction, generateProAnalysis, generateEmbedding } from '@/lib/gemini';
+import { buildNarrativeContext, searchCharacterMemories, type MemoryScope } from '@/lib/narrative-memory';
 
 export async function POST(request: NextRequest) {
   const authSession = await auth();
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const presentCharacters = JSON.parse(session.presentCharacters) as string[];
   const recentEvents = JSON.parse(session.recentEvents) as string[];
 
-  // 메모리 컨텍스트 로드 (유저-캐릭터 관계 + 기억)
+  // 메모리 컨텍스트 로드 (buildNarrativeContext + 임베딩 기반 기억 검색)
   let memoryContext = '';
   try {
     const scope: MemoryScope = {
@@ -71,26 +71,79 @@ export async function POST(request: NextRequest) {
       workId: session.workId,
       sessionId: sessionId,
     };
-    const relationships = await getAllRelationships(scope);
-    if (relationships.length > 0) {
-      const parts = relationships.map(rel => {
-        const lines: string[] = [`### ${rel.characterName}와의 관계`];
-        lines.push(`친밀도: ${rel.intimacyLevel} (${rel.intimacyScore}점), 신뢰: ${rel.trust}, 호감: ${rel.affection}, 존경: ${rel.respect}`);
-        if (rel.knownFacts.length > 0) {
-          lines.push(`알고 있는 사실: ${rel.knownFacts.join(', ')}`);
+
+    // 현재 턴 임베딩 생성 (1회, 모든 캐릭터에 재사용)
+    const queryEmbedding = await generateEmbedding(userMessage);
+    const embedding = queryEmbedding.length > 0 ? queryEmbedding : undefined;
+
+    // 각 캐릭터별 풍부한 컨텍스트 + 주제 관련 기억 병렬 로드
+    const contextResults = await Promise.all(
+      characters.map(async (c) => {
+        const [narrative, topicMemories] = await Promise.all([
+          buildNarrativeContext(scope, c.id, c.name, userMessage, embedding),
+          searchCharacterMemories({
+            scope,
+            characterId: c.id,
+            queryEmbedding: embedding,
+            limit: 5,
+            minImportance: 0.3,
+          }),
+        ]);
+        return { character: c, narrative, topicMemories };
+      })
+    );
+
+    const parts = contextResults.map(({ character, narrative, topicMemories }) => {
+      const rel = narrative.relationship;
+      const lines: string[] = [`### ${character.name}`];
+
+      // 관계 수치
+      lines.push(`관계: ${rel.intimacyLevel} (친밀 ${rel.intimacyScore}, 신뢰 ${rel.trust}, 호감 ${rel.affection}, 존경 ${rel.respect}, 경쟁 ${rel.rivalry})`);
+
+      // 핵심 사실 (Identity)
+      const identityFacts = rel.knownFacts.filter(f =>
+        /^(이름|나이|직업|성별|MBTI|고향|학교|생일):/i.test(f)
+      );
+      const otherFacts = rel.knownFacts.filter(f => !identityFacts.includes(f));
+      if (identityFacts.length > 0) {
+        lines.push(`핵심 정보: ${identityFacts.join(' | ')}`);
+      }
+      if (otherFacts.length > 0) {
+        lines.push(`알고 있는 사실: ${otherFacts.join(', ')}`);
+      }
+
+      // 이번 턴 주제와 관련된 기억 (임베딩 검색 결과)
+      if (topicMemories.length > 0) {
+        lines.push(`이번 대화와 관련된 기억:`);
+        topicMemories.forEach(m => {
+          const sim = m.similarity ? `(관련도 ${(m.similarity * 100).toFixed(0)}%)` : '';
+          lines.push(`  - ${m.interpretation} ${sim}`);
+        });
+      }
+
+      // 함께한 경험
+      if (rel.sharedExperiences.length > 0) {
+        lines.push(`함께한 경험: ${rel.sharedExperiences.slice(-10).join(', ')}`);
+      }
+
+      // 감정 흐름
+      if (rel.emotionalHistory.length > 0) {
+        const emotions = rel.emotionalHistory.slice(-5);
+        lines.push(`최근 감정 흐름: ${emotions.map(e => `${e.emotion}(${e.intensity})`).join(' → ')}`);
+      }
+
+      // 장면 분위기 (첫 캐릭터의 것만 — 동일 장면)
+      if (narrative.sceneContext) {
+        const tone = narrative.sceneContext.emotionalTone;
+        if (tone) {
+          lines.push(`장면 분위기: ${tone.mood} (강도 ${(tone.intensity * 100).toFixed(0)}%)`);
         }
-        if (rel.sharedExperiences.length > 0) {
-          const recent = rel.sharedExperiences.slice(-10);
-          lines.push(`함께한 경험: ${recent.join(', ')}`);
-        }
-        if (rel.emotionalHistory.length > 0) {
-          const recentEmotions = rel.emotionalHistory.slice(-5);
-          lines.push(`최근 감정: ${recentEmotions.map(e => `${e.emotion}(${e.intensity})`).join(', ')}`);
-        }
-        return lines.join('\n');
-      });
-      memoryContext = parts.join('\n\n');
-    }
+      }
+
+      return lines.join('\n');
+    });
+
+    memoryContext = parts.join('\n\n');
   } catch (e) {
     console.error('[ProAnalysis] 메모리 컨텍스트 로드 실패:', e instanceof Error ? e.message : String(e));
   }
