@@ -1,0 +1,72 @@
+{
+  "version": "v8",
+  "name": "surprise-filter-relaxation",
+  "date": "2026-02-19",
+  "description": "Surprise 필터 임계값 완화로 기억 다양성 개선",
+  "changes": [
+    "reinforce threshold: >= 0.85 → >= 0.90 (진짜 중복만 강화)",
+    "skip zone: 0.6~0.85 → 0.75~0.90 (skip 범위 축소)",
+    "skip condition: importance < 0.7 → < 0.4 (기본 imp 0.5가 저장됨)",
+    "save zone: < 0.6 → < 0.75 (더 다양한 에피소드 저장)",
+    "dampening: 30% → 20% (유사 기억 감쇠 완화)"
+  ],
+  "files_changed": ["src/lib/narrative-memory.ts"],
+  "commit": "bfef4c4",
+  "baseline": {
+    "code": "이전 (0.85/0.6)",
+    "scenario": "default-60",
+    "keep_memory": false,
+    "runs": [
+      {
+        "run": 1,
+        "date": "2026-02-19T23:17:00+09:00",
+        "report_file": "memory-test-report-1771510642364.txt",
+        "pass_rate": 74.1,
+        "passed": 43,
+        "total": 58,
+        "save": 41,
+        "reinforce": 6,
+        "skip": 0,
+        "avg_response_ms": 8731
+      }
+    ],
+    "median_pass_rate": 74.1
+  },
+  "results": {
+    "code": "새 코드 (0.90/0.75)",
+    "scenario": "default-60",
+    "keep_memory": false,
+    "runs": [
+      {
+        "run": 1,
+        "date": "2026-02-19T23:41:00+09:00",
+        "report_file": "memory-test-report-1771512062811.txt",
+        "pass_rate": 79.3,
+        "passed": 46,
+        "total": 58,
+        "save": 40,
+        "reinforce": 1,
+        "skip": 2,
+        "avg_response_ms": 8947
+      },
+      {
+        "run": 2,
+        "date": "2026-02-19T23:57:00+09:00",
+        "report_file": "memory-test-report-1771513036549.txt",
+        "pass_rate": 81.0,
+        "passed": 47,
+        "total": 58,
+        "save": 42,
+        "reinforce": 1,
+        "skip": 3,
+        "avg_response_ms": 8658
+      }
+    ],
+    "median_pass_rate": 80.2,
+    "improvement_pp": 6.1
+  },
+  "stage1_passed": true,
+  "stage2_pending": true,
+  "conclusion": "confirmed",
+  "notes": "60턴 clean start 2회 모두 기준선(74.1%) 초과. 중앙값 80.2%로 +6.1pp 개선 확인. Stage 2 (150턴) 미실행."
+}
