@@ -865,8 +865,9 @@ export async function generateProAnalysis(params: {
   currentTurnSummary: string;
   sceneState: SceneState;
   characterNames: string[];
+  memoryContext?: string;
 }): Promise<ProAnalysisResult> {
-  const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames } = params;
+  const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames, memoryContext } = params;
 
   const analysisPrompt = `당신은 인터랙티브 스토리의 서사 디렉터입니다.
 다음 턴의 AI가 참조할 "앞으로의 방향 가이드"를 작성하세요.
@@ -900,7 +901,10 @@ export async function generateProAnalysis(params: {
 ## 현재 장면
 장소: ${sceneState.location}, 시간: ${sceneState.time}
 등장인물: ${sceneState.presentCharacters.join(', ')}
-
+${memoryContext ? `
+## 유저에 대해 알고 있는 정보 (기억 컨텍스트)
+${memoryContext}
+` : ''}
 ## 이전 대화 요약
 ${conversationSummary}
 

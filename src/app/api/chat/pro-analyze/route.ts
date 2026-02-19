@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { buildSystemInstruction, generateProAnalysis } from '@/lib/gemini';
+import { getAllRelationships, type MemoryScope } from '@/lib/narrative-memory';
 
 export async function POST(request: NextRequest) {
   const authSession = await auth();
@@ -62,6 +63,38 @@ export async function POST(request: NextRequest) {
   const presentCharacters = JSON.parse(session.presentCharacters) as string[];
   const recentEvents = JSON.parse(session.recentEvents) as string[];
 
+  // 메모리 컨텍스트 로드 (유저-캐릭터 관계 + 기억)
+  let memoryContext = '';
+  try {
+    const scope: MemoryScope = {
+      userId: authSession.user.id,
+      workId: session.workId,
+      sessionId: sessionId,
+    };
+    const relationships = await getAllRelationships(scope);
+    if (relationships.length > 0) {
+      const parts = relationships.map(rel => {
+        const lines: string[] = [`### ${rel.characterName}와의 관계`];
+        lines.push(`친밀도: ${rel.intimacyLevel} (${rel.intimacyScore}점), 신뢰: ${rel.trust}, 호감: ${rel.affection}, 존경: ${rel.respect}`);
+        if (rel.knownFacts.length > 0) {
+          lines.push(`알고 있는 사실: ${rel.knownFacts.join(', ')}`);
+        }
+        if (rel.sharedExperiences.length > 0) {
+          const recent = rel.sharedExperiences.slice(-10);
+          lines.push(`함께한 경험: ${recent.join(', ')}`);
+        }
+        if (rel.emotionalHistory.length > 0) {
+          const recentEmotions = rel.emotionalHistory.slice(-5);
+          lines.push(`최근 감정: ${recentEmotions.map(e => `${e.emotion}(${e.intensity})`).join(', ')}`);
+        }
+        return lines.join('\n');
+      });
+      memoryContext = parts.join('\n\n');
+    }
+  } catch (e) {
+    console.error('[ProAnalysis] 메모리 컨텍스트 로드 실패:', e instanceof Error ? e.message : String(e));
+  }
+
   // Pro 분석 실행
   const result = await generateProAnalysis({
     systemInstruction,
@@ -74,6 +107,7 @@ export async function POST(request: NextRequest) {
       recentEvents,
     },
     characterNames: characters.map(c => c.name),
+    memoryContext,
   });
 
   // DB 저장: 세션 proAnalysis + 메시지 metadata에 proAnalysisMetrics 추가
