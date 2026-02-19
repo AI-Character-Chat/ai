@@ -768,9 +768,9 @@ export async function getAllRelationships(scope: MemoryScope): Promise<Relations
  *
  * | 유사도       | 판정     | 행동                                     |
  * |-------------|---------|------------------------------------------|
- * | >= 0.85     | 기존과 동일 | 기존 기억 강화 (A-MEM reinforcement)       |
- * | 0.6 ~ 0.85  | 뻔한 정보  | 중요도 낮으면 skip, 높으면 낮은 importance로 저장 |
- * | < 0.6       | 놀라운 정보 | surprise boost로 importance 상향 저장      |
+ * | >= 0.90     | 거의 동일  | 기존 기억 강화 (A-MEM reinforcement)       |
+ * | 0.75 ~ 0.90 | 비슷한 변형 | imp>=0.4 감쇠저장, imp<0.4 skip           |
+ * | < 0.75      | 새로운 정보 | surprise boost로 importance 상향 저장      |
  *
  * @returns action: 'reinforce'(강화됨) | 'skip'(저장 불필요) | 'save'(저장 필요)
  */
@@ -828,8 +828,8 @@ async function evaluateMemoryNovelty(
 
   const surpriseScore = 1.0 - maxSimilarity;
 
-  // [1] 거의 동일한 기억 (>=0.85): 기존 강화, 새 저장 생략
-  if (maxSimilarity >= 0.85 && mostSimilarMemory) {
+  // [1] 거의 동일한 기억 (>=0.90): 기존 강화, 새 저장 생략
+  if (maxSimilarity >= 0.90 && mostSimilarMemory) {
     await prisma.characterMemory.update({
       where: { id: mostSimilarMemory.id },
       data: {
@@ -842,18 +842,17 @@ async function evaluateMemoryNovelty(
     return { action: 'reinforce', surpriseScore, adjustedImportance: newImportance };
   }
 
-  // [2] 비슷한 기억 (0.6~0.85): 놀랍지 않음
-  if (maxSimilarity >= 0.6) {
-    // 감정적으로 중요하거나 importance가 높으면 그래도 저장 (감쇠된 importance)
-    if (newImportance >= 0.7) {
-      const dampened = newImportance * 0.7; // 중복성 감안 30% 감쇠
+  // [2] 비슷한 기억 (0.75~0.90): 약간 다른 변형
+  if (maxSimilarity >= 0.75) {
+    // importance가 극히 낮은 경우만 skip, 나머지는 감쇠 저장
+    if (newImportance >= 0.4) {
+      const dampened = newImportance * 0.8; // 중복성 감안 20% 감쇠
       return { action: 'save', surpriseScore, adjustedImportance: dampened };
     }
-    // 일반적인 정보 → skip
     return { action: 'skip', surpriseScore, adjustedImportance: newImportance };
   }
 
-  // [3] 놀라운 정보 (<0.6): surprise boost로 importance 상향
+  // [3] 새로운 정보 (<0.75): surprise boost로 importance 상향
   const surpriseBoost = surpriseScore * 0.3; // 최대 +0.3
   const adjustedImportance = Math.min(1.0, newImportance + surpriseBoost);
   return { action: 'save', surpriseScore, adjustedImportance };
