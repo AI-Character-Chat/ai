@@ -51,13 +51,13 @@
 <body>
 
 <h1>SYNK Memory Test Dashboard</h1>
-<p class="subtitle">v5/v6 150-turn memory retention test (30 facts, 156 checks) | v6-run1 completed: 2026-02-19</p>
+<p class="subtitle">v5/v6/v7 150-turn memory retention test (30 facts, 156 checks) | v7-run2 completed: 2026-02-20</p>
 
 <div class="summary-grid">
   <div class="card">
-    <div class="card-label">현재 통과율 (v6-run1)</div>
-    <div class="card-value up">73.7%</div>
-    <div class="card-delta up">+41.0pp vs baseline | +3.2pp vs v5-run4</div>
+    <div class="card-label">현재 통과율 (v7-run2) ★역대최고</div>
+    <div class="card-value up">75.6%</div>
+    <div class="card-delta up">+42.9pp vs baseline | +1.9pp vs v6</div>
   </div>
   <div class="card">
     <div class="card-label">Baseline (v5-run1)</div>
@@ -66,13 +66,13 @@
   </div>
   <div class="card">
     <div class="card-label">Skip 횟수</div>
-    <div class="card-value up">0</div>
-    <div class="card-delta up">-100% vs v5-run4 (8→0)</div>
+    <div class="card-value up">2</div>
+    <div class="card-delta up">v6: 0 → v7: 2 (미미)</div>
   </div>
   <div class="card">
-    <div class="card-label">Reinforce 횟수</div>
-    <div class="card-value up">61</div>
-    <div class="card-delta up">+510% vs v5-run4 (10→61)</div>
+    <div class="card-label">Reinforce 횟수 ★역대최고</div>
+    <div class="card-value up">67</div>
+    <div class="card-delta up">+570% vs v5-run4 (10→67)</div>
   </div>
 </div>
 
@@ -103,6 +103,16 @@
     <div class="bar" style="height: 147px; background: linear-gradient(180deg, #a78bfa, #5b21b6);"></div>
     <div class="bar-label">v6-run1<br><small>영구기억</small></div>
   </div>
+  <div class="bar-group">
+    <div class="bar-value partial">72.4%</div>
+    <div class="bar" style="height: 145px; background: linear-gradient(180deg, #94a3b8, #475569);"></div>
+    <div class="bar-label">v7-run1<br><small>Pro메모리v1</small></div>
+  </div>
+  <div class="bar-group">
+    <div class="bar-value up" style="color: #fbbf24;">75.6%</div>
+    <div class="bar" style="height: 151px; background: linear-gradient(180deg, #fbbf24, #f59e0b);"></div>
+    <div class="bar-label">v7-run2<br><small>★Pro강화v2</small></div>
+  </div>
 </div>
 
 <div class="section-title">개선 추이</div>
@@ -114,6 +124,8 @@
     <tr><td>v5-run3</td><td class="pass">70.5%</td><td class="up">+7.7pp</td><td class="up">+37.8pp</td><td>Plan/Health 추출 개선</td></tr>
     <tr><td>v5-run4</td><td class="pass">70.5%</td><td class="neutral">+0.0pp</td><td class="up">+37.8pp</td><td>MULTI_VALUE_KEYS + 종합나열 + IDENTITY확장</td></tr>
     <tr><td>v6-run1</td><td class="pass">73.7%</td><td class="up">+3.2pp</td><td class="up">+41.0pp</td><td>영구기억 (decay/pruning 제거, 검색 확대)</td></tr>
+    <tr><td>v7-run1</td><td class="partial">72.4%</td><td class="down">-1.3pp</td><td class="up">+39.7pp</td><td>Pro 기본 메모리 전달 (API 타임아웃 2건)</td></tr>
+    <tr style="background: #1a2e1a;"><td>v7-run2</td><td class="pass" style="color: #fbbf24;">75.6% ★</td><td class="up">+1.9pp</td><td class="up">+42.9pp</td><td>buildNarrativeContext + 임베딩검색 + 기억활용지시</td></tr>
   </tbody>
 </table>
 
@@ -202,22 +214,24 @@
   </div>
 </div>
 
-<div class="section-title">v6 영구기억 전환 핵심 지표</div>
-<table style="max-width: 600px;">
-  <thead><tr><th>지표</th><th>v5-run4</th><th>v6-run1</th><th>변화</th></tr></thead>
+<div class="section-title">버전별 핵심 지표 비교</div>
+<table style="max-width: 800px;">
+  <thead><tr><th>지표</th><th>v5-run4</th><th>v6-run1</th><th>v7-run1</th><th>v7-run2 ★</th></tr></thead>
   <tbody>
-    <tr><td>통과율</td><td class="pass">70.5% (110/156)</td><td class="pass">73.7% (115/156)</td><td class="up">+3.2pp</td></tr>
-    <tr><td>save</td><td>60</td><td>16</td><td class="neutral">-73%</td></tr>
-    <tr><td>skip</td><td>8</td><td class="pass">0</td><td class="up">-100%</td></tr>
-    <tr><td>reinforce</td><td>10</td><td class="pass">61</td><td class="up">+510%</td></tr>
-    <tr><td>Decay/Pruning</td><td>활성</td><td class="pass">비활성</td><td class="up">영구보존</td></tr>
-    <tr><td>왜곡(distortion)</td><td>0건</td><td class="pass">0건</td><td class="neutral">없음</td></tr>
+    <tr><td>통과율</td><td class="pass">70.5% (110)</td><td class="pass">73.7% (115)</td><td class="partial">72.4% (113)</td><td class="pass" style="color:#fbbf24;">75.6% (118)</td></tr>
+    <tr><td>save</td><td>60</td><td>16</td><td>10</td><td>8</td></tr>
+    <tr><td>skip</td><td>8</td><td class="pass">0</td><td>4</td><td>2</td></tr>
+    <tr><td>reinforce</td><td>10</td><td class="pass">61</td><td>62</td><td class="pass" style="color:#fbbf24;">67 ★</td></tr>
+    <tr><td>API 실패</td><td>0</td><td>0</td><td>2턴</td><td>1턴</td></tr>
+    <tr><td>Pro 메모리</td><td class="na">없음</td><td class="na">없음</td><td>기본 관계</td><td class="pass">풍부한 컨텍스트</td></tr>
+    <tr><td>Decay/Pruning</td><td>활성</td><td class="pass">비활성</td><td class="pass">비활성</td><td class="pass">비활성</td></tr>
   </tbody>
 </table>
 
 <p style="margin-top: 32px; color: #64748b; font-size: 12px;">
-  Generated: 2026-02-19 | SYNK Character Chat Memory Test Dashboard<br>
-  v6-run1: 115/156 (73.7%) | save: 16 | reinforce: 61 | skip: 0 | 영구기억 전환 완료<br>
+  Generated: 2026-02-20 | SYNK Character Chat Memory Test Dashboard<br>
+  v7-run2: 118/156 (75.6%) ★역대최고 | save: 8 | reinforce: 67 | skip: 2<br>
+  Pro 디렉팅: buildNarrativeContext + 임베딩검색 + 기억활용지시 적용<br>
   왜곡 사례: 0건 (모든 실패는 "잊음"이지 "틀린 정보" 아님)
 </p>
 

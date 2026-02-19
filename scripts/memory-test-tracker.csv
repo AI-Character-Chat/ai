@@ -4,6 +4,8 @@ v5-run2,2025-02-18,Fix1-4 적용,"ACTION_SUBJECTS 확장+isActionFact 키워드�
 v5-run3,2025-02-18,P1+P2 적용,"계획/예정/일정 ACTION에서 제거+건강심리정보 구체적추출+미래계획 추출대상 추가",70.5%,110/156,58,10,다수,2,8196,"F10 일본여행 개별PASS! F17 적녹색약 완전PASS! F7 고소공포증 여전히 FAIL(강아지와혼동)"
 v5-run4,2025-02-19,Phase2 Fix1-3 적용,"MULTI_VALUE_KEYS(다중값보존)+종합기억나열프롬프트+IDENTITY_SUBJECTS열망추가+ACTION_SUBJECTS희망제거",70.5%,110/156,60,8,다수,10,8946,"F7 고소공포증 PASS! F4/F5 종합PASS! F10 종합B PASS! F24 드럼 여전히 FAIL. 수치동일하나 패턴 크게변화"
 v6-run1,2026-02-19,영구기억 전환,"decay제거+pruning제거+sharedExp캡제거+consolidate원본보존+검색윈도우확대(50→200/100→300)+프롬프트확대",73.7%,115/156,16,0,다수,61,-,"skip 0회(이전8→0). Pruning/Decay 완전제거. reinforce 61회(이전10→61). +3.2pp 개선"
+v7-run1,2026-02-20,Pro메모리컨텍스트v1,"Pro에 getAllRelationships→knownFacts/sharedExp/emotionalHistory 전달",72.4%,113/156,10,4,다수,62,-,"Turn72/78 API타임아웃 2건. Pro기본메모리 전달만으로는 수치 변화 미미. skip 4회 발생"
+v7-run2,2026-02-20,Pro디렉팅강화v2,"buildNarrativeContext+임베딩검색(searchCharacterMemories)+기억활용지시프롬프트+Lost-in-Middle배치최적화",75.6%,118/156,8,2,다수,67,-,"역대최고. reinforce 67회(최고). Turn48 API실패1건. 누적 +42.9pp"
 
 ---팩트별 상세---
 
@@ -54,3 +56,5 @@ v5-run2 (Fix 1-4),62.8%,+30.1pp,노이즈필터+메모리지시+검색확대
 v5-run3 (P1+P2),70.5%,+7.7pp (누적 +37.8pp),건강정보구체화+미래계획추출
 v5-run4 (Phase2 Fix1-3),70.5%,+0.0pp (누적 +37.8pp),"F7완전해결+F4/F5/F10/F19종합개선 but F28/F29퇴보로 상쇄. 질적개선 있으나 수치동일"
 v6-run1 (영구기억),73.7%,+3.2pp (누적 +41.0pp),"decay/pruning 완전제거. skip 0회. reinforce 61회로 기억 강화 대폭 증가"
+v7-run1 (Pro메모리v1),72.4%,-1.3pp (누적 +39.7pp),"Pro에 기본 메모리 전달. API타임아웃 2건으로 수치 하락. 실질 동등"
+v7-run2 (Pro디렉팅강화),75.6%,+1.9pp (누적 +42.9pp),"buildNarrativeContext+임베딩검색+기억활용지시. reinforce 67회 역대최고. 역대최고 통과율"
