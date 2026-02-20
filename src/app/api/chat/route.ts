@@ -394,14 +394,6 @@ export async function PUT(request: NextRequest) {
           send('response_metadata', fullMetadata);
         }
 
-        // DB 저장 (새로고침 시에도 유지, fire-and-forget)
-        if (lastAiMessageId && fullMetadata) {
-          prisma.message.update({
-            where: { id: lastAiMessageId },
-            data: { metadata: JSON.stringify(fullMetadata) },
-          }).catch(e => console.error('[Metadata] save failed:', e));
-        }
-
         // ========== 메모리 처리 (동기 — surprise 결과를 SSE로 전송) ==========
         const memoryResults = await processImmediateMemory({
           sessionId,
@@ -422,6 +414,19 @@ export async function PUT(request: NextRequest) {
 
         if (memoryResults.length > 0) {
           send('memory_update', { results: memoryResults });
+        }
+
+        // DB 저장 (메모리 처리 이후 — memoryUpdateResults + extractedFacts 포함)
+        if (lastAiMessageId && fullMetadata) {
+          const metadataWithMemory = {
+            ...fullMetadata,
+            memoryUpdateResults: memoryResults.length > 0 ? memoryResults : undefined,
+            extractedFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
+          };
+          prisma.message.update({
+            where: { id: lastAiMessageId },
+            data: { metadata: JSON.stringify(metadataWithMemory) },
+          }).catch(e => console.error('[Metadata] save failed:', e));
         }
 
         // AI 응답 요약 (클라이언트가 Pro 분석 요청 시 전달용)
