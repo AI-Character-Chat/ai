@@ -562,6 +562,8 @@ function MemoriesView({ memories }: { memories: MemoryItem[] }) {
 // ============================================================
 
 function RelationshipsView({ relationships }: { relationships: RelationshipItem[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   if (relationships.length === 0) {
     return <div className="text-center text-gray-400 text-sm py-8">관계 데이터 없음</div>;
   }
@@ -583,88 +585,124 @@ function RelationshipsView({ relationships }: { relationships: RelationshipItem[
   };
 
   return (
-    <div className="space-y-4">
-      {relationships.map(r => (
-        <div key={r.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-100 dark:border-gray-700">
-          {/* 캐릭터 헤더 */}
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-bold text-gray-900 dark:text-white">{r.characterName || r.characterId}</h4>
-            <div className="flex gap-2 text-xs">
-              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">
-                {intimacyLabels[r.intimacyLevel] || r.intimacyLevel}
-              </span>
-              <span className="text-gray-400">{r.totalTurns}턴</span>
-              {r.nicknameForUser && (
-                <span className="text-gray-500">호칭: {r.nicknameForUser}</span>
-              )}
-            </div>
-          </div>
-
-          {/* 5축 바 */}
-          <div className="space-y-1.5 mb-3">
-            {axes.map(axis => (
-              <div key={axis.key} className="flex items-center gap-2 text-xs">
-                <span className="w-8 text-gray-500 text-right">{axis.label}</span>
-                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div
-                    className={`${axis.color} h-2 rounded-full transition-all`}
-                    style={{ width: `${r[axis.key]}%` }}
-                  />
+    <div className="space-y-2">
+      {relationships.map(r => {
+        const isExpanded = expandedId === r.id;
+        return (
+          <div key={r.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+            {/* 캐릭터 헤더 (클릭으로 토글) */}
+            <button
+              onClick={() => setExpandedId(isExpanded ? null : r.id)}
+              className="w-full flex items-center justify-between p-3 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <h4 className="font-bold text-gray-900 dark:text-white">{r.characterName || r.characterId}</h4>
+                <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">
+                  {intimacyLabels[r.intimacyLevel] || r.intimacyLevel}
+                </span>
+                {r.nicknameForUser && (
+                  <span className="text-xs text-gray-500">호칭: {r.nicknameForUser}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {/* 축약 5축 수치 */}
+                <div className="hidden sm:flex gap-1.5 text-[10px] text-gray-400">
+                  <span>신뢰{r.trust.toFixed(0)}</span>
+                  <span>호감{r.affection.toFixed(0)}</span>
+                  <span>존경{r.respect.toFixed(0)}</span>
+                  <span>친숙{r.familiarity.toFixed(0)}</span>
                 </div>
-                <span className="w-8 text-gray-400">{r[axis.key].toFixed(0)}</span>
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span>{r.totalTurns}턴</span>
+                  <span>사실 {r.knownFacts.length}</span>
+                </div>
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
-            ))}
+            </button>
+
+            {/* 확장 디테일 */}
+            {isExpanded && (
+              <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700 pt-3 space-y-4">
+                {/* 5축 바 */}
+                <div>
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">관계 5축</div>
+                  <div className="space-y-1.5">
+                    {axes.map(axis => (
+                      <div key={axis.key} className="flex items-center gap-2 text-xs">
+                        <span className="w-8 text-gray-500 text-right">{axis.label}</span>
+                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                          <div
+                            className={`${axis.color} h-2.5 rounded-full transition-all`}
+                            style={{ width: `${r[axis.key]}%` }}
+                          />
+                        </div>
+                        <span className="w-10 text-gray-600 dark:text-gray-300 font-medium">{r[axis.key].toFixed(0)}/100</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* knownFacts */}
+                {r.knownFacts.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                      알고 있는 사실 ({r.knownFacts.length})
+                    </div>
+                    <div className="space-y-1 max-h-60 overflow-y-auto">
+                      {r.knownFacts.map((fact, i) => (
+                        <div key={i} className="text-xs text-gray-700 dark:text-gray-300 pl-2.5 border-l-2 border-green-400 py-0.5">
+                          {fact}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* sharedExperiences */}
+                {r.sharedExperiences.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                      공유 경험 ({r.sharedExperiences.length})
+                    </div>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {r.sharedExperiences.map((exp, i) => (
+                        <div key={i} className="text-xs text-gray-600 dark:text-gray-400 pl-2.5 border-l-2 border-blue-400 py-0.5">
+                          {typeof exp === 'string' ? exp : JSON.stringify(exp)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* emotionalHistory */}
+                {r.emotionalHistory.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                      감정 기록 (최근 {Math.min(r.emotionalHistory.length, 10)}개)
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.emotionalHistory.slice(-10).map((eh, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 rounded">
+                          {eh.emotion} ({(eh.intensity * 100).toFixed(0)}%)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 기타 정보 */}
+                <div className="flex gap-4 text-xs text-gray-400 pt-1 border-t border-gray-200 dark:border-gray-700">
+                  <span>친밀도 점수: {r.intimacyScore.toFixed(1)}</span>
+                  <span>말투: {r.speechStyle === 'formal' ? '존댓말' : r.speechStyle === 'casual' ? '반말' : r.speechStyle === 'intimate' ? '친밀체' : r.speechStyle}</span>
+                  <span>총 대화: {r.totalTurns}턴</span>
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* knownFacts */}
-          {r.knownFacts.length > 0 && (
-            <div className="mb-3">
-              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                알고 있는 사실 ({r.knownFacts.length})
-              </div>
-              <div className="space-y-0.5">
-                {r.knownFacts.map((fact, i) => (
-                  <div key={i} className="text-xs text-gray-700 dark:text-gray-300 pl-2 border-l-2 border-green-400">
-                    {fact}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* sharedExperiences */}
-          {r.sharedExperiences.length > 0 && (
-            <div className="mb-3">
-              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                공유 경험 ({r.sharedExperiences.length})
-              </div>
-              <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                {r.sharedExperiences.map((exp, i) => (
-                  <div key={i} className="text-xs text-gray-600 dark:text-gray-400 pl-2 border-l-2 border-blue-400">
-                    {typeof exp === 'string' ? exp : JSON.stringify(exp)}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* emotionalHistory (최근 5개) */}
-          {r.emotionalHistory.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                감정 기록 (최근 5개)
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {r.emotionalHistory.slice(-5).map((eh, i) => (
-                  <span key={i} className="text-xs px-2 py-0.5 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 rounded">
-                    {eh.emotion} ({(eh.intensity * 100).toFixed(0)}%)
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
