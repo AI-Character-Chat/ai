@@ -129,7 +129,7 @@ export default function ChatContainer() {
         messageType: msg.messageType,
         createdAt: msg.createdAt,
         character: msg.character || null,
-        generatedImageUrl: msg.generatedImageUrl || null,
+        generatedImageUrl: msg.imageUrl || msg.generatedImageUrl || null,
       }));
 
       dispatch({ type: 'LOAD_SESSION', session, messages });
@@ -388,6 +388,9 @@ export default function ChatContainer() {
       // SSE 처리 중 메시지를 누적하기 위한 로컬 배열 (dispatch 사이 시차 문제 방지)
       let localNewMessages: ChatMessage[] = [];
       let lastAiMessageId = '';
+      // 이미지 생성용 데이터 캡처
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let sceneImageData: { presentCharacters?: any[]; characterDialogues?: any[]; sceneUpdate?: any } = {};
 
       while (true) {
         const { value, done } = await reader.read();
@@ -469,6 +472,12 @@ export default function ChatContainer() {
                   dispatch({ type: 'UPDATE_SESSION', session: updatedSess });
                   chatCache.updateSession(parsed.session.id, updatedSess);
                 }
+                // 이미지 생성용 데이터 캡처
+                sceneImageData = {
+                  presentCharacters: parsed.presentCharacters,
+                  characterDialogues: parsed.characterDialogues,
+                  sceneUpdate: parsed.sceneUpdate,
+                };
                 break;
 
               case 'memory_update':
@@ -488,7 +497,6 @@ export default function ChatContainer() {
                 // Pro 분석 트리거 (별도 API — Vercel serverless 타임아웃 회피)
                 if (lastAiMessageId && parsed.aiResponseSummary) {
                   const proMsgId = lastAiMessageId;
-                  // 분석 중 상태 표시
                   dispatch({
                     type: 'SET_PRO_ANALYSIS_METRICS',
                     messageId: proMsgId,
@@ -510,6 +518,72 @@ export default function ChatContainer() {
                       }
                     })
                     .catch(() => {});
+                }
+
+                // 장면 이미지 자동 생성 (Replicate)
+                if (lastAiMessageId && sceneImageData.presentCharacters) {
+                  const imgMsgId = localNewMessages.find(m => m.messageType === 'narrator')?.id || lastAiMessageId;
+                  const narratorText = localNewMessages
+                    .filter(m => m.messageType === 'narrator')
+                    .map(m => m.content)
+                    .join('\n');
+
+                  if (narratorText) {
+                    dispatch({ type: 'ADD_GENERATING_IMAGE', messageId: imgMsgId });
+
+                    const triggerSceneImage = async () => {
+                      try {
+                        const res = await fetch('/api/generate-scene-image', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            sessionId: sendingSessionId,
+                            messageId: imgMsgId,
+                            narratorText,
+                            characterProfiles: sceneImageData.presentCharacters,
+                            characterDialogues: sceneImageData.characterDialogues,
+                            sceneState: sceneImageData.sceneUpdate
+                              ? { location: sceneImageData.sceneUpdate.location, time: sceneImageData.sceneUpdate.time }
+                              : undefined,
+                          }),
+                        });
+
+                        if (!res.ok) throw new Error('Image generation request failed');
+                        const data = await res.json();
+
+                        // 캐시 히트 → 즉시 표시
+                        if (data.imageUrl) {
+                          dispatch({ type: 'UPDATE_MESSAGE_IMAGE', messageId: imgMsgId, imageUrl: data.imageUrl });
+                          dispatch({ type: 'REMOVE_GENERATING_IMAGE', messageId: imgMsgId });
+                          return;
+                        }
+
+                        // 폴링 (3초 간격, 최대 20회 = 60초)
+                        if (data.predictionId) {
+                          for (let i = 0; i < 20; i++) {
+                            await new Promise(r => setTimeout(r, 3000));
+                            const pollRes = await fetch(
+                              `/api/generate-scene-image?predictionId=${data.predictionId}&messageId=${imgMsgId}`
+                            );
+                            if (!pollRes.ok) break;
+                            const pollData = await pollRes.json();
+
+                            if (pollData.status === 'succeeded' && pollData.imageUrl) {
+                              dispatch({ type: 'UPDATE_MESSAGE_IMAGE', messageId: imgMsgId, imageUrl: pollData.imageUrl });
+                              break;
+                            }
+                            if (pollData.status === 'failed') break;
+                          }
+                        }
+                      } catch (e) {
+                        console.error('[SceneImage] 생성 실패:', e);
+                      } finally {
+                        dispatch({ type: 'REMOVE_GENERATING_IMAGE', messageId: imgMsgId });
+                      }
+                    };
+
+                    triggerSceneImage();
+                  }
                 }
                 break;
             }
