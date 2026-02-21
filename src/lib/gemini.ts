@@ -600,13 +600,23 @@ export type StreamEvent =
 
 const REFUSAL_PATTERNS = [
   '서비스 정책을 위반',
-  '응답을 생성할 수 없습니다',
-  '허용되지 않습니다',
+  '서비스 정책',
   '정책 위반',
-  '다른 행동을 알려주세요',
+  '정책을 위반',
+  '응답을 생성할 수 없',
+  '허용되지 않',
+  '허용하지 않',
+  '다른 행동을 알려',
+  '성적인 내용',
+  '성적 콘텐츠',
+  '부적절한 콘텐츠',
+  '부적절한 내용',
   'service policy',
   'cannot generate',
   'not allowed',
+  'inappropriate content',
+  'I cannot',
+  'I\'m unable to',
 ];
 
 function isRefusalContent(content: string): boolean {
@@ -733,7 +743,7 @@ export async function* generateStoryResponseStream(params: {
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: 1024 },  // 최소 사고: 반복 방지 + 맥락 파악 (0→1024)
+      thinkingConfig: { thinkingBudget: 0 },  // thinking 비활성화: 안전성 추론 방지 + 45% 속도 향상
     },
     contents,
   });
@@ -835,16 +845,74 @@ export async function* generateStoryResponseStream(params: {
     }
   }
 
-  // Flash 거부 시 Pro 모델로 자동 재시도
+  // Flash 거부 시 재시도 전략: Flash 1회 더 → Pro 1회
   if (emittedTurns.length === 0 && characters.length > 0) {
-    console.warn('⚠️ Flash 모델 거부/빈 응답 감지, Pro 모델로 재시도...');
+    // 1단계: Flash 자체 재시도 (거부는 확률적이므로 같은 모델 재시도가 효과적)
+    console.warn('⚠️ Flash 빈 응답 감지, Flash 재시도 (1/2)...');
+    try {
+      const flashRetryResult = await ai.models.generateContent({
+        model: MODEL_FLASH,
+        config: {
+          systemInstruction,
+          temperature: 1.0,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+          safetySettings: SAFETY_SETTINGS,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+        contents,
+      });
+
+      const flashRetryText = flashRetryResult.text?.trim();
+      if (flashRetryText) {
+        const flashRetryParsed = JSON.parse(flashRetryText);
+        const flashRetryTurns = (flashRetryParsed.turns || [])
+          .map((raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
+          .filter((t: StoryTurn | null): t is StoryTurn => t !== null && !isRefusalContent(t.content));
+
+        for (const turn of flashRetryTurns) {
+          console.log(`   🔄 Flash 재시도 turn ${emittedTurns.length + 1}: ${turn.type}`);
+          emittedTurns.push(turn);
+          yield { type: 'turn', turn };
+        }
+
+        if (flashRetryParsed.scene) {
+          parsedScene = {
+            location: flashRetryParsed.scene.location || sceneState.location,
+            time: flashRetryParsed.scene.time || sceneState.time,
+            presentCharacters: flashRetryParsed.scene.presentCharacters || sceneState.presentCharacters,
+          };
+        }
+        if (Array.isArray(flashRetryParsed.extractedFacts)) {
+          parsedFacts = flashRetryParsed.extractedFacts.filter((f: unknown) => typeof f === 'string' && f.length > 0);
+        }
+        if (emittedTurns.length > 0) {
+          const flashRetryUsage = flashRetryResult.usageMetadata;
+          if (flashRetryUsage) {
+            lastUsageMetadata = flashRetryUsage;
+            lastFinishReason = (flashRetryResult as any).candidates?.[0]?.finishReason || 'STOP';
+          }
+          console.log(`✅ Flash 재시도 성공 (${emittedTurns.length} turns)`);
+        }
+      }
+    } catch (flashRetryError) {
+      console.warn('⚠️ Flash 재시도 실패:', flashRetryError instanceof Error ? flashRetryError.message : String(flashRetryError));
+    }
+  }
+
+  // 2단계: Flash 재시도도 실패 시 Pro 모델로 폴백
+  if (emittedTurns.length === 0 && characters.length > 0) {
+    console.warn('⚠️ Flash 2회 실패, Pro 모델로 폴백 (2/2)...');
     try {
       const proRetryResult = await ai.models.generateContent({
         model: MODEL_PRO,
         config: {
           systemInstruction,
-          temperature: 0.85,
-          topP: 0.9,
+          temperature: 1.0,
+          topP: 0.95,
           topK: 40,
           maxOutputTokens: 8192,
           responseMimeType: 'application/json',
@@ -863,7 +931,7 @@ export async function* generateStoryResponseStream(params: {
           .filter((t: StoryTurn | null): t is StoryTurn => t !== null && !isRefusalContent(t.content));
 
         for (const turn of proTurns) {
-          console.log(`   🔄 Pro 재시도 turn ${emittedTurns.length + 1}: ${turn.type}`);
+          console.log(`   🔄 Pro 폴백 turn ${emittedTurns.length + 1}: ${turn.type}`);
           emittedTurns.push(turn);
           yield { type: 'turn', turn };
         }
@@ -879,16 +947,15 @@ export async function* generateStoryResponseStream(params: {
           parsedFacts = proParsed.extractedFacts.filter((f: unknown) => typeof f === 'string' && f.length > 0);
         }
 
-        // Pro 메타데이터 업데이트
         const proUsage = proRetryResult.usageMetadata;
         if (proUsage) {
           lastUsageMetadata = proUsage;
           lastFinishReason = (proRetryResult as any).candidates?.[0]?.finishReason || 'STOP';
         }
-        console.log(`✅ Pro 재시도 성공 (${emittedTurns.length} turns)`);
+        console.log(`✅ Pro 폴백 성공 (${emittedTurns.length} turns)`);
       }
     } catch (proError) {
-      console.error('⚠️ Pro 모델 재시도도 실패:', proError instanceof Error ? proError.message : String(proError));
+      console.error('⚠️ Pro 폴백도 실패:', proError instanceof Error ? proError.message : String(proError));
     }
   }
 
