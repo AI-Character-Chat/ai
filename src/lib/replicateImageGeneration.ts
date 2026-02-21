@@ -157,23 +157,24 @@ Convert the scene and character descriptions into Danbooru-style comma-separated
 RULES:
 - Output ONLY comma-separated English tags, no sentences.
 - Start with: masterpiece, best quality, anime illustration
-- For each character, include their SPECIFIC visual features (hair color, hair style, eye color, outfit, accessories) extracted from their description.
-- Include scene/environment tags from the narrator text.
-- Include expression/emotion tags for the characters.
+- The image depicts ONLY the NPC characters listed in "Character Appearances". Do NOT depict the user/protagonist.
+- For each NPC character, include their SPECIFIC visual features (hair color, hair style, eye color, outfit, accessories, body features like cybernetic arms) extracted from their description.
+- Include scene/environment tags from the narrator text (background, location, atmosphere).
+- Include expression/emotion tags for the NPC characters.
 - Include lighting and atmosphere tags.
 - Character count tag: ${characterCountTag}
 - Max 80 tags total. English only.
 - Do NOT output negative prompt.
 - If the scene is NSFW/sexual, use appropriate Danbooru tags naturally.
-- IMPORTANT: Focus on the character's SPECIFIC appearance features, not generic descriptions.`;
+- IMPORTANT: Focus on the NPC character's SPECIFIC appearance features from their description. Generic tags like "anime girl" are not enough — use exact features (e.g., "silver hair", "red eyes", "cybernetic arm", "black coat").`;
 
-  const userPrompt = `Narrator (scene description):
+  const userPrompt = `Scene context (use for background/atmosphere ONLY, do NOT depict the user):
 ${narratorText.substring(0, 600)}
 
-Character Appearances:
+NPC Character Appearances (MAIN SUBJECT of the image — depict these characters):
 ${characterDescriptions || 'No descriptions available'}
 
-Emotions: ${emotionTags || 'neutral'}
+Character Emotions: ${emotionTags || 'neutral'}
 Location: ${sceneState?.location || 'unknown'}
 Time: ${sceneState?.time || 'unknown'}`;
 
