@@ -520,13 +520,11 @@ export default function ChatContainer() {
                     .catch(() => {});
                 }
 
-                // 장면 이미지 자동 생성 (임시 비활성화 — 텍스트 거부 문제 해결 후 재활성화)
-                if (false && lastAiMessageId && sceneImageData.presentCharacters) {
-                  const imgMsgId = localNewMessages.find(m => m.messageType === 'narrator')?.id || lastAiMessageId;
-                  const narratorText = localNewMessages
-                    .filter(m => m.messageType === 'narrator')
-                    .map(m => m.content)
-                    .join('\n');
+                // 장면 이미지 자동 생성 (Replicate) — 첫 번째 나레이션만 사용
+                if (lastAiMessageId && sceneImageData.presentCharacters) {
+                  const firstNarrator = localNewMessages.find(m => m.messageType === 'narrator');
+                  const imgMsgId = firstNarrator?.id || lastAiMessageId;
+                  const narratorText = firstNarrator?.content || '';
 
                   if (narratorText) {
                     dispatch({ type: 'ADD_GENERATING_IMAGE', messageId: imgMsgId });

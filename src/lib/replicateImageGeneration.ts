@@ -141,7 +141,7 @@ export async function buildSDPrompt(
     return tag;
   }).filter(Boolean).join(', ');
 
-  // 캐릭터 외모 묘사 수집
+  // 캐릭터 외모 묘사만 추출 (성격, 말투, 배경 스토리 등 비시각적 정보 제외)
   const characterDescriptions = characterProfiles
     .filter(c => c.prompt)
     .map(c => `[${c.name}]: ${c.prompt!.substring(0, 400)}`)
@@ -152,29 +152,30 @@ export async function buildSDPrompt(
     characterCount === 2 ? '2girls' : `${characterCount}girls`;
 
   const systemPrompt = `You are a Danbooru tag expert for anime image generation (Animagine XL model).
-Convert the scene and character descriptions into Danbooru-style comma-separated tags.
+Convert the FIRST narrator scene into Danbooru-style comma-separated tags.
 
 RULES:
 - Output ONLY comma-separated English tags, no sentences.
 - Start with: masterpiece, best quality, anime illustration
-- The image depicts ONLY the NPC characters listed in "Character Appearances". Do NOT depict the user/protagonist.
-- For each NPC character, include their SPECIFIC visual features (hair color, hair style, eye color, outfit, accessories, body features like cybernetic arms) extracted from their description.
-- Include scene/environment tags from the narrator text (background, location, atmosphere).
+- Depict ONLY the NPC characters, NOT the user/protagonist.
+- From the character descriptions, extract ONLY visual/appearance features:
+  ✅ USE: hair color, hair length, hair style, eye color, skin color, body type, height, outfit, accessories, scars, tattoos, cybernetic parts, wings, horns, etc.
+  ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, age description in words, motivations.
+- The narrator text describes ONE specific scene moment. Convert that single scene into image tags.
 - Include expression/emotion tags for the NPC characters.
-- Include lighting and atmosphere tags.
+- Include scene background tags (location, lighting, atmosphere) from the narrator text.
 - Character count tag: ${characterCountTag}
-- Max 80 tags total. English only.
+- Max 60 tags total. English only.
 - Do NOT output negative prompt.
-- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally.
-- IMPORTANT: Focus on the NPC character's SPECIFIC appearance features from their description. Generic tags like "anime girl" are not enough — use exact features (e.g., "silver hair", "red eyes", "cybernetic arm", "black coat").`;
+- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally.`;
 
-  const userPrompt = `Scene context (use for background/atmosphere ONLY, do NOT depict the user):
-${narratorText.substring(0, 600)}
+  const userPrompt = `Scene (ONE moment to depict):
+${narratorText.substring(0, 300)}
 
-NPC Character Appearances (MAIN SUBJECT of the image — depict these characters):
+NPC Character Visual Features (extract ONLY appearance from these descriptions):
 ${characterDescriptions || 'No descriptions available'}
 
-Character Emotions: ${emotionTags || 'neutral'}
+Emotion: ${emotionTags || 'neutral'}
 Location: ${sceneState?.location || 'unknown'}
 Time: ${sceneState?.time || 'unknown'}`;
 
