@@ -238,20 +238,33 @@ export async function generateSceneImageAsync(params: SceneImageParams): Promise
 
   try {
     // ponynai3 (tPonynai3_v7) — Pony-XL 애니메 특화, score 시스템
-    console.log('[Replicate] ponynai3 모델 사용');
+    // 주 발화자의 profileImage를 img2img 참조로 사용 → 캐릭터 일관성 확보
+    const mainCharacter = characterProfiles[0];
+    const referenceImage = mainCharacter?.profileImage || null;
+
+    const input: Record<string, unknown> = {
+      prompt: sdPrompt,
+      negative_prompt: negativePrompt,
+      width: 1184,
+      height: 864,
+      steps: 35,
+      cfg_scale: 5,
+      scheduler: 'Euler a',
+      prepend_preprompt: true,  // score_9, score_8_up, score_7_up 자동 추가
+      batch_size: 1,
+    };
+
+    if (referenceImage) {
+      input.image = referenceImage;
+      input.strength = 0.6;  // 0=원본유지, 1=완전새로. 0.6=캐릭터 유지 + 장면 변경
+      console.log('[Replicate] img2img 모드 — 참조:', referenceImage.substring(0, 60) + '...');
+    } else {
+      console.log('[Replicate] txt2img 모드 — profileImage 없음');
+    }
+
     const prediction = await replicate.predictions.create({
       version: PONYNAI3_VERSION,
-      input: {
-        prompt: sdPrompt,
-        negative_prompt: negativePrompt,
-        width: 1184,
-        height: 864,
-        steps: 35,
-        cfg_scale: 5,
-        scheduler: 'Euler a',
-        prepend_preprompt: true,  // score_9, score_8_up, score_7_up 자동 추가
-        batch_size: 1,
-      },
+      input,
     });
 
     // pending 캐시 저장
