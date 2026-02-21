@@ -158,16 +158,17 @@ RULES:
 - Do NOT include score tags (score_9 etc.) — they are auto-prepended by the model.
 - Start with: masterpiece, best quality, absurdres
 - Determine gender from character descriptions: use 1boy/1girl/2boys/2girls etc. accordingly. Do NOT default to "girl".
-- There are ${characterCount} NPC character(s). Depict ONLY the NPC characters, NOT the user/protagonist.
+- There are ${characterCount} NPC character(s). The image should be NPC-CENTRIC (focused on the NPC).
+- USER/PROTAGONIST: Use POV perspective (pov, first person view, from above/below) so the camera IS the user. If user's hands/body must appear, add "faceless male" or "faceless female". NEVER show the user's face.
 - From the character descriptions, extract ONLY visual/appearance features using Compel weight syntax for important features:
   ✅ USE with weights: (silver hair:1.3), (red eyes:1.2), (black coat:1.2), scars, tattoos, cybernetic parts, wings, horns
   ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, motivations
-- Include the character's pose/action from the narrator text.
-- Include expression/emotion tags.
-- Include scene background tags (location, lighting, atmosphere).
+- POSE/ACTION is critical: Use specific Danbooru pose tags with HIGH weight (1.3~1.5). Examples: (lying:1.4), (sitting:1.3), (kneeling:1.3), (on back:1.4), (restrained:1.4), (standing:1.3). Avoid abstract descriptions — use concrete body position tags.
+- Include expression/emotion tags with weight.
+- BACKGROUND: Use specific Danbooru location tags with weight. e.g. (neon lights:1.3), (dark room:1.3), (bedroom:1.3), (outdoors:1.2). Avoid vague descriptions — use concrete setting tags.
 - Max 50 tags total. English only.
 - Do NOT output negative prompt.
-- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally (explicit, nipples, nude, etc.).
+- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally and explicitly (explicit, nipples, nude, sex, etc.). Do NOT censor.
 - Use Compel weight syntax: (important_tag:1.3) for emphasis, max weight 1.5.`;
 
   const userPrompt = `Scene (ONE moment to depict):
