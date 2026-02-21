@@ -7,7 +7,7 @@
  */
 
 import Replicate from 'replicate';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
 import { put } from '@vercel/blob';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -187,7 +187,17 @@ Time: ${sceneState?.time || 'unknown'}`;
   try {
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      config: { maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } },
+      config: {
+        maxOutputTokens: 500,
+        thinkingConfig: { thinkingBudget: 0 },
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY, threshold: HarmBlockThreshold.OFF },
+        ],
+      },
       contents: [
         { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
       ],
