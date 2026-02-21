@@ -1,13 +1,11 @@
 /**
- * 이미지 생성 모듈
+ * @deprecated Replicate 기반 replicateImageGeneration.ts로 교체됨
  *
- * 공식 문서: https://ai.google.dev/gemini-api/docs/image-generation
+ * 이 모듈은 Gemini gemini-2.5-flash-image 기반 이미지 생성을 담당했으나,
+ * NSFW 제한 없는 Replicate API로 완전 교체되었습니다.
+ * 유틸 함수(saveBase64Image, 캐시 등)는 새 모듈에서 자체 구현.
  *
- * 핵심 원칙 (공식 문서 기반):
- * 1. 최대 5개 인물 참조 이미지 지원
- * 2. 키워드 나열보다 서술형 묘사가 효과적
- * 3. 각 캐릭터를 명확히 구분하여 설명
- * 4. 프로필 없는 캐릭터는 실루엣/익명으로 표현
+ * 기존 /api/generate-image 엔드포인트에서 아직 참조 중일 수 있음.
  */
 
 import { GoogleGenAI } from '@google/genai';

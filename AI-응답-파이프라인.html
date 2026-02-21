@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SYNK AI 캐릭터 챗 — 응답 파이프라인</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-hover: #273548;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --accent3: #34d399;
+    --accent4: #fb923c;
+    --accent5: #f472b6;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --border: #334155;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  /* 전체 흐름도 */
+  .flow-overview {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2.5rem;
+    border: 1px solid var(--border);
+  }
+  .flow-overview h2 {
+    font-size: 1.3rem;
+    margin-bottom: 1.5rem;
+    color: var(--accent);
+  }
+  .flow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    position: relative;
+  }
+  .flow-step-num {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+  }
+  .flow-step:not(:last-child) .flow-step-num::after {
+    content: '';
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: calc(100% + 12px);
+    background: var(--border);
+  }
+  .flow-step-content {
+    flex: 1;
+    padding-bottom: 1.2rem;
+  }
+  .flow-step-title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+  }
+  .flow-step-desc {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  .c1 { background: #0ea5e9; }
+  .c2 { background: #8b5cf6; }
+  .c3 { background: #6366f1; }
+  .c4 { background: #f59e0b; }
+  .c5 { background: #10b981; }
+  .c6 { background: #ec4899; }
+  .c7 { background: #06b6d4; }
+  .c8 { background: #64748b; }
+
+  /* 상세 섹션 */
+  .section {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+  }
+  .section:hover { border-color: var(--accent); }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.2rem;
+    cursor: pointer;
+  }
+  .section-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .section h2 {
+    font-size: 1.2rem;
+    color: var(--text);
+  }
+  .section h3 {
+    font-size: 1rem;
+    color: var(--accent2);
+    margin: 1.2rem 0 0.6rem;
+    padding-left: 0.5rem;
+    border-left: 3px solid var(--accent2);
+  }
+  .file-badge {
+    display: inline-block;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent);
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border-radius: 20px;
+    margin-bottom: 0.8rem;
+    font-family: monospace;
+  }
+  p { margin-bottom: 0.7rem; font-size: 0.92rem; }
+  .highlight {
+    background: rgba(56, 189, 248, 0.1);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 8px 8px 0;
+    margin: 0.8rem 0;
+    font-size: 0.88rem;
+  }
+  .highlight strong { color: var(--accent); }
+
+  /* 테이블 */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    font-size: 0.85rem;
+  }
+  th {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--accent2);
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    font-weight: 600;
+  }
+  td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+
+  /* 코드/구조 블록 */
+  .struct-block {
+    background: #0c1222;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    overflow-x: auto;
+    margin: 0.8rem 0;
+    color: var(--text-dim);
+  }
+  .struct-block .key { color: var(--accent); }
+  .struct-block .val { color: var(--accent3); }
+  .struct-block .comment { color: #475569; }
+
+  /* JSON 블록 */
+  .json-block {
+    background: #0c1222;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    margin: 0.8rem 0;
+    white-space: pre;
+  }
+  .json-key { color: var(--accent); }
+  .json-str { color: var(--accent3); }
+  .json-num { color: var(--accent4); }
+  .json-comment { color: #475569; font-style: italic; }
+
+  /* 수식 */
+  .formula {
+    background: rgba(129, 140, 248, 0.1);
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    margin: 0.8rem 0;
+    text-align: center;
+    color: var(--accent2);
+  }
+
+  /* 최적화 카드 */
+  .opt-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.8rem;
+    margin-top: 1rem;
+  }
+  .opt-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .opt-card-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+    color: var(--accent3);
+  }
+  .opt-card-desc {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+
+  /* 레벨 바 */
+  .level-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0.3rem 0;
+    font-size: 0.8rem;
+  }
+  .level-bar .bar {
+    height: 6px;
+    border-radius: 3px;
+    flex: 1;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .level-bar .bar-fill {
+    position: absolute;
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .tag-blue { background: rgba(56,189,248,0.2); color: var(--accent); }
+  .tag-purple { background: rgba(129,140,248,0.2); color: var(--accent2); }
+  .tag-green { background: rgba(52,211,153,0.2); color: var(--accent3); }
+  .tag-orange { background: rgba(251,146,60,0.2); color: var(--accent4); }
+  .tag-pink { background: rgba(244,114,182,0.2); color: var(--accent5); }
+
+  footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<h1>SYNK AI 캐릭터 챗</h1>
+<p class="subtitle">유저가 메시지를 보내면 AI가 어떤 과정을 거쳐서 답변하는지, 코드 분석 기반으로 정리한 문서</p>
+
+<!-- ===== 전체 흐름 ===== -->
+<div class="flow-overview">
+  <h2>전체 흐름 한눈에 보기</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="flow-step-num c1">①</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">검증 & 인증</div>
+        <div class="flow-step-desc">로그인 체크, 메시지 길이 검증 (최대 5,000자)</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c2">②</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">컨텍스트 수집 (병렬)</div>
+        <div class="flow-step-desc">대화 히스토리 + 로어북 + 캐릭터 기억 + 유저 페르소나 + 장면 정보</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c3">③</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">프롬프트 조립</div>
+        <div class="flow-step-desc">고정 레이어(캐싱) + 동적 레이어(매 턴 생성)</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c4">④</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">Gemini API 스트리밍 호출</div>
+        <div class="flow-step-desc">gemini-2.5-flash로 JSON 구조화 응답 생성</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c5">⑤</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">응답 파싱 & DB 저장</div>
+        <div class="flow-step-desc">턴 단위 파싱 → Message 저장 → SSE로 실시간 전송</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c6">⑥</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">메모리 후처리</div>
+        <div class="flow-step-desc">관계도 5축 업데이트, 팩트 추출, 놀라움 기반 기억 필터링</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c7">⑦</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">세션 업데이트</div>
+        <div class="flow-step-desc">turnCount, 친밀도, 장면 정보 갱신</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num c8">⑧</div>
+      <div class="flow-step-content">
+        <div class="flow-step-title">백그라운드 작업</div>
+        <div class="flow-step-desc">5턴마다 요약 생성, 기억 통합/승격, 이미지 생성</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 단계 1 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c1">①</div>
+    <h2>검증 & 인증</h2>
+  </div>
+  <span class="file-badge">src/app/api/chat/route.ts (PUT)</span>
+  <p>유저가 메시지를 보내면 <strong>가장 먼저</strong> 일어나는 일이야.</p>
+  <table>
+    <tr><th>체크 항목</th><th>설명</th></tr>
+    <tr><td>로그인 상태</td><td>NextAuth 세션으로 확인</td></tr>
+    <tr><td>메시지 길이</td><td>최대 5,000자까지 허용</td></tr>
+    <tr><td>세션 존재</td><td>sessionId로 채팅 세션 조회</td></tr>
+  </table>
+  <p>여기를 통과하면 본격적으로 AI 응답 생성이 시작돼!</p>
+</div>
+
+<!-- ===== 단계 2 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c2">②</div>
+    <h2>컨텍스트 수집 — "AI한테 뭘 알려줄까?"</h2>
+  </div>
+  <span class="file-badge">src/lib/chat-service.ts → buildChatContext()</span>
+  <p>AI가 좋은 답변을 하려면 <strong>지금 상황을 잘 알아야</strong> 하잖아? 그래서 여러 정보를 <strong>동시에(병렬로)</strong> 가져와.</p>
+
+  <h3>2-1. 대화 히스토리</h3>
+  <span class="file-badge">src/lib/prompt-builder.ts</span>
+  <p>두 가지 전략이 있어:</p>
+  <table>
+    <tr><th>전략</th><th>조건</th><th>방식</th></tr>
+    <tr>
+      <td><span class="tag tag-blue">A: 선택적</span></td>
+      <td>임베딩이 있을 때</td>
+      <td>코사인 유사도로 관련 과거 대화 검색 + 최근 대화 결합</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-purple">B: 최근만</span></td>
+      <td>임베딩 없을 때</td>
+      <td>최근 30개 메시지를 그대로 포맷팅 (50K 토큰 제한)</td>
+    </tr>
+  </table>
+  <div class="highlight">
+    <strong>선택적 히스토리</strong>가 핵심! 예전에 나눈 중요한 대화를 AI가 "기억"하는 것처럼 동작해.
+  </div>
+
+  <h3>2-2. 로어북 필터링</h3>
+  <span class="file-badge">src/lib/prompt-builder.ts → filterActiveLorebookEntries()</span>
+  <p>로어북 항목이 활성화되려면 <strong>4가지 조건</strong>을 모두 만족해야 해:</p>
+  <table>
+    <tr><th>조건</th><th>설명</th></tr>
+    <tr><td>키워드 매칭</td><td>대화 내용에 키워드가 포함되어 있는지</td></tr>
+    <tr><td>최소 친밀도</td><td>캐릭터와 충분히 친해졌는지</td></tr>
+    <tr><td>최소 턴 수</td><td>대화를 충분히 나눴는지</td></tr>
+    <tr><td>필수 캐릭터</td><td>해당 캐릭터가 현재 장면에 있는지</td></tr>
+  </table>
+  <div class="highlight">
+    <strong>연쇄 활성화</strong> 가능! (최대 3라운드) — 항목 A가 켜지면, A 내용의 키워드가 항목 B를 트리거할 수 있어.
+  </div>
+
+  <h3>2-3. 캐릭터 기억 조립</h3>
+  <span class="file-badge">src/lib/narrative-memory.ts → buildNarrativeContext()</span>
+  <p>장면에 있는 <strong>각 캐릭터마다</strong> 기억을 모아:</p>
+
+  <p><strong>관계 상태</strong> (크로스 세션, userId+workId 범위)</p>
+  <table>
+    <tr><th>항목</th><th>내용</th></tr>
+    <tr><td>친밀도 레벨</td><td>stranger → acquaintance → friend → close_friend → intimate</td></tr>
+    <tr><td>5축 모델</td><td>신뢰 / 애정 / 존경 / 경쟁심 / 친숙도 (각 0~100)</td></tr>
+    <tr><td>알고 있는 정보</td><td>사실, 공유 경험, 말투 스타일</td></tr>
+  </table>
+
+  <p><strong>시맨틱 메모리 검색</strong></p>
+  <p>유저 메시지를 벡터로 변환 → CharacterMemory DB에서 유사도 검색 → 상위 10개 선택</p>
+  <div class="formula">
+    순위 = 유사도(70%) + 중요도(20%) + 강도(10%)
+  </div>
+
+  <div class="highlight">
+    <strong>"Lost-in-the-Middle" 방지 배치:</strong><br>
+    [상단] 관계 상태 → [중간] 기억/감정 → [하단] 정체성 사실<br>
+    AI 모델이 프롬프트 중간을 잘 못 읽는 문제를 해결하기 위한 전략이야!
+  </div>
+</div>
+
+<!-- ===== 단계 3 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c3">③</div>
+    <h2>프롬프트 조립 — "AI에게 보내는 최종 지시서"</h2>
+  </div>
+  <span class="file-badge">src/lib/gemini.ts → buildSystemInstruction() + buildContents()</span>
+  <p>프롬프트는 <strong>두 레이어</strong>로 나뉘어:</p>
+
+  <h3>systemInstruction — 고정 레이어 (캐싱됨)</h3>
+  <div class="struct-block">
+<span class="key">┌─ 응답 규칙</span>
+│  ├─ 유저 행동 존중, 서사 연속성 유지
+│  ├─ 턴 구성: 나레이터 + 대사 교환
+│  ├─ 장면 전개: 긴장감 있게 끝내기
+│  ├─ 나레이터 기법: 환경, 감각, 행동
+│  ├─ 대사 규칙: 2~4문장, 반복 금지
+│  └─ 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed
+<span class="key">├─ 세계관 설정</span> <span class="comment">← work.worldSetting</span>
+<span class="key">├─ 캐릭터 페르소나</span> <span class="comment">← {{user}}, {{char}} 치환</span>
+<span class="key">└─ 고정 로어북</span>
+  </div>
+
+  <h3>contents — 동적 레이어 (매 턴 생성)</h3>
+  <div class="struct-block">
+<span class="key">┌─ 유저 페르소나</span> <span class="comment">← 이름, 나이, 성별, 설명</span>
+<span class="key">├─ 캐릭터 기억</span> <span class="comment">← 관계 + 시맨틱 메모리</span>
+<span class="key">├─ 이전 대화 요약</span> <span class="comment">← 장기 기억</span>
+<span class="key">├─ 디렉터 노트</span> <span class="comment">← Pro 분석 (선택적)</span>
+<span class="key">├─ 현재 장면</span> <span class="comment">← 위치, 시간, 등장인물</span>
+<span class="key">├─ 대화 히스토리</span> <span class="comment">← 선택적 or 최근</span>
+<span class="key">└─ 유저 현재 메시지</span> <span class="comment">← 지금 보낸 메시지</span>
+  </div>
+</div>
+
+<!-- ===== 단계 4 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c4">④</div>
+    <h2>Gemini API 스트리밍 호출 — "AI야, 답변해줘!"</h2>
+  </div>
+  <span class="file-badge">src/lib/gemini.ts → generateStoryResponseStream()</span>
+
+  <h3>모델 설정</h3>
+  <table>
+    <tr><th>항목</th><th>값</th><th>의미</th></tr>
+    <tr><td>모델</td><td>gemini-2.5-flash</td><td>빠르고 효율적인 메인 모델</td></tr>
+    <tr><td>temperature</td><td>0.85</td><td>창의적이되 너무 랜덤하지 않게</td></tr>
+    <tr><td>topP / topK</td><td>0.9 / 40</td><td>답변 다양성 조절</td></tr>
+    <tr><td>최대 출력</td><td>8,192 토큰</td><td>충분한 답변 길이</td></tr>
+    <tr><td>응답 형식</td><td>JSON</td><td>구조화된 응답 강제</td></tr>
+    <tr><td>사고 예산</td><td>1,024 토큰</td><td>내부 추론에 쓸 수 있는 양</td></tr>
+  </table>
+
+  <h3>응답 스키마 — AI가 이 형식으로 답해야 함</h3>
+  <div class="json-block">{
+  <span class="json-key">"turns"</span>: [
+    {
+      <span class="json-key">"type"</span>: <span class="json-str">"narrator"</span> or <span class="json-str">"dialogue"</span>,
+      <span class="json-key">"character"</span>: <span class="json-str">"캐릭터이름"</span>,
+      <span class="json-key">"content"</span>: <span class="json-str">"2~4문장의 대사 또는 묘사"</span>,
+      <span class="json-key">"emotion"</span>: <span class="json-str">"smile"</span>,  <span class="json-comment">// 8가지 표정 중 하나</span>
+      <span class="json-key">"emotionIntensity"</span>: <span class="json-num">0.7</span>  <span class="json-comment">// 0.0 ~ 1.0</span>
+    }
+  ],
+  <span class="json-key">"scene"</span>: {
+    <span class="json-key">"location"</span>: <span class="json-str">"카페"</span>,
+    <span class="json-key">"time"</span>: <span class="json-str">"오후 3시"</span>,
+    <span class="json-key">"presentCharacters"</span>: [<span class="json-str">"미나"</span>, <span class="json-str">"하준"</span>]
+  },
+  <span class="json-key">"extractedFacts"</span>: [<span class="json-str">"직업: 대학생"</span>, <span class="json-str">"취미: 게임"</span>]
+}</div>
+
+  <h3>스트리밍 파싱</h3>
+  <p>응답이 한 번에 오는 게 아니라 <strong>조각조각</strong> 와. JSON 중괄호 깊이를 추적하면서, 완성된 턴을 발견하면 <strong>바로</strong> 클라이언트에 전송해.</p>
+
+  <h3>실패 시 대응</h3>
+  <table>
+    <tr><th>상황</th><th>처리 방법</th></tr>
+    <tr><td>토큰 초과로 잘린 응답</td><td><code>repairTruncatedJson()</code>으로 부분 턴 추출</td></tr>
+    <tr><td>JSON 파싱 실패</td><td><code>parseMarkdownFallback()</code>으로 마크다운 포맷 파싱</td></tr>
+  </table>
+</div>
+
+<!-- ===== 단계 5 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c5">⑤</div>
+    <h2>응답 파싱 & DB 저장</h2>
+  </div>
+  <span class="file-badge">src/app/api/chat/route.ts</span>
+  <p>스트림에서 이벤트가 올 때마다 처리해:</p>
+  <table>
+    <tr><th>SSE 이벤트</th><th>내용</th><th>클라이언트 동작</th></tr>
+    <tr><td><span class="tag tag-blue">user_message</span></td><td>유저 메시지 확인</td><td>메시지 표시</td></tr>
+    <tr><td><span class="tag tag-purple">narrator</span></td><td>나레이션 턴</td><td>상황 묘사 표시</td></tr>
+    <tr><td><span class="tag tag-green">character_response</span></td><td>캐릭터 대사</td><td>캐릭터 말풍선 표시</td></tr>
+    <tr><td><span class="tag tag-orange">session_update</span></td><td>세션 상태 동기화</td><td>UI 상태 갱신</td></tr>
+    <tr><td><span class="tag tag-pink">memory_update</span></td><td>놀라움 점수, 관계 변화</td><td>내부 업데이트</td></tr>
+    <tr><td><span class="tag tag-blue">done</span></td><td>스트림 종료</td><td>로딩 해제</td></tr>
+  </table>
+</div>
+
+<!-- ===== 단계 6 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c6">⑥</div>
+    <h2>메모리 후처리 — "이번 대화를 기억에 새기자"</h2>
+  </div>
+  <span class="file-badge">src/lib/narrative-memory.ts → processConversationForMemory()</span>
+  <p>대화가 끝나면 <strong>말한 캐릭터마다</strong> 메모리 처리가 돌아가:</p>
+
+  <h3>6-1. 관계도 업데이트 (5축 모델)</h3>
+  <div class="formula">
+    친밀도 = 애정(35%) + 신뢰(25%) + 친숙도(25%) + 존경(15%) − 경쟁심(10%)
+  </div>
+  <p>친밀도 레벨 자동 전환:</p>
+  <div class="struct-block">
+stranger <span class="val">→</span> acquaintance <span class="val">→</span> friend <span class="val">→</span> close_friend <span class="val">→</span> intimate
+  </div>
+
+  <h3>6-2. 유저 팩트 추출 & 충돌 해결</h3>
+  <table>
+    <tr><th>키 유형</th><th>예시</th><th>동작</th></tr>
+    <tr><td>단일값</td><td>직업, 나이</td><td>새 값으로 교체</td></tr>
+    <tr><td>다중값</td><td>취미, 알레르기, 공포증</td><td>여러 개 허용</td></tr>
+    <tr><td>부정적 팩트</td><td>"모른다", "기억 안 남"</td><td>저장 안 함 (거부)</td></tr>
+  </table>
+
+  <h3>6-3. 캐릭터 기억 저장 — 놀라움 기반 필터</h3>
+  <p>모든 기억을 다 저장하면 너무 많아지니까, <strong>"이 기억이 얼마나 새로운가?"</strong>를 평가해:</p>
+  <table>
+    <tr><th>기존 기억과의 유사도</th><th>처리</th></tr>
+    <tr>
+      <td>≥ 0.90 (거의 같음)</td>
+      <td><span class="tag tag-purple">강화</span> 기존 기억을 보강 (A-MEM 방식)</td>
+    </tr>
+    <tr>
+      <td>0.75 ~ 0.90 (비슷함)</td>
+      <td><span class="tag tag-orange">감쇠</span> 20% 낮은 중요도로 저장하거나 스킵</td>
+    </tr>
+    <tr>
+      <td>< 0.75 (새로움!)</td>
+      <td><span class="tag tag-green">보너스</span> 중요도 +30% 부여하여 저장</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ===== 단계 7 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c7">⑦</div>
+    <h2>세션 업데이트</h2>
+  </div>
+  <span class="file-badge">src/app/api/chat/route.ts</span>
+  <table>
+    <tr><th>항목</th><th>변경</th></tr>
+    <tr><td>turnCount</td><td>+1</td></tr>
+    <tr><td>intimacy</td><td>+0.1 (최대 10)</td></tr>
+    <tr><td>currentLocation</td><td>AI 응답의 장면 위치</td></tr>
+    <tr><td>currentTime</td><td>AI 응답의 장면 시간</td></tr>
+    <tr><td>presentCharacters</td><td>장면 + 대사 캐릭터 병합</td></tr>
+    <tr><td>recentEvents</td><td>요약 추가 (최근 10개)</td></tr>
+  </table>
+</div>
+
+<!-- ===== 단계 8 ===== -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num c8">⑧</div>
+    <h2>백그라운드 작업 (비동기)</h2>
+  </div>
+  <p>메인 응답과 별도로 백그라운드에서 돌아가:</p>
+
+  <h3>매 5턴마다</h3>
+  <table>
+    <tr><th>작업</th><th>설명</th></tr>
+    <tr><td>대화 요약 생성</td><td>Flash 모델로 대화를 요약해서 장기 기억으로 저장</td></tr>
+    <tr><td>기억 통합</td><td>비슷한 일화적 기억들을 의미적 기억으로 묶기</td></tr>
+    <tr><td>기억 승격</td><td>3번 이상 언급된 기억은 중요도 업그레이드</td></tr>
+  </table>
+
+  <h3>이미지 생성 (선택적)</h3>
+  <span class="file-badge">src/lib/imageGeneration.ts</span>
+  <div class="struct-block">
+<span class="key">1.</span> 캐시 체크 <span class="comment">← SHA-256 해시, 7일 TTL</span>
+<span class="key">2.</span> 캐릭터 분류 <span class="comment">← 프로필 있으면 참조, 없으면 실루엣</span>
+<span class="key">3.</span> 감정→시각 매핑 <span class="comment">← FACS 기반 표정</span>
+<span class="key">4.</span> gemini-2.5-flash-image 호출
+<span class="key">5.</span> Vercel Blob에 저장 <span class="comment">← 7일 캐싱</span>
+  </div>
+</div>
+
+<!-- ===== 성능 최적화 ===== -->
+<div class="section">
+  <div class="section-header">
+    <h2>핵심 성능 최적화</h2>
+  </div>
+  <div class="opt-grid">
+    <div class="opt-card">
+      <div class="opt-card-title">병렬 처리</div>
+      <div class="opt-card-desc">인증, DB 쿼리, 메모리 검색을 동시에 실행</div>
+    </div>
+    <div class="opt-card">
+      <div class="opt-card-title">스트리밍 응답</div>
+      <div class="opt-card-desc">전체 응답 기다리지 않고 턴 단위로 즉시 전송</div>
+    </div>
+    <div class="opt-card">
+      <div class="opt-card-title">프롬프트 캐싱</div>
+      <div class="opt-card-desc">systemInstruction은 같은 작품 내에서 재사용</div>
+    </div>
+    <div class="opt-card">
+      <div class="opt-card-title">선택적 히스토리</div>
+      <div class="opt-card-desc">전체가 아닌 관련 있는 과거 대화만 포함</div>
+    </div>
+    <div class="opt-card">
+      <div class="opt-card-title">이미지 캐싱</div>
+      <div class="opt-card-desc">같은 장면은 7일간 재생성하지 않음</div>
+    </div>
+    <div class="opt-card">
+      <div class="opt-card-title">놀라움 필터</div>
+      <div class="opt-card-desc">중복 기억 저장 방지로 스토리지 절약</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  SYNK Character Chat — AI 응답 파이프라인 문서 | 코드 분석 기반으로 생성
+</footer>
+
+</body>
+</html>

@@ -5,30 +5,54 @@
 <title>SYNK Memory Test Dashboard</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
-  h1 { font-size: 24px; margin-bottom: 8px; color: #f8fafc; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 28px; margin-bottom: 4px; color: #f8fafc; }
   .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
-  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
   .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+  .card.highlight { border-color: #f59e0b; box-shadow: 0 0 20px rgba(245, 158, 11, 0.15); }
   .card-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
-  .card-value { font-size: 32px; font-weight: 700; margin-top: 4px; }
+  .card-value { font-size: 36px; font-weight: 700; margin-top: 4px; }
   .card-delta { font-size: 14px; margin-top: 4px; }
   .up { color: #4ade80; }
   .down { color: #f87171; }
   .neutral { color: #94a3b8; }
-  .bar-chart { display: flex; align-items: end; gap: 12px; height: 220px; margin-bottom: 32px; padding: 16px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
-  .bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; }
-  .bar { width: 100%; border-radius: 6px 6px 0 0; min-height: 4px; transition: height 0.5s; }
-  .bar-label { font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center; }
-  .bar-value { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .gold { color: #fbbf24; }
+
+  .section-title { font-size: 20px; font-weight: 600; margin: 32px 0 16px; color: #f8fafc; display: flex; align-items: center; gap: 8px; }
+  .section-title::before { content: ''; width: 4px; height: 24px; background: #3b82f6; border-radius: 2px; }
+  .section-badge { font-size: 11px; background: #1e40af; color: #93c5fd; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+
+  /* Bar Chart */
+  .chart-container { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 20px; margin-bottom: 32px; }
+  .bar-chart { display: flex; align-items: end; gap: 8px; height: 240px; }
+  .bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+  .bar { width: 100%; border-radius: 6px 6px 0 0; min-height: 4px; transition: height 0.5s; position: relative; }
+  .bar:hover { opacity: 0.85; cursor: pointer; }
+  .bar-label { font-size: 10px; color: #94a3b8; margin-top: 8px; text-align: center; line-height: 1.3; }
+  .bar-value { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .bar-divider { border-left: 2px dashed #475569; padding-left: 8px; }
+
+  /* Comparison Chart */
+  .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .comparison-box { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 20px; }
+  .comparison-box h3 { font-size: 15px; color: #94a3b8; margin-bottom: 16px; }
+  .compare-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .compare-label { font-size: 13px; color: #94a3b8; width: 120px; flex-shrink: 0; }
+  .compare-bar-bg { flex: 1; height: 28px; background: #0f172a; border-radius: 6px; position: relative; overflow: hidden; }
+  .compare-bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: 12px; font-weight: 600; transition: width 0.8s ease; }
+  .compare-value { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 600; }
+
+  /* Tables */
   table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
-  th { background: #1e293b; padding: 10px 12px; text-align: left; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155; position: sticky; top: 0; }
+  th { background: #1e293b; padding: 10px 12px; text-align: left; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155; position: sticky; top: 0; z-index: 1; }
   td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 13px; }
   tr:hover td { background: #1e293b; }
   .pass { color: #4ade80; font-weight: 600; }
   .fail { color: #f87171; font-weight: 600; }
   .partial { color: #fbbf24; font-weight: 600; }
   .na { color: #475569; }
+
   .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
   .tag-identity { background: #1e3a5f; color: #60a5fa; }
   .tag-health { background: #3b1f1f; color: #f87171; }
@@ -37,126 +61,396 @@
   .tag-preference { background: #2d1f3b; color: #c084fc; }
   .tag-plan { background: #1f2f3b; color: #67e8f9; }
   .tag-relationship { background: #3b1f2f; color: #fb7185; }
-  .section-title { font-size: 18px; font-weight: 600; margin: 24px 0 12px; color: #f8fafc; }
+
   .failure-type { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid; }
   .failure-type.a { border-color: #4ade80; }
   .failure-type.b { border-color: #fbbf24; }
   .failure-type.c { border-color: #fb923c; }
   .failure-type.d { border-color: #94a3b8; }
+  .failure-title { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+  .failure-desc { font-size: 13px; line-height: 1.6; color: #cbd5e1; }
+
   .improved { background: #0d2818; }
   .regressed { background: #2d0f0f; }
-  .trend-table td:first-child { font-weight: 600; }
+
+  /* Methodology */
+  .methodology { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 20px; margin-bottom: 32px; }
+  .methodology h3 { font-size: 15px; margin-bottom: 12px; }
+  .method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .method-item { font-size: 13px; color: #cbd5e1; padding: 8px 12px; background: #0f172a; border-radius: 8px; }
+  .method-item strong { color: #f8fafc; }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: #334155; }
+  .timeline-item { position: relative; margin-bottom: 16px; padding: 12px 16px; background: #1e293b; border-radius: 8px; }
+  .timeline-item::before { content: ''; position: absolute; left: -20px; top: 16px; width: 10px; height: 10px; border-radius: 50%; }
+  .timeline-item.major::before { background: #3b82f6; }
+  .timeline-item.minor::before { background: #94a3b8; }
+  .timeline-item.best::before { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.5); }
+  .timeline-date { font-size: 11px; color: #64748b; }
+  .timeline-title { font-weight: 600; font-size: 14px; margin: 4px 0; }
+  .timeline-desc { font-size: 12px; color: #94a3b8; }
+
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #1e293b; color: #475569; font-size: 12px; line-height: 1.8; }
+
+  @media (max-width: 768px) {
+    .comparison-grid { grid-template-columns: 1fr; }
+    .method-grid { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>
 
 <h1>SYNK Memory Test Dashboard</h1>
-<p class="subtitle">v5/v6/v7 150-turn memory retention test (30 facts, 156 checks) | v7-parallel completed: 2026-02-20</p>
+<p class="subtitle">v5 ~ v8 Memory Recall Test Results | Updated: 2026-02-20</p>
 
+<!-- Summary Cards -->
 <div class="summary-grid">
-  <div class="card">
-    <div class="card-label">최고 통과율 (v7-parallel-2) ★역대최고</div>
-    <div class="card-value up" style="color: #fbbf24;">77.6%</div>
-    <div class="card-delta up">+44.9pp vs baseline | 121/156</div>
+  <div class="card highlight">
+    <div class="card-label">v8 Stage 2 개선폭 (150턴)</div>
+    <div class="card-value gold">+25.7pp</div>
+    <div class="card-delta up">45.5% -> 71.2% (keep-memory=false)</div>
   </div>
   <div class="card">
-    <div class="card-label">단일 테스트 최고 (v7-run2)</div>
-    <div class="card-value up">75.6%</div>
-    <div class="card-delta up">+42.9pp vs baseline | 118/156</div>
+    <div class="card-label">v8 Stage 1 개선폭 (60턴)</div>
+    <div class="card-value up">+6.1pp</div>
+    <div class="card-delta up">74.1% -> 80.2% (keep-memory=false)</div>
   </div>
   <div class="card">
-    <div class="card-label">병렬 테스트 (3유저 동시)</div>
-    <div class="card-value up">2/3 PASS</div>
-    <div class="card-delta neutral">75.6% / 77.6% / 41.7%</div>
+    <div class="card-label">최고 기록 (keep-memory=true)</div>
+    <div class="card-value gold">77.6%</div>
+    <div class="card-delta neutral">v7-parallel-2 (121/156)</div>
   </div>
   <div class="card">
     <div class="card-label">Baseline (v5-run1)</div>
     <div class="card-value neutral">32.7%</div>
     <div class="card-delta neutral">51/156 (Fix 적용 전)</div>
   </div>
-</div>
-
-<div class="section-title">테스트 이력 비교</div>
-<div class="bar-chart">
-  <div class="bar-group">
-    <div class="bar-value down">32.7%</div>
-    <div class="bar" style="height: 65px; background: linear-gradient(180deg, #f87171, #991b1b);"></div>
-    <div class="bar-label">v5-run1<br><small>Baseline</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value partial">62.8%</div>
-    <div class="bar" style="height: 126px; background: linear-gradient(180deg, #fbbf24, #92400e);"></div>
-    <div class="bar-label">v5-run2<br><small>Fix 1-4</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value up">70.5%</div>
-    <div class="bar" style="height: 141px; background: linear-gradient(180deg, #4ade80, #166534);"></div>
-    <div class="bar-label">v5-run3<br><small>P1+P2</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value up">70.5%</div>
-    <div class="bar" style="height: 141px; background: linear-gradient(180deg, #60a5fa, #1e3a5f);"></div>
-    <div class="bar-label">v5-run4<br><small>Phase2</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value up">73.7%</div>
-    <div class="bar" style="height: 147px; background: linear-gradient(180deg, #a78bfa, #5b21b6);"></div>
-    <div class="bar-label">v6-run1<br><small>영구기억</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value partial">72.4%</div>
-    <div class="bar" style="height: 145px; background: linear-gradient(180deg, #94a3b8, #475569);"></div>
-    <div class="bar-label">v7-run1<br><small>Pro메모리v1</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value up" style="color: #fbbf24;">75.6%</div>
-    <div class="bar" style="height: 151px; background: linear-gradient(180deg, #fbbf24, #f59e0b);"></div>
-    <div class="bar-label">v7-run2<br><small>Pro강화v2</small></div>
-  </div>
-  <div class="bar-group" style="border-left: 2px dashed #475569; padding-left: 12px;">
-    <div class="bar-value up">75.6%</div>
-    <div class="bar" style="height: 151px; background: linear-gradient(180deg, #60a5fa, #3b82f6);"></div>
-    <div class="bar-label">병렬-1<br><small>기존유저</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value up" style="color: #fbbf24;">77.6%</div>
-    <div class="bar" style="height: 155px; background: linear-gradient(180deg, #fbbf24, #eab308);"></div>
-    <div class="bar-label">병렬-2<br><small>★역대최고</small></div>
-  </div>
-  <div class="bar-group">
-    <div class="bar-value down">41.7%</div>
-    <div class="bar" style="height: 83px; background: linear-gradient(180deg, #f87171, #dc2626);"></div>
-    <div class="bar-label">병렬-3<br><small>이상치</small></div>
+  <div class="card">
+    <div class="card-label">총 누적 개선 (150턴)</div>
+    <div class="card-value up">+44.9pp</div>
+    <div class="card-delta neutral">32.7% -> 77.6%</div>
   </div>
 </div>
 
-<div class="section-title">개선 추이</div>
-<table class="trend-table" style="max-width: 700px;">
-  <thead><tr><th>버전</th><th>통과율</th><th>개선폭</th><th>누적</th><th>핵심 변경</th></tr></thead>
+<!-- v8 Fair Comparison -->
+<div class="section-title">v8 공정 비교 (keep-memory=false) <span class="section-badge">NEW</span></div>
+<div class="comparison-grid">
+  <div class="comparison-box">
+    <h3>Stage 1: 60턴 (default 시나리오, 58 checks)</h3>
+    <div class="compare-row">
+      <div class="compare-label">이전 (0.85/0.6)</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 74.1%; background: linear-gradient(90deg, #64748b, #475569);">
+          <span>74.1%</span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label">새코드 Run 1</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 79.3%; background: linear-gradient(90deg, #3b82f6, #2563eb);">
+          <span>79.3%</span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label">새코드 Run 2</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 81%; background: linear-gradient(90deg, #3b82f6, #2563eb);">
+          <span>81.0%</span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label" style="color: #4ade80; font-weight: 600;">중앙값</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 80.2%; background: linear-gradient(90deg, #4ade80, #16a34a);">
+          <span>80.2% (+6.1pp)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="comparison-box">
+    <h3>Stage 2: 150턴 (v5 시나리오, 156 checks)</h3>
+    <div class="compare-row">
+      <div class="compare-label">이전 (0.85/0.6)</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 45.5%; background: linear-gradient(90deg, #64748b, #475569);">
+          <span>45.5%</span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label">새코드 Run 1</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 70.5%; background: linear-gradient(90deg, #3b82f6, #2563eb);">
+          <span>70.5%</span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label">새코드 Run 2</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 71.8%; background: linear-gradient(90deg, #3b82f6, #2563eb);">
+          <span>71.8%</span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label" style="color: #fbbf24; font-weight: 600;">중앙값</div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill" style="width: 71.2%; background: linear-gradient(90deg, #fbbf24, #d97706);">
+          <span>71.2% (+25.7pp)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Historical Bar Chart (keep-memory=true, 150 turns) -->
+<div class="section-title">150턴 통과율 추이 (keep-memory=true)</div>
+<div class="chart-container">
+  <div class="bar-chart">
+    <div class="bar-group">
+      <div class="bar-value down">32.7%</div>
+      <div class="bar" style="height: 78px; background: linear-gradient(180deg, #f87171, #991b1b);" title="v5-run1: 32.7% (51/156)"></div>
+      <div class="bar-label">v5-r1<br><small>Baseline</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value partial">62.8%</div>
+      <div class="bar" style="height: 151px; background: linear-gradient(180deg, #fbbf24, #92400e);" title="v5-run2: 62.8% (98/156)"></div>
+      <div class="bar-label">v5-r2<br><small>Fix1-4</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value up">70.5%</div>
+      <div class="bar" style="height: 169px; background: linear-gradient(180deg, #4ade80, #166534);" title="v5-run3: 70.5% (110/156)"></div>
+      <div class="bar-label">v5-r3<br><small>P1+P2</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value up">70.5%</div>
+      <div class="bar" style="height: 169px; background: linear-gradient(180deg, #60a5fa, #1e3a5f);" title="v5-run4: 70.5% (110/156)"></div>
+      <div class="bar-label">v5-r4<br><small>Phase2</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value up">73.7%</div>
+      <div class="bar" style="height: 177px; background: linear-gradient(180deg, #a78bfa, #5b21b6);" title="v6-run1: 73.7% (115/156)"></div>
+      <div class="bar-label">v6-r1<br><small>영구기억</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value neutral">72.4%</div>
+      <div class="bar" style="height: 174px; background: linear-gradient(180deg, #94a3b8, #475569);" title="v7-run1: 72.4% (113/156)"></div>
+      <div class="bar-label">v7-r1<br><small>Pro v1</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value gold">75.6%</div>
+      <div class="bar" style="height: 181px; background: linear-gradient(180deg, #fbbf24, #f59e0b);" title="v7-run2: 75.6% (118/156)"></div>
+      <div class="bar-label">v7-r2<br><small>Pro v2</small></div>
+    </div>
+    <div class="bar-group bar-divider">
+      <div class="bar-value up">75.6%</div>
+      <div class="bar" style="height: 181px; background: linear-gradient(180deg, #60a5fa, #3b82f6);" title="v7-parallel-1: 75.6% (118/156)"></div>
+      <div class="bar-label">P-1<br><small>기존유저</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value gold">77.6%</div>
+      <div class="bar" style="height: 186px; background: linear-gradient(180deg, #fbbf24, #eab308);" title="v7-parallel-2: 77.6% (121/156) ★역대최고"></div>
+      <div class="bar-label">P-2<br><small>역대최고</small></div>
+    </div>
+    <div class="bar-group">
+      <div class="bar-value down">41.7%</div>
+      <div class="bar" style="height: 100px; background: linear-gradient(180deg, #f87171, #dc2626);" title="v7-parallel-3: 41.7% (65/156) 이상치"></div>
+      <div class="bar-label">P-3<br><small>이상치</small></div>
+    </div>
+  </div>
+</div>
+
+<!-- v8 Fair Comparison Bar Chart -->
+<div class="section-title">v8 공정 비교 차트 (keep-memory=false)</div>
+<div class="chart-container">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <!-- 60-turn -->
+    <div>
+      <div style="text-align: center; font-size: 14px; color: #94a3b8; margin-bottom: 12px;">Stage 1: 60턴</div>
+      <div class="bar-chart" style="height: 180px;">
+        <div class="bar-group">
+          <div class="bar-value neutral">74.1%</div>
+          <div class="bar" style="height: 133px; background: linear-gradient(180deg, #64748b, #334155);" title="기준선: 74.1% (43/58)"></div>
+          <div class="bar-label">기준선<br><small>0.85/0.6</small></div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value up">79.3%</div>
+          <div class="bar" style="height: 143px; background: linear-gradient(180deg, #3b82f6, #1d4ed8);" title="새코드 Run 1: 79.3%"></div>
+          <div class="bar-label">Run 1<br><small>0.90/0.75</small></div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value up">81.0%</div>
+          <div class="bar" style="height: 146px; background: linear-gradient(180deg, #3b82f6, #1d4ed8);" title="새코드 Run 2: 81.0%"></div>
+          <div class="bar-label">Run 2<br><small>0.90/0.75</small></div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value pass">80.2%</div>
+          <div class="bar" style="height: 144px; background: linear-gradient(180deg, #4ade80, #16a34a);" title="중앙값: 80.2% (+6.1pp)"></div>
+          <div class="bar-label">중앙값<br><small>+6.1pp</small></div>
+        </div>
+      </div>
+    </div>
+    <!-- 150-turn -->
+    <div>
+      <div style="text-align: center; font-size: 14px; color: #94a3b8; margin-bottom: 12px;">Stage 2: 150턴</div>
+      <div class="bar-chart" style="height: 180px;">
+        <div class="bar-group">
+          <div class="bar-value fail">45.5%</div>
+          <div class="bar" style="height: 82px; background: linear-gradient(180deg, #64748b, #334155);" title="기준선: 45.5% (71/156)"></div>
+          <div class="bar-label">기준선<br><small>0.85/0.6</small></div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value up">70.5%</div>
+          <div class="bar" style="height: 127px; background: linear-gradient(180deg, #3b82f6, #1d4ed8);" title="새코드 Run 1: 70.5%"></div>
+          <div class="bar-label">Run 1<br><small>0.90/0.75</small></div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value up">71.8%</div>
+          <div class="bar" style="height: 129px; background: linear-gradient(180deg, #3b82f6, #1d4ed8);" title="새코드 Run 2: 71.8%"></div>
+          <div class="bar-label">Run 2<br><small>0.90/0.75</small></div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value gold">71.2%</div>
+          <div class="bar" style="height: 128px; background: linear-gradient(180deg, #fbbf24, #d97706);" title="중앙값: 71.2% (+25.7pp)"></div>
+          <div class="bar-label">중앙값<br><small>+25.7pp</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Improvement Trend Table -->
+<div class="section-title">개선 추이 타임라인</div>
+<table style="max-width: 900px;">
+  <thead><tr><th>버전</th><th>통과율</th><th>개선폭</th><th>누적</th><th>핵심 변경</th><th>테스트 조건</th></tr></thead>
   <tbody>
-    <tr><td>v5-run1</td><td class="fail">32.7%</td><td class="na">-</td><td class="na">-</td><td>원본 (baseline)</td></tr>
-    <tr><td>v5-run2</td><td class="partial">62.8%</td><td class="up">+30.1pp</td><td class="up">+30.1pp</td><td>노이즈 필터 + AI 지시 + limit 확장</td></tr>
-    <tr><td>v5-run3</td><td class="pass">70.5%</td><td class="up">+7.7pp</td><td class="up">+37.8pp</td><td>Plan/Health 추출 개선</td></tr>
-    <tr><td>v5-run4</td><td class="pass">70.5%</td><td class="neutral">+0.0pp</td><td class="up">+37.8pp</td><td>MULTI_VALUE_KEYS + 종합나열 + IDENTITY확장</td></tr>
-    <tr><td>v6-run1</td><td class="pass">73.7%</td><td class="up">+3.2pp</td><td class="up">+41.0pp</td><td>영구기억 (decay/pruning 제거, 검색 확대)</td></tr>
-    <tr><td>v7-run1</td><td class="partial">72.4%</td><td class="down">-1.3pp</td><td class="up">+39.7pp</td><td>Pro 기본 메모리 전달 (API 타임아웃 2건)</td></tr>
-    <tr style="background: #1a2e1a;"><td>v7-run2</td><td class="pass" style="color: #fbbf24;">75.6%</td><td class="up">+1.9pp</td><td class="up">+42.9pp</td><td>buildNarrativeContext + 임베딩검색 + 기억활용지시</td></tr>
-    <tr style="background: #1a1a2e;"><td>v7-parallel</td><td class="pass" style="color: #fbbf24;">77.6% ★</td><td class="up">+2.0pp</td><td class="up">+44.9pp</td><td>3유저 동시접속 (유저2가 역대최고 갱신)</td></tr>
+    <tr><td>v5-run1</td><td class="fail">32.7%</td><td class="na">-</td><td class="na">-</td><td>원본 (baseline)</td><td>150턴, keep=true</td></tr>
+    <tr><td>v5-run2</td><td class="partial">62.8%</td><td class="up">+30.1pp</td><td class="up">+30.1pp</td><td>노이즈 필터 + AI 지시 + limit 확장</td><td>150턴, keep=true</td></tr>
+    <tr><td>v5-run3</td><td class="pass">70.5%</td><td class="up">+7.7pp</td><td class="up">+37.8pp</td><td>Plan/Health 추출 개선</td><td>150턴, keep=true</td></tr>
+    <tr><td>v5-run4</td><td class="pass">70.5%</td><td class="neutral">+0.0pp</td><td class="up">+37.8pp</td><td>MULTI_VALUE_KEYS + 종합나열</td><td>150턴, keep=true</td></tr>
+    <tr><td>v6-run1</td><td class="pass">73.7%</td><td class="up">+3.2pp</td><td class="up">+41.0pp</td><td>영구기억 (decay/pruning 제거)</td><td>150턴, keep=true</td></tr>
+    <tr><td>v7-run1</td><td class="partial">72.4%</td><td class="down">-1.3pp</td><td class="up">+39.7pp</td><td>Pro 기본 메모리 전달</td><td>150턴, keep=true</td></tr>
+    <tr style="background: #1a2e1a;"><td>v7-run2</td><td class="pass">75.6%</td><td class="up">+1.9pp</td><td class="up">+42.9pp</td><td>Pro 디렉팅 강화</td><td>150턴, keep=true</td></tr>
+    <tr style="background: #1a2e1a;"><td>v7-parallel-2</td><td class="gold" style="font-weight:700;">77.6%</td><td class="up">+2.0pp</td><td class="up">+44.9pp</td><td>3유저 동시접속 (역대최고)</td><td>150턴, keep=true</td></tr>
+    <tr style="border-top: 3px solid #334155;"><td colspan="6" style="text-align: center; color: #64748b; font-size: 12px; padding: 8px;">--- 이하 공정 비교 (keep-memory=false, clean start) ---</td></tr>
+    <tr><td>v8-S1 기준선</td><td class="pass">74.1%</td><td class="na">-</td><td class="na">기준선</td><td>이전 코드 (0.85/0.6)</td><td>60턴, keep=false</td></tr>
+    <tr style="background: #1a2e1a;"><td>v8-S1 새코드</td><td class="pass" style="color: #4ade80;">80.2%</td><td class="up">+6.1pp</td><td class="up">+6.1pp</td><td>Surprise 필터 완화 (0.90/0.75)</td><td>60턴, keep=false</td></tr>
+    <tr><td>v8-S2 기준선</td><td class="fail">45.5%</td><td class="na">-</td><td class="na">기준선</td><td>이전 코드 (0.85/0.6)</td><td>150턴, keep=false</td></tr>
+    <tr style="background: #1a2e1a;"><td>v8-S2 새코드</td><td class="pass" style="color: #fbbf24;">71.2%</td><td class="up" style="font-size: 15px; font-weight: 700;">+25.7pp</td><td class="up">+25.7pp</td><td>Surprise 필터 완화 (0.90/0.75)</td><td>150턴, keep=false</td></tr>
   </tbody>
 </table>
 
+<!-- Key Insight -->
+<div class="failure-type a" style="border-color: #3b82f6; margin-bottom: 32px;">
+  <div class="failure-title" style="color: #60a5fa;">핵심 인사이트: 장기 대화에서 4배 효과</div>
+  <div class="failure-desc">
+    60턴에서는 +6.1pp 개선이지만, 150턴에서는 +25.7pp로 효과가 <strong>4배 이상 극대화</strong>됨.<br>
+    이전 코드의 skip zone(0.6~0.85)이 너무 넓어서, 대화가 길어질수록 기존 기억과의 유사도가 높아져 새 기억 저장이 점점 어려워졌음.<br>
+    새 코드는 save zone을 넓히고(&lt;0.75) skip 조건을 완화(imp&lt;0.4)하여 다양한 에피소드를 지속 저장.
+  </div>
+</div>
+
+<!-- Surprise Filter Before/After -->
+<div class="section-title">v8 Surprise 필터 변경 상세</div>
+<table style="max-width: 700px;">
+  <thead><tr><th>파라미터</th><th>이전 (0.85/0.6)</th><th>변경 후 (0.90/0.75)</th><th>효과</th></tr></thead>
+  <tbody>
+    <tr><td>Reinforce 임계값</td><td>&gt;= 0.85</td><td class="pass">&gt;= 0.90</td><td>진짜 중복만 강화</td></tr>
+    <tr><td>Skip zone</td><td>0.6 ~ 0.85</td><td class="pass">0.75 ~ 0.90</td><td>skip 범위 60% 축소</td></tr>
+    <tr><td>Skip 조건 (importance)</td><td>&lt; 0.7</td><td class="pass">&lt; 0.4</td><td>기본 imp 0.5가 저장됨</td></tr>
+    <tr><td>Save zone</td><td>&lt; 0.6</td><td class="pass">&lt; 0.75</td><td>더 다양한 에피소드 저장</td></tr>
+    <tr><td>Dampening</td><td>30%</td><td class="pass">20%</td><td>유사 기억 감쇠 완화</td></tr>
+  </tbody>
+</table>
+
+<!-- Parallel Test -->
+<div class="section-title">병렬 스트레스 테스트 (3유저 동시접속)</div>
+<table style="max-width: 800px;">
+  <thead><tr><th>유저</th><th>통과율</th><th>통과/전체</th><th>save</th><th>skip</th><th>reinforce</th><th>유형</th><th>비고</th></tr></thead>
+  <tbody>
+    <tr><td>유저1</td><td class="pass">75.6%</td><td>118/156</td><td>10</td><td>5</td><td>55</td><td>기존</td><td>v7-run2와 동일 통과율</td></tr>
+    <tr style="background: #1a2e1a;"><td>유저2</td><td class="gold" style="font-weight: 700;">77.6%</td><td>121/156</td><td>60</td><td>4</td><td>6</td><td>신규</td><td>역대 최고 기록</td></tr>
+    <tr style="background: #2d0f0f;"><td>유저3</td><td class="fail">41.7%</td><td>65/156</td><td>37</td><td>3</td><td>24</td><td>신규</td><td>이상치 (Flash 비결정적)</td></tr>
+    <tr style="border-top: 2px solid #334155;"><td><strong>중앙값</strong></td><td class="pass">75.6%</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>2/3 유저 75%+ 달성</td></tr>
+  </tbody>
+</table>
+
+<!-- Version Comparison -->
+<div class="section-title">버전별 핵심 지표 비교</div>
+<table style="max-width: 900px;">
+  <thead><tr><th>지표</th><th>v5-run4</th><th>v6-run1</th><th>v7-run2</th><th>v8 (60턴)</th><th>v8 (150턴)</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>통과율</td>
+      <td class="pass">70.5%</td>
+      <td class="pass">73.7%</td>
+      <td class="gold">75.6%</td>
+      <td class="pass">80.2%</td>
+      <td class="pass">71.2%</td>
+    </tr>
+    <tr>
+      <td>테스트 조건</td>
+      <td>150턴/keep=T</td>
+      <td>150턴/keep=T</td>
+      <td>150턴/keep=T</td>
+      <td>60턴/keep=F</td>
+      <td>150턴/keep=F</td>
+    </tr>
+    <tr>
+      <td>save</td>
+      <td>60</td>
+      <td>16</td>
+      <td>8</td>
+      <td>41 (avg)</td>
+      <td>64 (avg)</td>
+    </tr>
+    <tr>
+      <td>skip</td>
+      <td>8</td>
+      <td class="pass">0</td>
+      <td>2</td>
+      <td>2.5 (avg)</td>
+      <td>6.5 (avg)</td>
+    </tr>
+    <tr>
+      <td>reinforce</td>
+      <td>10</td>
+      <td>61</td>
+      <td class="gold">67</td>
+      <td>1</td>
+      <td>4.5 (avg)</td>
+    </tr>
+    <tr>
+      <td>Decay/Pruning</td>
+      <td>활성</td>
+      <td class="pass">비활성</td>
+      <td class="pass">비활성</td>
+      <td class="pass">비활성</td>
+      <td class="pass">비활성</td>
+    </tr>
+    <tr>
+      <td>Surprise 필터</td>
+      <td>0.85/0.6</td>
+      <td>0.85/0.6</td>
+      <td>0.85/0.6</td>
+      <td class="pass">0.90/0.75</td>
+      <td class="pass">0.90/0.75</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Fact Recall Table -->
 <div class="section-title">팩트별 회상 결과 (30 Facts)</div>
 <table>
   <thead>
-    <tr>
-      <th>ID</th>
-      <th>내용</th>
-      <th>카테고리</th>
-      <th>v5-run3</th>
-      <th>v5-run4</th>
-      <th>v6-run1</th>
-      <th>변화</th>
-    </tr>
+    <tr><th>ID</th><th>내용</th><th>카테고리</th><th>v5-r3</th><th>v5-r4</th><th>v6</th><th>변화</th></tr>
   </thead>
   <tbody>
     <tr><td>F1</td><td>이름: 김민수</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
@@ -165,9 +459,9 @@
     <tr class="improved"><td>F4</td><td>고양이 나비(검은)</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">보충PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
     <tr class="improved"><td>F5</td><td>고양이 초코(치즈태비)</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">보충PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
     <tr><td>F6</td><td>초콜릿 알레르기</td><td><span class="tag tag-health">Health</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
-    <tr class="improved"><td>F7</td><td>고소공포증</td><td><span class="tag tag-health">Health</span></td><td class="fail">FAIL(혼동)</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">해결</td></tr>
+    <tr class="improved"><td>F7</td><td>고소공포증</td><td><span class="tag tag-health">Health</span></td><td class="fail">FAIL</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">해결</td></tr>
     <tr><td>F8</td><td>여동생 수진/심리학</td><td><span class="tag tag-family">Family</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
-    <tr><td>F9</td><td>게임장르 RPG->로그라이크</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">교정OK</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
+    <tr><td>F9</td><td>RPG->로그라이크</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">교정OK</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
     <tr class="improved"><td>F10</td><td>일본여행(도쿄/교토)</td><td><span class="tag tag-plan">Plan</span></td><td class="partial">개별PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="up">개선</td></tr>
     <tr><td>F11</td><td>밴드/기타</td><td><span class="tag tag-hobby">Hobby</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
     <tr><td>F12</td><td>김치찌개</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
@@ -186,14 +480,14 @@
     <tr><td>F25</td><td>생일 9/23</td><td><span class="tag tag-identity">Identity</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
     <tr><td>F26</td><td>고향 부산</td><td><span class="tag tag-identity">Identity</span></td><td class="partial">개별PASS</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
     <tr><td>F27</td><td>형 민호/의사</td><td><span class="tag tag-family">Family</span></td><td class="pass">PASS</td><td class="pass">PASS</td><td class="pass">PASS</td><td class="neutral">유지</td></tr>
-    <tr><td>F28</td><td>가을</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="down">퇴보</td></tr>
-    <tr><td>F29</td><td>졸업작품 게임</td><td><span class="tag tag-plan">Plan</span></td><td class="partial">보충PASS</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="down">퇴보</td></tr>
+    <tr class="regressed"><td>F28</td><td>가을</td><td><span class="tag tag-preference">Preference</span></td><td class="pass">PASS</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="down">퇴보</td></tr>
+    <tr class="regressed"><td>F29</td><td>졸업작품 게임</td><td><span class="tag tag-plan">Plan</span></td><td class="partial">보충PASS</td><td class="fail">FAIL</td><td class="fail">FAIL</td><td class="down">퇴보</td></tr>
     <tr><td>F30</td><td>신라면</td><td><span class="tag tag-preference">Preference</span></td><td class="partial">언급</td><td class="partial">부분</td><td class="partial">부분</td><td class="neutral">유지</td></tr>
   </tbody>
 </table>
 
-<div class="section-title">실패 유형 분류 (v6-run1 기준)</div>
-
+<!-- Failure Types -->
+<div class="section-title">실패 유형 분류</div>
 <div class="failure-type a">
   <div class="failure-title">Type A: 완전실패 -> 해결 (1건)</div>
   <div class="failure-desc">
@@ -201,74 +495,64 @@
     원인: resolveFactConflicts()에서 동일 key "공포증" 값을 덮어쓰기. 해결: 다중값 카테고리는 APPEND.
   </div>
 </div>
-
 <div class="failure-type b">
   <div class="failure-title">Type B: 종합실패 - 개별 OK / 종합 FAIL (3건)</div>
   <div class="failure-desc">
     <strong>F13(왼손), F14(미국), F26(부산)</strong> - 개별 질문 시 PASS하지만, "아는 거 전부 말해봐" 종합 질문 시 누락됨.<br>
-    v5-run4에서 F4/F5/F10/F19는 종합PASS로 개선되었으나 이 3건은 여전히 종합FAIL.<br>
     Flash 모델이 30+개 팩트 중 일부를 선택적으로 생략하는 어텐션 한계.
   </div>
 </div>
-
 <div class="failure-type c">
   <div class="failure-title">Type C: 부분실패 - 핵심 OK / 디테일 누락 (3건)</div>
   <div class="failure-desc">
-    <strong>F9(로그라이크)</strong> - 교정 후 PASS하나 종합에서 누락.<br>
-    <strong>F17(적녹색약)</strong> - 개별 PASS / 종합 FAIL.<br>
-    <strong>F30(신라면)</strong> - 종합에서 언급은 되나 키워드 매칭 문제.
+    <strong>F9(로그라이크), F17(적녹색약), F30(신라면)</strong> - 핵심은 기억하나 세부 디테일이 누락되거나 키워드 매칭 문제.
   </div>
 </div>
-
 <div class="failure-type d">
   <div class="failure-title">Type D: 지속실패 - 추출/회상 안 됨 (4건)</div>
   <div class="failure-desc">
-    <strong>F24(드럼)</strong> - Fix3 적용에도 추출 자체 안됨. AI가 "배우고 싶은 것:" 형식으로 추출 안 하는 문제.<br>
-    <strong>F23(수학)</strong> - 추출/검증 모두 불안정.<br>
-    <strong>F28(가을)</strong> - v5-run3 PASS -> v5-run4부터 FAIL (퇴보).<br>
-    <strong>F29(졸업작품)</strong> - v5-run3 보충PASS -> v5-run4부터 FAIL (퇴보).
+    <strong>F24(드럼), F23(수학), F28(가을), F29(졸업작품)</strong> - 추출 자체 안 되거나 v5-run3에서 퇴보 후 미복구.
   </div>
 </div>
 
-<div class="section-title">병렬 스트레스 테스트 (3유저 동시접속)</div>
-<table style="max-width: 800px;">
-  <thead><tr><th>유저</th><th>통과율</th><th>통과/전체</th><th>save</th><th>skip</th><th>reinforce</th><th>유형</th><th>비고</th></tr></thead>
-  <tbody>
-    <tr><td>유저1</td><td class="pass">75.6%</td><td>118/156</td><td>10</td><td>5</td><td>55</td><td>기존</td><td>v7-run2와 동일 통과율</td></tr>
-    <tr style="background: #1a2e1a;"><td>유저2</td><td class="pass" style="color: #fbbf24;">77.6% ★</td><td>121/156</td><td>60</td><td>4</td><td>6</td><td>신규</td><td>역대 최고 기록 갱신</td></tr>
-    <tr style="background: #2d0f0f;"><td>유저3</td><td class="fail">41.7%</td><td>65/156</td><td>37</td><td>3</td><td>24</td><td>신규</td><td>이상치 — Gemini Flash 비결정적 응답</td></tr>
-    <tr style="border-top: 2px solid #334155;"><td><strong>평균</strong></td><td>64.9%</td><td>101/156</td><td>36</td><td>4</td><td>28</td><td>-</td><td>중앙값: 75.6%</td></tr>
-  </tbody>
-</table>
-<div class="failure-type b" style="margin-top: 12px;">
-  <div class="failure-title">분석: 유저3 이상치 원인</div>
-  <div class="failure-desc">
-    API 실패 0건 — 네트워크/서버 문제 아님. Gemini Flash의 비결정적(non-deterministic) 특성으로 인해<br>
-    동일 프롬프트+메모리에서도 기억 활용 품질이 크게 달라질 수 있음. 2/3 유저(66.7%)가 75%+ 달성.
+<!-- Test Methodology -->
+<div class="section-title">테스트 방법론</div>
+<div class="methodology">
+  <h3 style="color: #f8fafc;">2단계 검증 프로토콜</h3>
+  <div class="method-grid">
+    <div class="method-item">
+      <strong>Stage 1 (빠른 검증)</strong><br>
+      60턴, default 시나리오, 58 checks<br>
+      ~10분/회, 2회 실행, 중앙값 채택<br>
+      통과 기준: 기준선 대비 +3pp
+    </div>
+    <div class="method-item">
+      <strong>Stage 2 (최종 확인)</strong><br>
+      150턴, v5 시나리오, 156 checks<br>
+      ~30분/회, 2회 실행, 중앙값 채택<br>
+      통과 기준: 기준선 대비 +2pp
+    </div>
+    <div class="method-item">
+      <strong>공정성 보장</strong><br>
+      keep-memory=false (항상 초기화)<br>
+      동일 시나리오/유저/서버<br>
+      한 번에 하나만 변경
+    </div>
+    <div class="method-item">
+      <strong>현재 기준선</strong><br>
+      60턴: 80.2% (v8 새코드)<br>
+      150턴: 71.2% (v8 새코드)<br>
+      다음 변경 시 이 값이 기준
+    </div>
   </div>
 </div>
 
-<div class="section-title">버전별 핵심 지표 비교</div>
-<table style="max-width: 800px;">
-  <thead><tr><th>지표</th><th>v5-run4</th><th>v6-run1</th><th>v7-run1</th><th>v7-run2 ★</th></tr></thead>
-  <tbody>
-    <tr><td>통과율</td><td class="pass">70.5% (110)</td><td class="pass">73.7% (115)</td><td class="partial">72.4% (113)</td><td class="pass" style="color:#fbbf24;">75.6% (118)</td></tr>
-    <tr><td>save</td><td>60</td><td>16</td><td>10</td><td>8</td></tr>
-    <tr><td>skip</td><td>8</td><td class="pass">0</td><td>4</td><td>2</td></tr>
-    <tr><td>reinforce</td><td>10</td><td class="pass">61</td><td>62</td><td class="pass" style="color:#fbbf24;">67 ★</td></tr>
-    <tr><td>API 실패</td><td>0</td><td>0</td><td>2턴</td><td>1턴</td></tr>
-    <tr><td>Pro 메모리</td><td class="na">없음</td><td class="na">없음</td><td>기본 관계</td><td class="pass">풍부한 컨텍스트</td></tr>
-    <tr><td>Decay/Pruning</td><td>활성</td><td class="pass">비활성</td><td class="pass">비활성</td><td class="pass">비활성</td></tr>
-  </tbody>
-</table>
-
-<p style="margin-top: 32px; color: #64748b; font-size: 12px;">
-  Generated: 2026-02-20 | SYNK Character Chat Memory Test Dashboard<br>
-  v7-parallel-2: 121/156 (77.6%) ★역대최고 | 3유저 동시접속 병렬 테스트<br>
-  v7-run2 단일: 118/156 (75.6%) | save: 8 | reinforce: 67 | skip: 2<br>
-  Pro 디렉팅: buildNarrativeContext + 임베딩검색 + 기억활용지시 적용<br>
-  병렬 테스트: 2/3 유저 75%+ (중앙값 75.6%) | 누적 개선: 32.7% → 77.6% (+44.9pp)
-</p>
+<div class="footer">
+  Generated: 2026-02-20 | SYNK Character Chat Memory Test Dashboard v3<br>
+  v5 ~ v8 전체 이력 포함 | 총 12회 테스트 + 3유저 병렬 테스트<br>
+  v8 공정 비교: Stage 1 +6.1pp (74.1->80.2%) | Stage 2 +25.7pp (45.5->71.2%)<br>
+  최고 기록 (keep=true): 77.6% (v7-parallel-2) | 누적 개선: 32.7% -> 77.6% (+44.9pp)
+</div>
 
 </body>
 </html>

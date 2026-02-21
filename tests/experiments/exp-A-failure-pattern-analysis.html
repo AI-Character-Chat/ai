@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Experiment A: 지속 실패 팩트 원인 분석</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; max-width: 1200px; margin: 0 auto; line-height: 1.7; }
+  h1 { font-size: 26px; color: #f8fafc; margin-bottom: 4px; }
+  h2 { font-size: 20px; color: #f8fafc; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #334155; }
+  h3 { font-size: 16px; color: #cbd5e1; margin: 20px 0 12px; }
+  .meta { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+  p { margin-bottom: 12px; font-size: 14px; color: #cbd5e1; }
+  strong { color: #f8fafc; }
+  code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #fbbf24; }
+
+  .summary-box { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #334155; }
+  .summary-box h3 { margin-top: 0; color: #f8fafc; }
+
+  /* Pipeline */
+  .pipeline { display: flex; gap: 4px; margin: 16px 0; flex-wrap: wrap; }
+  .pipe-stage { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-align: center; flex: 1; min-width: 120px; }
+  .pipe-ok { background: #166534; color: #4ade80; }
+  .pipe-fail { background: #991b1b; color: #fca5a5; }
+  .pipe-warn { background: #92400e; color: #fbbf24; }
+  .pipe-na { background: #1e293b; color: #64748b; border: 1px dashed #475569; }
+  .pipe-arrow { display: flex; align-items: center; color: #475569; font-size: 18px; }
+
+  /* Fact Card */
+  .fact-card { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 24px; border-left: 4px solid; }
+  .fact-card.critical { border-color: #f87171; }
+  .fact-card.resolved { border-color: #4ade80; }
+  .fact-card.partial { border-color: #fbbf24; }
+  .fact-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .fact-id { font-size: 18px; font-weight: 700; }
+  .fact-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-fail { background: #450a0a; color: #fca5a5; }
+  .badge-pass { background: #052e16; color: #86efac; }
+  .badge-intermittent { background: #451a03; color: #fed7aa; }
+
+  .fact-input { background: #0f172a; padding: 12px 16px; border-radius: 8px; margin: 12px 0; font-size: 14px; }
+  .fact-input .turn { color: #64748b; font-size: 12px; }
+  .fact-input .msg { color: #e2e8f0; margin-top: 4px; }
+
+  /* Evidence Table */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th { background: #0f172a; padding: 8px 12px; text-align: left; font-size: 12px; color: #94a3b8; border-bottom: 2px solid #334155; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 13px; }
+  .ok { color: #4ade80; font-weight: 600; }
+  .fail { color: #f87171; font-weight: 600; }
+  .warn { color: #fbbf24; font-weight: 600; }
+  .na { color: #475569; }
+
+  /* Root Cause */
+  .root-cause { background: #0f172a; border-radius: 8px; padding: 16px; margin: 12px 0; border-left: 3px solid; }
+  .root-cause.extraction { border-color: #f87171; }
+  .root-cause.classification { border-color: #fb923c; }
+  .root-cause.retrieval { border-color: #fbbf24; }
+  .root-cause.utilization { border-color: #a78bfa; }
+  .root-cause-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .rc-extraction { color: #f87171; }
+  .rc-classification { color: #fb923c; }
+  .rc-retrieval { color: #fbbf24; }
+  .rc-utilization { color: #a78bfa; }
+
+  /* Action Items */
+  .action-item { display: flex; gap: 12px; padding: 12px 16px; background: #0f172a; border-radius: 8px; margin: 8px 0; }
+  .action-priority { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; height: fit-content; }
+  .p1 { background: #991b1b; color: #fca5a5; }
+  .p2 { background: #92400e; color: #fbbf24; }
+  .p3 { background: #1e3a5f; color: #93c5fd; }
+  .action-content { flex: 1; }
+  .action-title { font-weight: 600; font-size: 14px; color: #f8fafc; margin-bottom: 4px; }
+  .action-desc { font-size: 13px; color: #94a3b8; }
+
+  /* Diagram */
+  .diagram { background: #0f172a; border-radius: 12px; padding: 20px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; color: #94a3b8; overflow-x: auto; }
+  .diagram .highlight { color: #fbbf24; font-weight: 600; }
+  .diagram .error { color: #f87171; font-weight: 600; }
+  .diagram .success { color: #4ade80; }
+
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #1e293b; color: #475569; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Experiment A: 지속 실패 팩트 파이프라인 분석</h1>
+<p class="meta">Date: 2026-02-20 | Version: v8 (0.90/0.75) | Data: 3 test reports (150-turn, keep-memory=false)</p>
+
+<!-- Executive Summary -->
+<div class="summary-box">
+  <h3>Executive Summary</h3>
+  <p>
+    지속 실패로 분류된 4개 팩트(F23, F24, F28, F29)를 메모리 파이프라인 5단계
+    (<strong>추출 > 분류 > 저장 > 검색 > 활용</strong>)에서 추적한 결과,
+    실패 원인이 <strong>각각 다른 단계</strong>에 있음을 발견했습니다.
+  </p>
+  <table style="margin-top: 12px;">
+    <thead><tr><th>팩트</th><th>실패 단계</th><th>근본 원인</th><th>현재 상태</th></tr></thead>
+    <tbody>
+      <tr><td>F23 수학 싫어</td><td class="warn">활용 (Stage 5)</td><td>Flash가 "싫어하는 것"을 종합 응답에서 누락</td><td class="warn">간헐적 실패</td></tr>
+      <tr><td>F24 드럼 배우고싶음</td><td class="fail">추출 (Stage 1)</td><td>AI가 "~할까 해"를 일시적 의향으로 판단, 추출 안 함</td><td class="fail">2/3 실패</td></tr>
+      <tr><td>F28 가을</td><td class="ok">-</td><td>v8 clean-start에서 해결됨 (이전 keep=true 테스트 오류)</td><td class="ok">해결</td></tr>
+      <tr><td>F29 졸업작품 게임</td><td class="warn">검색 (Stage 4)</td><td>111턴 후 임베딩 검색에서 순위 밀림</td><td class="warn">간헐적 실패</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Pipeline Diagram -->
+<h2>메모리 파이프라인 구조</h2>
+<div class="diagram">
+<span class="highlight">유저 메시지</span>
+    |
+    v
+<span class="highlight">[Stage 1: 추출]</span> Gemini Flash가 "주제: 내용" 형식으로 팩트 추출
+    |                    - extractedFacts 배열에 기록
+    |                    - 일시적 감정/상황은 제외 (빈 배열 [])
+    v
+<span class="highlight">[Stage 2: 분류]</span> Identity vs Action 분류
+    |                    - Identity: knownFacts에 저장 (영구 프로필)
+    |                    - Action: sharedExperiences에 저장 (에피소드)
+    v
+<span class="highlight">[Stage 3: 저장]</span> DB에 기록 + Surprise 필터
+    |                    - 임베딩 생성 > 유사도 비교 > save/skip/reinforce
+    |                    - CharacterMemory (에피소드) + CharacterRelationship (프로필)
+    v
+<span class="highlight">[Stage 4: 검색]</span> 질문 시 관련 기억 검색
+    |                    - 임베딩 유사도 Top-K 검색
+    |                    - knownFacts는 전체 로드, characterMemory는 검색
+    v
+<span class="highlight">[Stage 5: 활용]</span> Flash가 검색된 기억을 응답에 포함
+                         - 프롬프트에 주입된 기억을 참고하여 자연어 응답 생성
+</div>
+
+<!-- ===================== F24 (CRITICAL) ===================== -->
+<h2>F24: 드럼 배우고싶음</h2>
+<div class="fact-card critical">
+  <div class="fact-header">
+    <span class="fact-id">F24</span>
+    <span class="fact-badge badge-fail">EXTRACTION FAILURE</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 32 (v5 시나리오) / Turn 35 (실제 입력 순서)</div>
+    <div class="msg">"밴드 다시 하고 싶어. 이번엔 <strong>드럼 배워볼까 해</strong>."</div>
+  </div>
+
+  <h3>파이프라인 단계별 추적 (3회 테스트)</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-fail">1. 추출<br><small>2/3 실패</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">2. 분류<br><small>미도달</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">3. 저장<br><small>미도달</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">4. 검색<br><small>미도달</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">5. 활용<br><small>미도달</small></div>
+  </div>
+
+  <h3>증거 데이터</h3>
+  <table>
+    <thead><tr><th>테스트</th><th>추출 결과</th><th>surprise</th><th>importance</th><th>처리</th><th>검증 결과</th></tr></thead>
+    <tbody>
+      <tr><td>Report 1 (기준선/이전코드)</td><td class="warn">추출됨 (2개)</td><td>0.20</td><td>0.50</td><td class="fail">skip (밴드/기타와 유사)</td><td class="ok">Turn 148: PASS</td></tr>
+      <tr><td>Report 2 (새코드 Run 1)</td><td class="fail">no_facts (0개)</td><td>0.00</td><td>0.00</td><td class="na">-</td><td class="fail">Turn 148: FAIL</td></tr>
+      <tr><td>Report 3 (새코드 Run 2)</td><td class="fail">no_facts (0개)</td><td>0.00</td><td>0.00</td><td class="na">-</td><td class="ok">Turn 148: PASS</td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause extraction">
+    <div class="root-cause-label rc-extraction">Root Cause #1: 추출 실패 (Primary)</div>
+    <p>Gemini Flash가 <code>"밴드 다시 하고 싶어. 이번엔 드럼 배워볼까 해."</code>에서 팩트를 추출하지 않음.</p>
+    <p><strong>원인 분석:</strong></p>
+    <p>1. <strong>"~할까 해" 표현</strong> — "배워볼까 해"는 확정적 의지가 아닌 <strong>탐색적/임시적 표현</strong>으로 읽힘. 프롬프트의 "일시적 의견은 추출하지 마라" 지시에 의해 필터링됨.</p>
+    <p>2. <strong>기존 밴드 팩트와 중복 판단</strong> — F11(밴드/기타)이 이미 추출되어 있으므로, "밴드" 관련 정보를 "이미 알려진 사실"로 판단하고 건너뜀.</p>
+    <p>3. <strong>프롬프트에 "배우고 싶은 것: 드럼" 예시가 있음에도</strong> — Flash가 "~할까 해"와 "~하고 싶다"를 다르게 취급하는 것으로 추정.</p>
+  </div>
+
+  <div class="root-cause extraction">
+    <div class="root-cause-label rc-extraction">Root Cause #2: 유사도 Skip (Secondary)</div>
+    <p>추출이 성공한 경우에도(Report 1), 기존 "밴드/기타" 메모리와의 <strong>코사인 유사도 0.80</strong>으로 인해 이전 코드(0.85/0.6)에서 skip됨.</p>
+    <p>새 코드(0.90/0.75)에서는 0.80이 save zone에 들어가므로 저장 가능하나, 추출 자체가 안 되어 테스트 불가.</p>
+  </div>
+
+  <h3>Report 3에서 PASS한 이유 (흥미로운 발견)</h3>
+  <p>Report 3은 추출 0개인데 검증 PASS. 이는 <strong>F11(밴드/기타) 기억</strong>이 "악기" 관련 질문에서 검색되어, Flash가 "기타를 쳤으니 드럼도 관심있을 수 있다"고 추론했을 가능성. <strong>진짜 기억이 아닌 추론에 의한 우연한 PASS</strong>.</p>
+</div>
+
+<!-- ===================== F23 ===================== -->
+<h2>F23: 수학 싫어</h2>
+<div class="fact-card partial">
+  <div class="fact-header">
+    <span class="fact-id">F23</span>
+    <span class="fact-badge badge-intermittent">UTILIZATION INTERMITTENT</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 31</div>
+    <div class="msg">"나 <strong>수학이 정말 싫어</strong>. 숫자 보면 머리 아파."</div>
+  </div>
+
+  <h3>파이프라인 단계별 추적</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-ok">1. 추출<br><small>3/3 성공</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">2. 분류<br><small>Identity</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">3. 저장<br><small>3/3 save</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">4. 검색<br><small>knownFacts</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-warn">5. 활용<br><small>간헐적 누락</small></div>
+  </div>
+
+  <h3>증거 데이터</h3>
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>importance</th><th>처리</th><th>검증</th></tr></thead>
+    <tbody>
+      <tr><td>Report 1</td><td class="ok">2개 추출</td><td>0.44</td><td>0.93</td><td class="ok">save</td><td class="fail">Turn 88: FAIL</td></tr>
+      <tr><td>Report 2</td><td class="ok">2개 추출</td><td>0.64</td><td>0.69</td><td class="ok">save</td><td class="na">미확인</td></tr>
+      <tr><td>Report 3</td><td class="ok">2개 추출</td><td>0.67</td><td>1.00</td><td class="ok">save</td><td class="na">미확인</td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause utilization">
+    <div class="root-cause-label rc-utilization">Root Cause: Flash 활용 누락</div>
+    <p>추출/분류/저장/검색 모두 정상 동작. <code>"싫어하는 것: 수학"</code>이 knownFacts에 저장되어 있고, 프롬프트에 포함됨.</p>
+    <p><strong>문제:</strong> "아는 것 전부 말해봐" 종합 질문에서 Flash가 30+개 팩트 중 <strong>"싫어하는 것"을 선택적으로 생략</strong>. 좋아하는 것(음식, 색, 계절)은 말하지만 싫어하는 것은 우선순위가 낮다고 판단하는 경향.</p>
+    <p><strong>Type B 패턴과 동일:</strong> F13(왼손), F14(미국), F26(부산)과 같은 "개별 PASS / 종합 FAIL" 패턴. Flash의 어텐션 용량 한계.</p>
+  </div>
+</div>
+
+<!-- ===================== F29 ===================== -->
+<h2>F29: 졸업작품 게임</h2>
+<div class="fact-card partial">
+  <div class="fact-header">
+    <span class="fact-id">F29</span>
+    <span class="fact-badge badge-intermittent">RETRIEVAL INTERMITTENT</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 37</div>
+    <div class="msg">"<strong>졸업작품으로 만든 게임</strong> 발표할 예정이야. 교수님 피드백이 중요해."</div>
+  </div>
+
+  <h3>파이프라인 단계별 추적</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-ok">1. 추출<br><small>3/3 성공</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-warn">2. 분류<br><small>Action?</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">3. 저장<br><small>3/3 save</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-warn">4. 검색<br><small>111턴 후 밀림</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-warn">5. 활용<br><small>1/3 성공</small></div>
+  </div>
+
+  <h3>증거 데이터</h3>
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>importance</th><th>처리</th><th>검증 (Turn 148)</th></tr></thead>
+    <tbody>
+      <tr><td>Report 1</td><td class="ok">1개 추출</td><td>0.64</td><td>0.69</td><td class="ok">save</td><td class="fail">FAIL (졸업 미언급)</td></tr>
+      <tr><td>Report 2</td><td class="ok">1개 추출</td><td>0.50</td><td>0.95</td><td class="ok">save</td><td class="fail">FAIL (졸업 미언급)</td></tr>
+      <tr><td>Report 3</td><td class="ok">2개 추출</td><td>0.55</td><td>0.96</td><td class="ok">save</td><td class="ok">PASS (졸업 언급)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause classification">
+    <div class="root-cause-label rc-classification">Root Cause #1: 분류 불확실성</div>
+    <p>AI가 <code>"발표할 예정이야"</code>를 어떻게 추출하느냐에 따라 분류가 달라짐:</p>
+    <p>- <code>"졸업작품: 게임"</code> → "졸업작품"은 IDENTITY_SUBJECTS에 <strong>없음</strong> → Identity도 Action도 아닌 기타 → knownFacts에 단순 추가</p>
+    <p>- <code>"활동: 졸업작품 게임 발표"</code> → "활동"은 ACTION_SUBJECTS에 <strong>있음</strong> → Action → <strong>sharedExperiences</strong>로 분류</p>
+    <p>분류 경로에 따라 검색 방식이 달라지므로 <strong>검증 결과가 비결정적</strong>.</p>
+  </div>
+
+  <div class="root-cause retrieval">
+    <div class="root-cause-label rc-retrieval">Root Cause #2: 장기 검색 순위 하락</div>
+    <p>Turn 37에서 저장된 기억이 Turn 148 검증 시 <strong>111턴 간격</strong>. 그 사이 60+개의 새 기억이 쌓이면서 임베딩 검색 순위가 밀림.</p>
+    <p>"졸업작품"이라는 키워드가 이후 대화에서 재등장하지 않으므로 reinforce도 안 됨.</p>
+  </div>
+</div>
+
+<!-- ===================== F28 ===================== -->
+<h2>F28: 가을</h2>
+<div class="fact-card resolved">
+  <div class="fact-header">
+    <span class="fact-id">F28</span>
+    <span class="fact-badge badge-pass">RESOLVED (v8)</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 33</div>
+    <div class="msg">"참, 내 생일은 9월 23일이야. <strong>가을 생일이라 좋아</strong>."</div>
+  </div>
+
+  <h3>파이프라인 단계별 추적</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-ok">1. 추출<br><small>3/3 성공</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">2. 분류<br><small>Identity</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">3. 저장<br><small>3/3 save</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">4. 검색<br><small>정상</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">5. 활용<br><small>3/3 성공</small></div>
+  </div>
+
+  <h3>증거 데이터</h3>
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>importance</th><th>처리</th><th>검증 (Turn 137)</th></tr></thead>
+    <tbody>
+      <tr><td>Report 1</td><td class="ok">1개 추출</td><td>0.43</td><td>0.63</td><td class="ok">save</td><td class="ok">PASS (가을, 파란)</td></tr>
+      <tr><td>Report 2</td><td class="ok">1개 추출</td><td>0.43</td><td>0.93</td><td class="ok">save</td><td class="ok">PASS (가을, 파란)</td></tr>
+      <tr><td>Report 3</td><td class="ok">1개 추출</td><td>0.50</td><td>0.95</td><td class="ok">save</td><td class="ok">PASS (가을, 파란)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause retrieval" style="border-color: #4ade80;">
+    <div class="root-cause-label" style="color: #4ade80;">RESOLVED: 테스트 방법론 오류였음</div>
+    <p>v5-run4, v6에서 FAIL이었던 것은 <strong>keep-memory=true</strong> 환경에서 이전 테스트의 노이즈가 축적된 결과.</p>
+    <p>v8에서 <strong>keep-memory=false</strong> (clean start)로 전환 후 <strong>3/3 모두 PASS</strong>.</p>
+    <p><strong>교훈:</strong> 테스트 방법론(clean start)이 결과 신뢰도에 결정적 영향. F28은 코드 문제가 아니라 테스트 환경 문제였음.</p>
+  </div>
+</div>
+
+<!-- ===================== Summary ===================== -->
+<h2>근본 원인 요약</h2>
+
+<div class="diagram">
+<span class="highlight">5단계 파이프라인별 실패 분포:</span>
+
+  Stage 1 (추출)    <span class="error">##########</span>  F24 — AI가 추출 자체를 안 함
+  Stage 2 (분류)    <span class="error">######</span>      F29 — Identity/Action 경계 모호
+  Stage 3 (저장)    <span class="success">OK</span>             — Surprise 필터 v8에서 개선됨
+  Stage 4 (검색)    <span class="error">######</span>      F29 — 111턴 후 검색 순위 하락
+  Stage 5 (활용)    <span class="error">########</span>    F23 — Flash가 종합 응답에서 선택 누락
+
+  <span class="success">해결됨</span>           F28 — 테스트 환경 문제 (keep-memory=true 노이즈)
+</div>
+
+<!-- ===================== Action Items ===================== -->
+<h2>개선 방향 (다음 실험 후보)</h2>
+
+<div class="action-item">
+  <div class="action-priority p1">P1</div>
+  <div class="action-content">
+    <div class="action-title">Experiment B: 추출 프롬프트 강화 (F24 해결)</div>
+    <div class="action-desc">
+      "~할까 해", "~해볼까", "~해보고 싶다" 같은 <strong>탐색적 의향 표현</strong>도 "배우고 싶은 것"으로 추출하도록 프롬프트에 명시적 예시 추가.
+      <br>예: <code>[중요] "~할까 해", "~해볼까" 표현도 의지/열망으로 취급하라. "드럼 배워볼까 해" → "배우고 싶은 것: 드럼"</code>
+      <br>측정: 60턴 테스트에서 F24 포함 턴의 추출 성공률 확인
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p1">P1</div>
+  <div class="action-content">
+    <div class="action-title">Experiment C: 검색 적중률 측정 도구 (F29 진단)</div>
+    <div class="action-desc">
+      검증 턴에서 실제로 검색되는 기억 Top-10을 로그로 기록하는 디버깅 모드 추가.
+      <br>F29가 저장은 되지만 검색에서 누락되는지, 아니면 검색은 되지만 Flash가 무시하는지 구분 가능.
+      <br>이 도구는 이후 모든 실험의 기반 인프라가 됨.
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p2">P2</div>
+  <div class="action-content">
+    <div class="action-title">Experiment D: IDENTITY_SUBJECTS 확장 (F29 분류 개선)</div>
+    <div class="action-desc">
+      "졸업작품", "프로젝트", "작품" 등을 IDENTITY_SUBJECTS에 추가하여 Action 대신 Identity로 분류되게 함.
+      <br>또는 프롬프트에서 "학업 관련 장기 프로젝트"도 영구 사실로 추출하도록 지시.
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p2">P2</div>
+  <div class="action-content">
+    <div class="action-title">Experiment E: 종합 응답 프롬프트 개선 (F23, Type B 해결)</div>
+    <div class="action-desc">
+      Flash가 종합 질문에서 "싫어하는 것"을 누락하는 문제. 기억 주입 시 <strong>카테고리별 구조화</strong>하여 어텐션 분산 방지.
+      <br>예: "좋아하는 것: [김치찌개, 파란색, 가을] / 싫어하는 것: [수학] / 건강: [초콜릿 알레르기, ...]"
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p3">P3</div>
+  <div class="action-content">
+    <div class="action-title">Experiment F: 하이브리드 검색 (임베딩 + 키워드)</div>
+    <div class="action-desc">
+      임베딩 검색만으로는 "졸업작품"같은 고유 키워드의 정확 매칭이 불안정.
+      <br>키워드 매칭을 보조 검색으로 추가하면 F29 등의 검색 누락 문제 완화 가능.
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Methodology ===================== -->
+<h2>실험 방법론</h2>
+<div class="summary-box">
+  <h3>데이터 소스</h3>
+  <p>3개 테스트 리포트에서 해당 턴의 로그를 수집하여 파이프라인 단계별 성공/실패를 추적.</p>
+  <table>
+    <thead><tr><th>리포트</th><th>코드</th><th>조건</th><th>파일</th></tr></thead>
+    <tbody>
+      <tr><td>Report 1</td><td>이전 코드 (0.85/0.6)</td><td>150턴, keep=false</td><td>memory-test-report-1771520259165.txt</td></tr>
+      <tr><td>Report 2</td><td>새 코드 (0.90/0.75)</td><td>150턴, keep=false</td><td>memory-test-report-1771515772596.txt</td></tr>
+      <tr><td>Report 3</td><td>새 코드 (0.90/0.75)</td><td>150턴, keep=false</td><td>memory-test-report-1771517871994.txt</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top: 16px;">분석 방법</h3>
+  <p>각 팩트에 대해 5단계 파이프라인을 역추적:</p>
+  <p>1. <strong>추출</strong>: 해당 턴의 extractedFacts 개수 확인 (0이면 추출 실패)</p>
+  <p>2. <strong>분류</strong>: 추출된 팩트 형식으로 isIdentityFact/isActionFact 분류 추정</p>
+  <p>3. <strong>저장</strong>: save/skip/reinforce/no_facts 로그 확인</p>
+  <p>4. <strong>검색</strong>: 검증 턴에서의 검색 결과 (현재는 로그 미지원 - Exp C에서 개선)</p>
+  <p>5. <strong>활용</strong>: 검증 턴에서 키워드 매칭으로 PASS/FAIL 판정</p>
+</div>
+
+<div class="footer">
+  Experiment A: Failure Pattern Analysis | SYNK Character Chat<br>
+  Generated: 2026-02-20 | 분석 대상: F23, F24, F28, F29<br>
+  결론: 4건 중 1건 해결(F28), 3건은 각각 다른 파이프라인 단계에서 실패 (추출/분류+검색/활용)<br>
+  다음 실험: Exp B (추출 프롬프트), Exp C (검색 적중률 도구)
+</div>
+
+</body>
+</html>

@@ -90,6 +90,7 @@ export async function PUT(
       visibility,
       isAdult,
       worldSetting,
+      relationshipConfig,
     } = body;
 
     const updateData: Record<string, unknown> = {};
@@ -101,6 +102,12 @@ export async function PUT(
     if (visibility !== undefined) updateData.visibility = visibility;
     if (isAdult !== undefined) updateData.isAdult = isAdult;
     if (worldSetting !== undefined) updateData.worldSetting = worldSetting;
+    if (relationshipConfig !== undefined) {
+      // 문자열이면 그대로, 객체면 JSON.stringify
+      updateData.relationshipConfig = typeof relationshipConfig === 'string'
+        ? relationshipConfig
+        : JSON.stringify(relationshipConfig);
+    }
 
     const work = await prisma.work.update({
       where: { id: workId },

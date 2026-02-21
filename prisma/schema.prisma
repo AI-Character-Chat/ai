@@ -134,8 +134,9 @@ model Work {
   targetAudience String   @default("all") // "all" | "male" | "female"
   visibility     String   @default("private") // "public" | "private" | "unlisted"
   isAdult        Boolean  @default(false)
-  worldSetting   String   @default("") // 세계관 설정 (최대 10000자)
-  createdAt      DateTime @default(now())
+  worldSetting       String   @default("") // 세계관 설정 (최대 10000자)
+  relationshipConfig String   @default("{}") // JSON - 커스텀 관계 축/레벨 설정
+  createdAt          DateTime @default(now())
   updatedAt      DateTime @updatedAt
   publishedAt    DateTime? // 론칭일 (public으로 전환한 날짜)
 
@@ -486,6 +487,9 @@ model UserCharacterRelationship {
   // === 캐릭터가 아는 유저 정보 ===
   // 이 캐릭터만 알고 있는 유저 정보 (다른 캐릭터는 모름)
   knownFacts String @default("[]") // JSON array
+
+  // 커스텀 축 값 (JSON - Record<string, number>)
+  customAxes  String @default("{}")
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

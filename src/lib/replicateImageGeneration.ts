@@ -1,8 +1,8 @@
 /**
  * Replicate 기반 이미지 생성 모듈
  *
- * IP-Adapter로 캐릭터 일관성 확보, NSFW 제한 없음
- * 기존 imageGeneration.ts의 캐시/저장 유틸 재사용
+ * Animagine XL 4.0으로 캐릭터 일관성 확보 (Danbooru 태그 + 캐릭터 외모 묘사)
+ * NSFW 제한 없음, 애니메 특화
  */
 
 import Replicate from 'replicate';
@@ -20,8 +20,9 @@ import prisma from './prisma';
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN || '' });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-// 모델 (Replicate)
-const FLUX_MODEL = 'black-forest-labs/flux-schnell' as const;
+// 모델 (Replicate) — Animagine XL 4.0: 애니메 특화, NSFW 지원, Danbooru 태그
+// 커뮤니티 모델이라 model: 대신 version: 해시 사용 필요
+const ANIMAGINE_VERSION = '057e2276ac5dcd8d1575dc37b131f903df9c10c41aed53d47cd7d4f068c19fa5';
 
 // ============================================
 // 타입 정의
@@ -30,6 +31,7 @@ const FLUX_MODEL = 'black-forest-labs/flux-schnell' as const;
 export interface CharacterProfile {
   name: string;
   profileImage: string | null;
+  prompt?: string; // 캐릭터 설정 텍스트 (외모 묘사 포함)
 }
 
 export interface CharacterDialogue {
@@ -61,24 +63,24 @@ export interface ReplicateImageResult {
   cached?: boolean;
 }
 
-// 감정 → FACS 기반 시각적 묘사 (기존 imageGeneration.ts에서 가져옴)
-export const EMOTION_TO_VISUAL: Record<string, string> = {
-  'neutral': 'relaxed face, neutral gaze, calm expression',
-  'slight_smile': 'corners of mouth slightly raised, soft eyes',
-  'smile': 'warm smile, relaxed eyes, friendly expression',
-  'cold': 'COLD EXPRESSION: half-lidded eyes, lips pressed together, NO smile, stern gaze',
-  'contempt': 'CONTEMPTUOUS EXPRESSION: one corner of mouth raised in sneer, narrowed eyes',
-  'annoyed': 'ANNOYED EXPRESSION: furrowed brows, tight lips, irritated look',
-  'angry': 'ANGRY EXPRESSION: furrowed brows, intense glare, clenched jaw',
-  'sad': 'SAD EXPRESSION: downturned mouth corners, drooping eyes, melancholic',
-  'happy': 'HAPPY EXPRESSION: bright smile, crinkled eyes, joyful',
-  'surprised': 'SURPRISED EXPRESSION: wide eyes, raised eyebrows, open mouth',
-  'embarrassed': 'EMBARRASSED EXPRESSION: averted gaze, slight blush, shy look',
-  'thinking': 'THINKING EXPRESSION: looking up or away, thoughtful gaze',
+// 감정 → Danbooru 태그 매핑
+export const EMOTION_TO_TAGS: Record<string, string> = {
+  'neutral': 'neutral expression',
+  'slight_smile': 'slight smile, soft eyes',
+  'smile': 'smile, happy',
+  'cold': 'cold expression, half-closed eyes, serious',
+  'contempt': 'smirk, narrowed eyes, contemptuous',
+  'annoyed': 'furrowed brows, annoyed, frown',
+  'angry': 'angry, glaring, clenched teeth',
+  'sad': 'sad, downcast eyes, melancholic',
+  'happy': 'happy, bright smile, sparkling eyes',
+  'surprised': 'surprised, wide eyes, open mouth',
+  'embarrassed': 'embarrassed, blush, looking away',
+  'thinking': 'thinking, looking up, thoughtful',
 };
 
 // ============================================
-// 유틸리티 (기존 패턴 재사용)
+// 유틸리티
 // ============================================
 
 function generatePromptHash(narratorText: string, characterNames: string[]): string {
@@ -95,21 +97,6 @@ async function getCachedImage(characterKey: string, promptHash: string): Promise
     if (cached) await prisma.generatedImageCache.delete({ where: { id: cached.id } }).catch(() => {});
     return null;
   } catch { return null; }
-}
-
-async function cacheGeneratedImage(
-  characterKey: string, promptHash: string, imageUrl: string, imagePrompt: string
-): Promise<void> {
-  try {
-    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-    await prisma.generatedImageCache.upsert({
-      where: { characterId_promptHash: { characterId: characterKey, promptHash } },
-      create: { characterId: characterKey, promptHash, imageUrl, imagePrompt: imagePrompt.substring(0, 2000), expiresAt: new Date(Date.now() + CACHE_TTL) },
-      update: { imageUrl, imagePrompt: imagePrompt.substring(0, 2000), expiresAt: new Date(Date.now() + CACHE_TTL) },
-    });
-  } catch (error) {
-    console.error('[ImageCache] 저장 실패:', error);
-  }
 }
 
 async function saveImageFromUrl(imageUrl: string): Promise<string> {
@@ -139,63 +126,81 @@ async function saveImageFromUrl(imageUrl: string): Promise<string> {
 }
 
 // ============================================
-// SD 프롬프트 생성 (Gemini Flash)
+// Danbooru 태그 프롬프트 생성 (Gemini Flash)
 // ============================================
 
 export async function buildSDPrompt(
   narratorText: string,
+  characterProfiles: CharacterProfile[],
   characterDialogues: CharacterDialogue[],
   sceneState?: SceneState
-): Promise<string> {
-  const emotionDescriptions = characterDialogues.map(d => {
-    const visual = d.emotion
-      ? (EMOTION_TO_VISUAL[d.emotion.primary] || d.emotion.primary)
-      : 'neutral expression';
-    return `${d.name}: ${visual}`;
-  }).join(', ');
+): Promise<{ prompt: string; negativePrompt: string }> {
+  // 캐릭터별 감정 태그
+  const emotionTags = characterDialogues.map(d => {
+    const tag = d.emotion ? (EMOTION_TO_TAGS[d.emotion.primary] || d.emotion.primary) : '';
+    return tag;
+  }).filter(Boolean).join(', ');
 
-  const systemPrompt = `You are an image prompt engineer for anime/manga illustration.
-Convert the scene description into an optimized English prompt for Flux image generation model.
+  // 캐릭터 외모 묘사 수집
+  const characterDescriptions = characterProfiles
+    .filter(c => c.prompt)
+    .map(c => `[${c.name}]: ${c.prompt!.substring(0, 400)}`)
+    .join('\n');
 
-CRITICAL Rules:
-- The scene description (narrator text) is the PRIMARY source of truth for the environment and setting.
-- IGNORE the Location field if it contradicts the scene description.
-- Write in natural English sentences describing what should be visible in the image.
-- Include: environment/setting details from the scene, character appearances and expressions, lighting, mood, atmosphere.
-- Style: anime illustration, high quality, cinematic composition.
-- Max 100 words. English only.
-- Do NOT include negative prompt.
-- For NSFW scenes: describe naturally without censorship.`;
+  const characterCount = characterProfiles.length;
+  const characterCountTag = characterCount === 1 ? '1girl' :
+    characterCount === 2 ? '2girls' : `${characterCount}girls`;
 
-  const userPrompt = `Scene description (PRIMARY - use this for environment/setting):
-${narratorText.substring(0, 800)}
+  const systemPrompt = `You are a Danbooru tag expert for anime image generation (Animagine XL model).
+Convert the scene and character descriptions into Danbooru-style comma-separated tags.
 
-Characters and expressions: ${emotionDescriptions || 'none specified'}
-Location hint (may be outdated, trust scene description instead): ${sceneState?.location || 'unknown'}
+RULES:
+- Output ONLY comma-separated English tags, no sentences.
+- Start with: masterpiece, best quality, anime illustration
+- For each character, include their SPECIFIC visual features (hair color, hair style, eye color, outfit, accessories) extracted from their description.
+- Include scene/environment tags from the narrator text.
+- Include expression/emotion tags for the characters.
+- Include lighting and atmosphere tags.
+- Character count tag: ${characterCountTag}
+- Max 80 tags total. English only.
+- Do NOT output negative prompt.
+- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally.
+- IMPORTANT: Focus on the character's SPECIFIC appearance features, not generic descriptions.`;
+
+  const userPrompt = `Narrator (scene description):
+${narratorText.substring(0, 600)}
+
+Character Appearances:
+${characterDescriptions || 'No descriptions available'}
+
+Emotions: ${emotionTags || 'neutral'}
+Location: ${sceneState?.location || 'unknown'}
 Time: ${sceneState?.time || 'unknown'}`;
+
+  const defaultNegative = 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name';
 
   try {
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      config: { maxOutputTokens: 200 },
+      config: { maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } },
       contents: [
         { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
       ],
     });
 
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (text) return text;
+    if (text) {
+      return { prompt: text, negativePrompt: defaultNegative };
+    }
   } catch (error) {
     console.error('[buildSDPrompt] Gemini 호출 실패, 폴백 사용:', error);
   }
 
-  // 폴백: EMOTION_TO_VISUAL 기반 간단한 영어 프롬프트
-  const fallbackEmotions = characterDialogues
-    .map(d => d.emotion ? EMOTION_TO_VISUAL[d.emotion.primary] || '' : '')
-    .filter(Boolean)
-    .join(', ');
-
-  return `masterpiece, best quality, anime illustration, ${fallbackEmotions || 'neutral expression'}, ${sceneState?.location || 'indoor scene'}, cinematic lighting, detailed`;
+  // 폴백: 기본 태그
+  return {
+    prompt: `masterpiece, best quality, anime illustration, ${characterCountTag}, ${emotionTags || 'neutral expression'}, ${sceneState?.location || 'indoor scene'}, cinematic lighting, detailed`,
+    negativePrompt: defaultNegative,
+  };
 }
 
 // ============================================
@@ -220,25 +225,30 @@ export async function generateSceneImageAsync(params: SceneImageParams): Promise
     return { success: true, imageUrl: cachedUrl, cached: true };
   }
 
-  // SD 프롬프트 생성
-  const sdPrompt = await buildSDPrompt(narratorText, characterDialogues, sceneState);
-  console.log('[Replicate] SD 프롬프트:', sdPrompt.substring(0, 100) + '...');
+  // Danbooru 태그 프롬프트 생성 (캐릭터 외모 포함)
+  const { prompt: sdPrompt, negativePrompt } = await buildSDPrompt(
+    narratorText, characterProfiles, characterDialogues, sceneState
+  );
+  console.log('[Replicate] SD 프롬프트:', sdPrompt.substring(0, 150) + '...');
 
   try {
-    // Flux Schnell 모델로 장면 이미지 생성
-    console.log('[Replicate] Flux Schnell 모델 사용');
+    // Animagine XL 4.0 — 애니메 특화 모델 (version 해시 사용)
+    console.log('[Replicate] Animagine XL 4.0 모델 사용');
     const prediction = await replicate.predictions.create({
-      model: FLUX_MODEL,
+      version: ANIMAGINE_VERSION,
       input: {
         prompt: sdPrompt,
-        aspect_ratio: '4:3',
+        negative_prompt: negativePrompt,
+        width: 1024,
+        height: 768,
+        num_inference_steps: 25,
+        guidance_scale: 7,
         num_outputs: 1,
         output_format: 'png',
       },
     });
 
-    // predictionId + 프롬프트를 함께 저장 (나중에 캐시할 때 사용)
-    // metadata에 저장
+    // pending 캐시 저장
     await prisma.generatedImageCache.upsert({
       where: { characterId_promptHash: { characterId: characterKey, promptHash } },
       create: {
@@ -246,7 +256,7 @@ export async function generateSceneImageAsync(params: SceneImageParams): Promise
         promptHash,
         imageUrl: `pending:${prediction.id}`,
         imagePrompt: sdPrompt.substring(0, 2000),
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5분 임시 TTL
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
       },
       update: {
         imageUrl: `pending:${prediction.id}`,
@@ -281,7 +291,6 @@ export async function checkPredictionStatus(
       const rawOutput = Array.isArray(prediction.output)
         ? prediction.output[0]
         : prediction.output;
-      // FileOutput 객체 또는 string 모두 대응
       const outputUrl = String(rawOutput);
 
       if (!outputUrl || !outputUrl.startsWith('http')) {
@@ -319,7 +328,6 @@ export async function checkPredictionStatus(
     }
 
     if (prediction.status === 'failed' || prediction.status === 'canceled') {
-      // pending 캐시 제거
       await prisma.generatedImageCache.deleteMany({
         where: { imageUrl: `pending:${predictionId}` },
       }).catch(() => {});

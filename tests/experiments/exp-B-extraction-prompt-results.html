@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Experiment B: 추출 프롬프트 강화 결과</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; max-width: 1200px; margin: 0 auto; line-height: 1.7; }
+  h1 { font-size: 26px; color: #f8fafc; margin-bottom: 4px; }
+  h2 { font-size: 20px; color: #f8fafc; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #334155; }
+  h3 { font-size: 16px; color: #cbd5e1; margin: 20px 0 12px; }
+  .meta { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+  p { margin-bottom: 12px; font-size: 14px; color: #cbd5e1; }
+  strong { color: #f8fafc; }
+  code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #fbbf24; }
+
+  .summary-box { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #334155; }
+  .summary-box h3 { margin-top: 0; color: #f8fafc; }
+
+  /* Pipeline */
+  .pipeline { display: flex; gap: 4px; margin: 16px 0; flex-wrap: wrap; }
+  .pipe-stage { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-align: center; flex: 1; min-width: 120px; }
+  .pipe-ok { background: #166534; color: #4ade80; }
+  .pipe-fail { background: #991b1b; color: #fca5a5; }
+  .pipe-warn { background: #92400e; color: #fbbf24; }
+  .pipe-na { background: #1e293b; color: #64748b; border: 1px dashed #475569; }
+  .pipe-arrow { display: flex; align-items: center; color: #475569; font-size: 18px; }
+
+  /* Fact Card */
+  .fact-card { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 24px; border-left: 4px solid; }
+  .fact-card.critical { border-color: #f87171; }
+  .fact-card.resolved { border-color: #4ade80; }
+  .fact-card.partial { border-color: #fbbf24; }
+  .fact-card.regression { border-color: #c084fc; }
+  .fact-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .fact-id { font-size: 18px; font-weight: 700; }
+  .fact-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-fail { background: #450a0a; color: #fca5a5; }
+  .badge-pass { background: #052e16; color: #86efac; }
+  .badge-intermittent { background: #451a03; color: #fed7aa; }
+  .badge-regression { background: #3b0764; color: #d8b4fe; }
+  .badge-improved { background: #052e16; color: #86efac; }
+
+  .fact-input { background: #0f172a; padding: 12px 16px; border-radius: 8px; margin: 12px 0; font-size: 14px; }
+  .fact-input .turn { color: #64748b; font-size: 12px; }
+  .fact-input .msg { color: #e2e8f0; margin-top: 4px; }
+
+  /* Evidence Table */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th { background: #0f172a; padding: 8px 12px; text-align: left; font-size: 12px; color: #94a3b8; border-bottom: 2px solid #334155; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e293b; font-size: 13px; }
+  .ok { color: #4ade80; font-weight: 600; }
+  .fail { color: #f87171; font-weight: 600; }
+  .warn { color: #fbbf24; font-weight: 600; }
+  .na { color: #475569; }
+  .regression { color: #c084fc; font-weight: 600; }
+
+  /* Root Cause */
+  .root-cause { background: #0f172a; border-radius: 8px; padding: 16px; margin: 12px 0; border-left: 3px solid; }
+  .root-cause.extraction { border-color: #f87171; }
+  .root-cause.classification { border-color: #fb923c; }
+  .root-cause.retrieval { border-color: #fbbf24; }
+  .root-cause.utilization { border-color: #a78bfa; }
+  .root-cause.regression-cause { border-color: #c084fc; }
+  .root-cause-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .rc-extraction { color: #f87171; }
+  .rc-classification { color: #fb923c; }
+  .rc-retrieval { color: #fbbf24; }
+  .rc-utilization { color: #a78bfa; }
+  .rc-regression { color: #c084fc; }
+
+  /* Action Items */
+  .action-item { display: flex; gap: 12px; padding: 12px 16px; background: #0f172a; border-radius: 8px; margin: 8px 0; }
+  .action-priority { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; height: fit-content; }
+  .p1 { background: #991b1b; color: #fca5a5; }
+  .p2 { background: #92400e; color: #fbbf24; }
+  .p3 { background: #1e3a5f; color: #93c5fd; }
+  .action-content { flex: 1; }
+  .action-title { font-weight: 600; font-size: 14px; color: #f8fafc; margin-bottom: 4px; }
+  .action-desc { font-size: 13px; color: #94a3b8; }
+
+  /* Diagram */
+  .diagram { background: #0f172a; border-radius: 12px; padding: 20px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; color: #94a3b8; overflow-x: auto; }
+  .diagram .highlight { color: #fbbf24; font-weight: 600; }
+  .diagram .error { color: #f87171; font-weight: 600; }
+  .diagram .success { color: #4ade80; }
+  .diagram .regression-text { color: #c084fc; font-weight: 600; }
+
+  /* Code block */
+  .code-block { background: #0f172a; border-radius: 8px; padding: 16px; margin: 12px 0; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; color: #94a3b8; overflow-x: auto; border: 1px solid #334155; }
+  .code-block .added { color: #4ade80; }
+  .code-block .comment { color: #64748b; }
+
+  /* Comparison */
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .comp-box { background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155; }
+  .comp-box h4 { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+  .comp-box .score { font-size: 32px; font-weight: 700; }
+  .comp-box .score.up { color: #4ade80; }
+  .comp-box .score.down { color: #f87171; }
+  .comp-box .delta { font-size: 14px; margin-top: 4px; }
+
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #1e293b; color: #475569; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Experiment B: 추출 프롬프트 강화 결과 분석</h1>
+<p class="meta">Date: 2026-02-20 | Commit: e1c9a9f | Data: 4 reports (Exp A 3건 + Exp B 1건, 150-turn, keep-memory=false)</p>
+
+<!-- Executive Summary -->
+<div class="summary-box">
+  <h3>Executive Summary</h3>
+  <p>
+    Experiment A에서 도출한 P1 개선 — <strong>탐색적 표현/혼합 메시지/싫어하는 것</strong> 추출 프롬프트 강화를 적용하고 150턴 테스트를 실행한 결과,
+    <strong>전체 점수는 71.2% → 76.9% (+5.7pp) 상승</strong>했으나, 개별 타겟 팩트에서는 <strong>혼합된 결과</strong>가 나타났습니다.
+  </p>
+  <div class="comparison">
+    <div class="comp-box">
+      <h4>v8 새코드 (Exp A 중앙값)</h4>
+      <div class="score" style="color: #94a3b8;">71.2%</div>
+      <div class="delta" style="color: #94a3b8;">110~112 / 156</div>
+    </div>
+    <div class="comp-box">
+      <h4>v8 + Exp B (추출 프롬프트 강화)</h4>
+      <div class="score up">76.9%</div>
+      <div class="delta" style="color: #4ade80;">120 / 156 (+5.7pp)</div>
+    </div>
+  </div>
+  <table style="margin-top: 12px;">
+    <thead><tr><th>타겟 팩트</th><th>Exp A 상태</th><th>Exp B 결과</th><th>판정</th></tr></thead>
+    <tbody>
+      <tr><td>F23 수학 싫어</td><td>활용 간헐적 (추출 OK)</td><td>추출 OK, 검증 T86/T144 PASS</td><td class="ok">개선</td></tr>
+      <tr><td>F24 드럼 배우기</td><td>추출 실패 2/3</td><td>여전히 no_facts (0개)</td><td class="fail">미해결</td></tr>
+      <tr><td>F28 가을 좋아</td><td>해결됨 (3/3 PASS)</td><td>no_facts → 4/4 FAIL</td><td class="regression">회귀</td></tr>
+      <tr><td>F29 졸업작품</td><td>검색 간헐적 (추출 OK)</td><td>no_facts → 1/1 FAIL</td><td class="regression">회귀</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Code Changes -->
+<h2>Exp B 코드 변경 (gemini.ts)</h2>
+<div class="code-block">
+<span class="comment">// 기존 프롬프트 (유지)</span>
+- [중요] "배우고 싶다", "해보고 싶다" 같은 안정적 열망은 추출하라.
+
+<span class="comment">// Exp B에서 추가된 3줄 (commit e1c9a9f)</span>
+<span class="added">+ [중요] "~할까 해", "~해볼까", "~해보려고" 같은 탐색적 표현도 의지/열망으로 취급하라.</span>
+<span class="added">+ [중요] 한 메시지에 이미 알려진 정보(A)와 새 정보(B)가 함께 있으면, A는 건너뛰되 B는 반드시 추출하라.</span>
+<span class="added">+ [중요] "싫어하는 것"도 취향으로 추출하라: "수학 싫어" → "싫어하는 것: 수학".</span>
+
+<span class="comment">// 기존 프롬프트 (유지)</span>
+- [중요] 일시적 상황은 추출하지 마라: 감정, 현재 행동, 일시적 의견...
+- 이미 이전 대화에서 알려진 사실은 다시 추출하지 마라.
+</div>
+
+<!-- Overall Comparison -->
+<h2>전체 성능 비교</h2>
+<table>
+  <thead><tr><th>리포트</th><th>코드</th><th>점수</th><th>save</th><th>reinforce</th><th>skip</th><th>응답시간</th></tr></thead>
+  <tbody>
+    <tr><td>Exp A Report 1 (기준선)</td><td>이전 코드 (0.85/0.6)</td><td>45.5% (71/156)</td><td>70</td><td>1</td><td>6</td><td>8602ms</td></tr>
+    <tr><td>Exp A Report 2</td><td>새 코드 (0.90/0.75)</td><td>70.5% (110/156)</td><td>68</td><td>2</td><td>2</td><td>8942ms</td></tr>
+    <tr><td>Exp A Report 3</td><td>새 코드 (0.90/0.75)</td><td>71.8% (112/156)</td><td>60</td><td>7</td><td>11</td><td>8744ms</td></tr>
+    <tr style="background: #1e293b;"><td><strong>Exp B Report</strong></td><td><strong>+ 추출 프롬프트 강화</strong></td><td class="ok"><strong>76.9% (120/156)</strong></td><td><strong>68</strong></td><td><strong>8</strong></td><td><strong>12</strong></td><td><strong>8911ms</strong></td></tr>
+  </tbody>
+</table>
+<p><strong>주목:</strong> reinforce 8회는 Exp A 대비 증가 (1~7 → 8). 기존 기억의 재확인이 더 많이 발생. 전체 +8~10개 팩트 추가 검증 통과.</p>
+
+<!-- ===================== F23 (IMPROVED) ===================== -->
+<h2>F23: 수학 싫어</h2>
+<div class="fact-card partial" style="border-color: #4ade80;">
+  <div class="fact-header">
+    <span class="fact-id">F23</span>
+    <span class="fact-badge badge-improved">IMPROVED</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 31</div>
+    <div class="msg">"나 <strong>수학이 정말 싫어</strong>. 숫자 보면 머리 아파."</div>
+  </div>
+
+  <h3>Exp A → Exp B 변화</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-ok">1. 추출<br><small>유지 (4/4)</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">2. 분류<br><small>Identity</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">3. 저장<br><small>유지 (save)</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">4. 검색<br><small>knownFacts</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-ok">5. 활용<br><small>개선됨</small></div>
+  </div>
+
+  <h3>4회 테스트 비교</h3>
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>저장</th><th>종합검증A</th><th>종합검증B</th></tr></thead>
+    <tbody>
+      <tr><td>Exp A R1 (기준선)</td><td class="ok">2개</td><td>0.44</td><td class="ok">save</td><td class="fail">FAIL</td><td>-</td></tr>
+      <tr><td>Exp A R2</td><td class="ok">2개</td><td>0.64</td><td class="ok">save</td><td>-</td><td>-</td></tr>
+      <tr><td>Exp A R3</td><td class="ok">2개</td><td>0.67</td><td class="ok">save</td><td>-</td><td>-</td></tr>
+      <tr style="background: #0f172a;"><td><strong>Exp B</strong></td><td class="ok">2개</td><td>0.55</td><td class="ok">save</td><td class="ok"><strong>PASS (T86)</strong></td><td class="ok"><strong>PASS (T144)</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause" style="border-color: #4ade80;">
+    <div class="root-cause-label" style="color: #4ade80;">IMPROVED: "싫어하는 것" 프롬프트 효과</div>
+    <p>Exp B의 <code>"싫어하는 것"도 취향으로 추출하라</code> 지시 덕분에 추출 안정성이 유지되고, Flash의 활용 측면에서도 종합 질문(T86, T144) 모두에서 "수학 싫어하는 것"을 언급.</p>
+    <p>박서연 T86: <code>"싫어하는 건 쓴 커피랑 수학이고"</code><br>
+    박서연 T144: <code>"수학 싫어하는 것도!"</code></p>
+    <p><strong>Exp A에서 간헐적이었던 활용 문제가 안정화.</strong> 다만 보충 질문(T87 "빠뜨린 거 없어?")에서는 여전히 누락 — 이는 Flash의 어텐션 한계이지 기억 부재는 아님.</p>
+  </div>
+</div>
+
+<!-- ===================== F24 (STILL FAILED) ===================== -->
+<h2>F24: 드럼 배우기</h2>
+<div class="fact-card critical">
+  <div class="fact-header">
+    <span class="fact-id">F24</span>
+    <span class="fact-badge badge-fail">EXTRACTION STILL FAILING</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 32</div>
+    <div class="msg">"밴드 다시 하고 싶어. 이번엔 <strong>드럼 배워볼까 해</strong>."</div>
+  </div>
+
+  <h3>4회 테스트 비교</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-fail">1. 추출<br><small>3/4 실패</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">2. 분류<br><small>미도달</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">3. 저장<br><small>미도달</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">4. 검색<br><small>미도달</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-fail">5. 활용<br><small>전체 FAIL</small></div>
+  </div>
+
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>저장</th><th>검증 T148</th></tr></thead>
+    <tbody>
+      <tr><td>Exp A R1 (기준선)</td><td class="warn">2개 추출</td><td>0.20</td><td class="fail">skip</td><td class="ok">PASS</td></tr>
+      <tr><td>Exp A R2</td><td class="fail">no_facts (0개)</td><td>-</td><td class="na">-</td><td class="fail">FAIL</td></tr>
+      <tr><td>Exp A R3</td><td class="fail">no_facts (0개)</td><td>-</td><td class="na">-</td><td class="ok">PASS (추론)</td></tr>
+      <tr style="background: #0f172a;"><td><strong>Exp B</strong></td><td class="fail"><strong>no_facts (0개)</strong></td><td>-</td><td class="na">-</td><td class="fail"><strong>FAIL</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause extraction">
+    <div class="root-cause-label rc-extraction">Root Cause: 프롬프트 지시가 무시됨</div>
+    <p>Exp B에서 명시적으로 <code>"~할까 해" → "배우고 싶은 것: 드럼"</code> 예시까지 추가했음에도 Flash가 추출하지 않음.</p>
+    <p><strong>추정 원인:</strong></p>
+    <p>1. <strong>문맥 간섭</strong> — "밴드 다시 하고 싶어"가 기존 F11(밴드/기타)과 중복으로 판단되어 메시지 전체를 "이미 알려진 정보"로 분류. 두 번째 문장("드럼 배워볼까 해")까지 함께 무시됨.</p>
+    <p>2. <strong>프롬프트 충돌</strong> — "이미 이전 대화에서 알려진 사실은 다시 추출하지 마라" 지시가 "혼합 메시지에서 새 정보만 추출하라" 지시보다 <strong>우선적으로 적용</strong>되는 것으로 추정.</p>
+    <p>3. <strong>프롬프트 길이 한계</strong> — 추출 지시가 이미 10개 이상의 [중요] 항목으로 복잡. Flash가 모든 조건을 동시에 충족하기 어려울 수 있음.</p>
+  </div>
+
+  <div class="root-cause extraction">
+    <div class="root-cause-label rc-extraction">핵심 교훈: 프롬프트만으로는 한계</div>
+    <p>동일한 프롬프트에서 <strong>"추출하라"와 "추출하지 마라"가 경쟁</strong>할 때, LLM은 더 보수적인 방향(추출하지 않음)으로 편향됨.</p>
+    <p>F24 해결을 위해서는 프롬프트 개선이 아닌 <strong>구조적 접근</strong>이 필요 (예: 2단계 추출, 후처리 필터).</p>
+  </div>
+</div>
+
+<!-- ===================== F28 (REGRESSION) ===================== -->
+<h2>F28: 가을 좋아</h2>
+<div class="fact-card regression">
+  <div class="fact-header">
+    <span class="fact-id">F28</span>
+    <span class="fact-badge badge-regression">REGRESSION</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 36</div>
+    <div class="msg">"나 <strong>가을이 제일 좋아</strong>. 선선한 바람에 낙엽 밟는 소리."</div>
+  </div>
+
+  <h3>Exp A (3/3 성공) → Exp B (0/1 실패)</h3>
+  <div class="pipeline">
+    <div class="pipe-stage pipe-fail">1. 추출<br><small>Exp B: 실패</small></div>
+    <div class="pipe-arrow">></div>
+    <div class="pipe-stage pipe-na">2~5<br><small>미도달</small></div>
+  </div>
+
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>저장</th><th>검증 (107턴후)</th><th>종합 검증</th></tr></thead>
+    <tbody>
+      <tr><td>Exp A R1 (기준선)</td><td class="ok">1개</td><td>0.43</td><td class="ok">save</td><td class="fail">FAIL</td><td class="fail">FAIL</td></tr>
+      <tr><td>Exp A R2</td><td class="ok">1개</td><td>0.50</td><td class="ok">save</td><td class="ok">PASS</td><td class="ok">PASS</td></tr>
+      <tr><td>Exp A R3</td><td class="ok">1개</td><td>0.43</td><td class="ok">save</td><td class="ok">PASS</td><td class="ok">PASS</td></tr>
+      <tr style="background: #0f172a;"><td><strong>Exp B</strong></td><td class="fail"><strong>no_facts (0개)</strong></td><td>-</td><td class="na">-</td><td class="fail"><strong>FAIL</strong></td><td class="fail"><strong>FAIL</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause regression-cause">
+    <div class="root-cause-label rc-regression">Root Cause: 추출 과도억제 (Over-suppression)</div>
+    <p>Exp A에서 3/3 추출 성공 → Exp B에서 0/1 추출 실패. <strong>Exp B 코드만의 차이</strong>.</p>
+    <p><strong>추정 메커니즘:</strong></p>
+    <p>1. Turn 33에서 <code>"참, 내 생일은 9월 23일이야. 가을 생일이라 좋아."</code>로 "가을"이 생일 컨텍스트에서 첫 등장 (이 턴에서는 생일만 추출됨).</p>
+    <p>2. Turn 36에서 <code>"나 가을이 제일 좋아"</code>를 Flash가 "이미 알려진 사실"로 판단. Turn 33에서 "가을"을 이미 언급했으므로 중복으로 처리.</p>
+    <p>3. <strong>Exp B의 "이미 알려진 정보(A)는 건너뛰되" 지시가 과도하게 적용됨.</strong> Turn 33에서 "가을 = 생일 계절" 맥락이었지 "좋아하는 계절 = 가을"이 아니었는데, Flash는 키워드("가을") 수준에서 중복 판단.</p>
+  </div>
+
+  <div class="root-cause regression-cause">
+    <div class="root-cause-label rc-regression">사실 유형 차이를 구분 못 함</div>
+    <p>Turn 33: <code>생일 → 9월 → "가을 생일"</code> (생일의 부가 정보)<br>
+    Turn 36: <code>좋아하는 계절 → 가을</code> (독립적 취향 정보)</p>
+    <p>같은 키워드("가을")라도 <strong>사실 카테고리가 다름</strong>. Flash는 키워드 매칭으로 중복을 판단하기 때문에 이 차이를 구분하지 못함.</p>
+  </div>
+</div>
+
+<!-- ===================== F29 (REGRESSION) ===================== -->
+<h2>F29: 졸업작품 게임</h2>
+<div class="fact-card regression">
+  <div class="fact-header">
+    <span class="fact-id">F29</span>
+    <span class="fact-badge badge-regression">REGRESSION</span>
+  </div>
+
+  <div class="fact-input">
+    <div class="turn">Turn 37</div>
+    <div class="msg">"<strong>졸업작품으로 만든 게임</strong> 발표할 예정이야. 교수님 피드백이 중요해."</div>
+  </div>
+
+  <h3>Exp A (3/3 추출 성공) → Exp B (0/1 추출 실패)</h3>
+  <table>
+    <thead><tr><th>테스트</th><th>추출</th><th>surprise</th><th>저장</th><th>검증 T148</th></tr></thead>
+    <tbody>
+      <tr><td>Exp A R1 (기준선)</td><td class="ok">1개</td><td>0.64</td><td class="ok">save</td><td class="fail">FAIL (검색 밀림)</td></tr>
+      <tr><td>Exp A R2</td><td class="ok">2개</td><td>0.55</td><td class="ok">save</td><td class="ok">PASS</td></tr>
+      <tr><td>Exp A R3</td><td class="ok">1개</td><td>0.50</td><td class="ok">save</td><td class="fail">FAIL (검색 밀림)</td></tr>
+      <tr style="background: #0f172a;"><td><strong>Exp B</strong></td><td class="fail"><strong>no_facts (0개)</strong></td><td>-</td><td class="na">-</td><td class="fail"><strong>FAIL</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="root-cause regression-cause">
+    <div class="root-cause-label rc-regression">Root Cause: "일시적 상황" 과도 적용</div>
+    <p>Turn 37의 <code>"졸업작품으로 만든 게임 발표할 예정이야"</code>에서:</p>
+    <p>- "발표할 예정이야" → 미래 이벤트 → "일시적 상황은 추출하지 마라" 지시에 해당?</p>
+    <p>- "교수님 피드백이 중요해" → 현재 상황/의견 → "일시적 의견"으로 필터링?</p>
+    <p>Exp B 이전에는 "졸업작품: 게임" 또는 "활동: 졸업작품 게임 발표"로 추출 성공했으나, 프롬프트에 추가된 새 지시들이 <strong>"추출하지 마라" 조건을 강화</strong>하여 전체 메시지를 일시적 상황으로 판단했을 가능성.</p>
+  </div>
+
+  <div class="root-cause regression-cause">
+    <div class="root-cause-label rc-regression">주의: 단일 테스트 한계</div>
+    <p>Exp B 결과는 <strong>1회 실행</strong>. LLM의 확률적 특성상 단일 실행으로 회귀를 확정할 수 없음. 그러나 F28, F29 <strong>두 팩트가 동시에 회귀</strong>한 점은 단순 분산으로 보기 어려움.</p>
+    <p><strong>권장:</strong> Exp B 코드로 <strong>최소 1회 추가 실행</strong>하여 회귀 재현 여부 확인.</p>
+  </div>
+</div>
+
+<!-- ===================== Root Cause Summary ===================== -->
+<h2>Exp B 근본 원인 요약</h2>
+
+<div class="diagram">
+<span class="highlight">Exp B 프롬프트 변경의 효과:</span>
+
+  <span class="success">긍정적</span>
+  ├── "싫어하는 것" 추출 지시  →  F23 활용 안정화 (종합검증 PASS)
+  └── 전반적 추출 품질 향상    →  전체 점수 +5.7pp
+
+  <span class="error">부정적 (회귀)</span>
+  ├── "이미 알려진 정보 건너뛰기" 과도 적용  →  F28 가을 (키워드 중복 판단)
+  ├── "일시적 상황 추출 금지" 확대 해석      →  F29 졸업작품 (미래 이벤트 필터링)
+  └── F24 드럼은 여전히 미해결               →  프롬프트 한계 확인
+
+  <span class="regression-text">핵심 발견:</span>
+  "추출하라" 지시와 "추출하지 마라" 지시가 <span class="error">경쟁</span>할 때,
+  Flash는 <span class="error">보수적 방향(추출 안 함)</span>으로 편향됨.
+  프롬프트 추가 → <span class="error">의도하지 않은 억제 효과</span> 발생.
+</div>
+
+<!-- ===================== Verdict ===================== -->
+<h2>Exp B 판정: 조건부 유지</h2>
+<div class="summary-box">
+  <h3>결론</h3>
+  <table>
+    <thead><tr><th>항목</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td>전체 점수</td><td class="ok">+5.7pp (71.2% → 76.9%) — 역대 최고 단일 실행</td></tr>
+      <tr><td>F23 해결</td><td class="ok">개선 — 종합검증 안정화</td></tr>
+      <tr><td>F24 해결</td><td class="fail">미해결 — 프롬프트만으로 부족</td></tr>
+      <tr><td>F28 회귀</td><td class="regression">1회 실행 기준 회귀 — 추가 확인 필요</td></tr>
+      <tr><td>F29 회귀</td><td class="regression">1회 실행 기준 회귀 — 추가 확인 필요</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top: 16px;">권장 조치</h3>
+  <p><strong>Option A (보수적):</strong> Exp B 코드 유지 + 1회 추가 테스트로 회귀 재현 확인. 재현되면 "혼합 메시지" 줄을 제거하고 재테스트.</p>
+  <p><strong>Option B (공격적):</strong> "혼합 메시지" 줄 즉시 제거 (회귀의 가장 유력한 원인). "싫어하는 것" 줄만 유지하고 재테스트.</p>
+</div>
+
+<!-- ===================== Next Experiments ===================== -->
+<h2>다음 실험 후보 (업데이트)</h2>
+
+<div class="action-item">
+  <div class="action-priority p1">P1</div>
+  <div class="action-content">
+    <div class="action-title">Exp B-2: 회귀 확인 + 프롬프트 정리</div>
+    <div class="action-desc">
+      1. 현재 Exp B 코드로 1회 추가 테스트 → F28/F29 회귀 재현 여부 확인<br>
+      2. 재현 시: "혼합 메시지" 줄 제거, "싫어하는 것" + "탐색적 표현" 줄만 유지<br>
+      3. 재테스트하여 점수 유지 + 회귀 해소 확인<br>
+      <strong>측정:</strong> F28 추출 성공 여부, F29 추출 성공 여부, 전체 점수 유지 여부
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p1">P1</div>
+  <div class="action-content">
+    <div class="action-title">Exp C: 2단계 추출 (F24 구조적 해결)</div>
+    <div class="action-desc">
+      프롬프트만으로 F24 해결 불가 확인됨. <strong>구조적 접근</strong> 필요:<br>
+      - <strong>Option 1: 후처리 추출</strong> — Flash 응답 완료 후, 유저 메시지를 별도 API 호출로 재분석하여 누락된 팩트 보충<br>
+      - <strong>Option 2: Pro 추출 위임</strong> — Pro 분석 단계에서 "이번 턴에서 추출 누락된 유저 정보" 항목 추가<br>
+      - <strong>Option 3: 규칙 기반 보조</strong> — "~할까 해", "~해보고 싶어" 패턴을 정규식으로 감지, extractedFacts가 비어있으면 자동 추출<br>
+      <strong>측정:</strong> F24 추출 성공률, 추가 API 비용/지연
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p2">P2</div>
+  <div class="action-content">
+    <div class="action-title">Exp D: 검색 적중률 측정 도구 (Exp A의 Exp C)</div>
+    <div class="action-desc">
+      검증 턴에서 실제 검색되는 기억 Top-10을 로그로 기록. F29 등의 "저장됐지만 검색 못함" 문제를 정량적으로 진단.<br>
+      Exp A에서 제안된 P1 인프라. 향후 모든 실험의 기반 도구.
+    </div>
+  </div>
+</div>
+
+<div class="action-item">
+  <div class="action-priority p3">P3</div>
+  <div class="action-content">
+    <div class="action-title">Exp E: IDENTITY_SUBJECTS 확장 (Exp A의 Exp D)</div>
+    <div class="action-desc">
+      "졸업작품", "프로젝트", "작품" 등을 IDENTITY_SUBJECTS에 추가.<br>
+      F29가 추출 성공한 경우에도 Identity 대신 Action으로 분류되는 문제 해결.
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Methodology ===================== -->
+<h2>실험 방법론</h2>
+<div class="summary-box">
+  <h3>데이터 소스</h3>
+  <table>
+    <thead><tr><th>리포트</th><th>코드</th><th>조건</th><th>파일</th></tr></thead>
+    <tbody>
+      <tr><td>Exp A R1 (기준선)</td><td>이전 코드 (0.85/0.6)</td><td>150턴, keep=false</td><td>memory-test-report-1771520259165.txt</td></tr>
+      <tr><td>Exp A R2</td><td>새 코드 (0.90/0.75)</td><td>150턴, keep=false</td><td>memory-test-report-1771515772596.txt</td></tr>
+      <tr><td>Exp A R3</td><td>새 코드 (0.90/0.75)</td><td>150턴, keep=false</td><td>memory-test-report-1771517871994.txt</td></tr>
+      <tr><td>Exp B</td><td>+ 추출 프롬프트 강화</td><td>150턴, keep=false</td><td>memory-test-report-1771525379231.txt</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top: 16px;">한계점</h3>
+  <p>1. <strong>Exp B 단일 실행</strong> — 1회 테스트만으로는 통계적 유의성 부족. 회귀 판정에 주의 필요.</p>
+  <p>2. <strong>LLM 확률성</strong> — 동일 프롬프트에서도 추출 결과가 달라질 수 있음 (Exp A R2 vs R3의 skip 차이: 2 vs 11).</p>
+  <p>3. <strong>다음 실험 전 최소 1회 추가 실행</strong>하여 Exp B 결과의 안정성을 확인해야 함.</p>
+</div>
+
+<div class="footer">
+  Experiment B: 추출 프롬프트 강화 결과 | SYNK Character Chat<br>
+  Generated: 2026-02-20 | Commit: e1c9a9f | 분석 대상: F23, F24, F28, F29<br>
+  결론: 전체 +5.7pp 상승, F23 개선, F24 미해결, F28/F29 회귀 의심<br>
+  다음 실험: Exp B-2 (회귀 확인), Exp C (2단계 추출)
+</div>
+
+</body>
+</html>

@@ -145,7 +145,8 @@ export default function StudioPage() {
             {works.map((work) => (
               <div
                 key={work.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between"
+                onClick={() => router.push(`/studio/${work.id}`)}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -180,14 +181,8 @@ export default function StudioPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Link
-                    href={`/studio/${work.id}`}
-                    className="px-4 py-2 text-primary-600 border border-primary-600 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                  >
-                    편집
-                  </Link>
                   <button
-                    onClick={() => deleteWork(work.id)}
+                    onClick={(e) => { e.stopPropagation(); deleteWork(work.id); }}
                     className="px-4 py-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
                     삭제

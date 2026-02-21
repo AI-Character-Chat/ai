@@ -1,0 +1,4187 @@
+{
+  "timestamp": "2026-02-20T09:01:51.299Z",
+  "reason": "compaction",
+  "status": {
+    "version": "2.0",
+    "lastUpdated": "2026-02-20T08:46:56.168Z",
+    "activeFeatures": [
+      "embedding-memory-search",
+      "response-restructure",
+      "chat-io-rebuild",
+      "synk-character-chat",
+      "upload",
+      "chat",
+      "[workId]",
+      "scripts",
+      "reports",
+      "admin",
+      "settings",
+      "HomePage",
+      "e2e",
+      "prisma",
+      "debug",
+      "contexts",
+      "openings",
+      "[openingId]",
+      "stats",
+      "pro-analyze",
+      "[sessionId]",
+      "sessions",
+      "overview",
+      "session"
+    ],
+    "primaryFeature": "embedding-memory-search",
+    "features": {
+      "multi-axis-relationship": {
+        "phase": "completed",
+        "phaseNumber": 6,
+        "matchRate": 100,
+        "iterationCount": 0,
+        "requirements": [
+          "R1: DB 5축 필드 추가 (trust, affection, respect, rivalry, familiarity)",
+          "R2: RelationshipState 인터페이스 확장",
+          "R3: updateRelationship 다축 델타 처리",
+          "R4: generateNarrativePrompt 다축 정보 전달",
+          "R5: Pro 분석에서 다축 델타 추론",
+          "R6: intimacyScore 하위 호환 (5축 가중 평균)",
+          "R7: 기존 데이터 무중단 마이그레이션"
+        ],
+        "documents": {
+          "plan": "docs/01-plan/features/multi-axis-relationship.plan.md"
+        },
+        "timestamps": {
+          "started": "2026-02-12T10:00:00.000Z",
+          "lastUpdated": "2026-02-20T00:00:00.000Z",
+          "completed": "2026-02-20T00:00:00.000Z"
+        },
+        "lastFile": "docs/01-plan/features/multi-axis-relationship.plan.md"
+      },
+      "embedding-memory-search": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [
+          "R1: CharacterMemory 임베딩 벡터 생성 및 저장",
+          "R2: 유저 입력 임베딩 코사인 유사도 검색",
+          "R3: buildNarrativeContext 통합",
+          "R4: 임베딩 API 실패 시 폴백",
+          "R5: 기존 메모리 감쇠/가지치기 충돌 없음",
+          "R6: 응답 지연 최소화 (<500ms)",
+          "R7: 기존 데이터 무중단 마이그레이션"
+        ],
+        "documents": {
+          "plan": "docs/01-plan/features/embedding-memory-search.plan.md",
+          "design": "docs/02-design/features/embedding-memory-search.design.md"
+        },
+        "timestamps": {
+          "started": "2026-02-12T08:00:00.000Z",
+          "lastUpdated": "2026-02-12T08:00:00.000Z"
+        },
+        "lastFile": "docs/01-plan/features/embedding-memory-search.plan.md"
+      },
+      "response-restructure": {
+        "phase": "design",
+        "phaseNumber": 2,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [
+          "R1: turns[] 교차 응답 구조 (JSON Schema 변경)",
+          "R2: 캐릭터 유기적 등장 시스템",
+          "R3: 프롬프트 강화 (스토리 진행력)",
+          "R4: SSE 스트리밍 + DB 저장 적응",
+          "R5: 프론트엔드 렌더링 적응",
+          "R6: 캐싱 호환성 유지"
+        ],
+        "documents": {
+          "plan": "docs/01-plan/features/response-restructure.plan.md",
+          "design": "docs/02-design/features/response-restructure.design.md"
+        },
+        "timestamps": {
+          "started": "2026-02-11T01:30:00.000Z",
+          "lastUpdated": "2026-02-11T01:30:00.000Z"
+        },
+        "lastFile": "docs/01-plan/features/response-restructure.plan.md"
+      },
+      "chat-io-rebuild": {
+        "phase": "completed",
+        "phaseNumber": 6,
+        "matchRate": 91.9,
+        "iterationCount": 1,
+        "requirements": [
+          "gemini-2.5-flash + systemInstruction implicit caching",
+          "SDK migration @google/generative-ai -> @google/genai",
+          "ChatView split into 5 components + useReducer",
+          "narrative-memory.ts activation in chat flow",
+          "JSON response mode",
+          "Session summary async 5-turn cycle"
+        ],
+        "documents": {
+          "plan": "docs/01-plan/features/chat-io-rebuild.plan.md",
+          "design": "docs/02-design/features/chat-io-rebuild.design.md",
+          "analysis": "docs/03-analysis/chat-io-rebuild.analysis.md",
+          "report": "docs/04-report/features/chat-io-rebuild.report.md"
+        },
+        "timestamps": {
+          "started": "2026-02-10T14:00:00.000Z",
+          "lastUpdated": "2026-02-11T00:00:00.000Z",
+          "completedAt": "2026-02-11T00:00:00.000Z"
+        },
+        "lastFile": "docs/04-report/features/chat-io-rebuild.report.md"
+      },
+      "synk-character-chat": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T05:23:51.265Z",
+          "lastUpdated": "2026-02-19T17:13:43.057Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/lib/gemini.ts"
+      },
+      "upload": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T05:23:57.775Z",
+          "lastUpdated": "2026-02-10T05:23:57.775Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/upload/route.ts"
+      },
+      "chat": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:17:31.737Z",
+          "lastUpdated": "2026-02-20T07:46:23.535Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/chat/route.ts"
+      },
+      "[workId]": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:20:11.079Z",
+          "lastUpdated": "2026-02-13T05:05:03.038Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/works/[workId]/route.ts"
+      },
+      "scripts": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:26:27.452Z",
+          "lastUpdated": "2026-02-18T08:50:56.369Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/scripts/test-memory-simulation.ts"
+      },
+      "reports": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:42:24.399Z",
+          "lastUpdated": "2026-02-10T07:08:57.976Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/reports/route.ts"
+      },
+      "admin": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:42:50.207Z",
+          "lastUpdated": "2026-02-20T08:46:56.168Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/admin/components/MemoryAnalysisTab.tsx"
+      },
+      "settings": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:44:32.075Z",
+          "lastUpdated": "2026-02-10T07:09:14.222Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/settings/route.ts"
+      },
+      "HomePage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T06:52:36.722Z",
+          "lastUpdated": "2026-02-10T07:07:44.854Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/components/HomePage/ProfileEditModal.tsx"
+      },
+      "e2e": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T07:09:49.430Z",
+          "lastUpdated": "2026-02-10T07:09:55.900Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/e2e/studio.spec.ts"
+      },
+      "prisma": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T07:39:55.384Z",
+          "lastUpdated": "2026-02-10T07:47:57.376Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/prisma/seed.ts"
+      },
+      "debug": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T08:35:09.522Z",
+          "lastUpdated": "2026-02-10T08:35:09.522Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/debug/route.ts"
+      },
+      "contexts": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T10:56:28.877Z",
+          "lastUpdated": "2026-02-10T15:49:31.167Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/contexts/ChatCacheContext.tsx"
+      },
+      "openings": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-11T05:35:01.119Z",
+          "lastUpdated": "2026-02-11T05:35:22.788Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/openings/route.ts"
+      },
+      "[openingId]": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-11T05:35:27.151Z",
+          "lastUpdated": "2026-02-11T05:35:35.756Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/openings/[openingId]/route.ts"
+      },
+      "stats": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-11T12:04:06.008Z",
+          "lastUpdated": "2026-02-11T12:04:06.008Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/stats/route.ts"
+      },
+      "pro-analyze": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-11T12:14:44.546Z",
+          "lastUpdated": "2026-02-19T05:43:03.405Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/chat/pro-analyze/route.ts"
+      },
+      "[sessionId]": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-13T04:52:26.328Z",
+          "lastUpdated": "2026-02-20T07:50:40.041Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/memory/session/[sessionId]/route.ts"
+      },
+      "sessions": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-13T04:52:37.890Z",
+          "lastUpdated": "2026-02-20T07:50:25.712Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/memory/sessions/route.ts"
+      },
+      "overview": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-20T07:27:42.421Z",
+          "lastUpdated": "2026-02-20T07:34:46.639Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/memory/overview/route.ts"
+      },
+      "session": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-20T07:28:02.127Z",
+          "lastUpdated": "2026-02-20T07:28:02.127Z"
+        },
+        "lastFile": "/Users/kimjeongho/Desktop/(주)SYNK/AI 캐릭터 챗/synk-character-chat/src/app/api/admin/memory/session/route.ts"
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-02-10T05:15:58.884Z",
+      "onboardingCompleted": false,
+      "lastActivity": "2026-02-20T08:46:56.168Z"
+    },
+    "history": [
+      {
+        "timestamp": "2026-02-10T05:23:51.265Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:23:57.775Z",
+        "feature": "upload",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:24:03.439Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:24:13.951Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:24:23.695Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:24:28.282Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:24:32.358Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T05:24:56.396Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:16:46.390Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:17:22.258Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:17:31.737Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:19:34.705Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:20:11.079Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:26:27.452Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:35:19.091Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:35:31.909Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:35:36.531Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:35:49.306Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:36:00.394Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:36:13.104Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:36:28.399Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:36:34.547Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:36:43.711Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:36:52.709Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:40:39.508Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:40:58.229Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:41:25.942Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:41:52.133Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:42:24.399Z",
+        "feature": "reports",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:42:50.207Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:43:00.999Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:43:05.266Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:43:19.223Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:43:30.005Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:44:07.103Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:44:32.075Z",
+        "feature": "settings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:44:37.421Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:44:43.256Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:44:47.665Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:44:56.046Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:45:07.662Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:45:28.301Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:52:36.722Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:52:57.115Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:53:25.218Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:53:32.534Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:54:03.058Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:54:26.954Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:54:58.092Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:55:41.708Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T06:55:56.513Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:03:23.225Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:03:29.241Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:03:37.829Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:03:45.047Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:03:54.477Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:03:58.602Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:04:06.753Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:04:11.573Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:04:18.431Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:04:23.029Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:04:28.413Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:04:33.493Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:05:18.244Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:05:50.177Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:05:54.796Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:05:59.140Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:04.243Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:13.075Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:22.340Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:26.588Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:35.117Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:39.250Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:06:44.127Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:13.077Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:17.559Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:22.064Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:26.786Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:34.737Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:39.867Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:44.854Z",
+        "feature": "HomePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:54.073Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:07:59.317Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:03.744Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:07.526Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:20.250Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:39.971Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:48.744Z",
+        "feature": "reports",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:53.893Z",
+        "feature": "reports",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:08:57.976Z",
+        "feature": "reports",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:02.378Z",
+        "feature": "settings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:06.016Z",
+        "feature": "settings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:09.752Z",
+        "feature": "settings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:14.222Z",
+        "feature": "settings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:38.280Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:49.430Z",
+        "feature": "e2e",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:09:55.900Z",
+        "feature": "e2e",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:39:55.384Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:12.663Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:21.406Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:30.098Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:37.054Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:43.500Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:51.150Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T07:47:57.376Z",
+        "feature": "prisma",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T08:35:09.522Z",
+        "feature": "debug",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T08:44:22.330Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T08:55:38.215Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T08:55:47.338Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T09:37:30.164Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T09:37:39.286Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T09:37:49.469Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T09:38:10.140Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T09:38:29.636Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:31:36.141Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:32:50.830Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:45:00.305Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:45:05.638Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:45:10.158Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:45:18.533Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:45:25.762Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:47:12.619Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:47:20.531Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:47:29.774Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:47:42.391Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:47:54.655Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:48:06.667Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:56:28.877Z",
+        "feature": "contexts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:56:33.740Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:56:40.181Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:56:48.499Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:56:57.974Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:57:16.006Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:57:23.529Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:57:30.583Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:57:39.156Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:57:45.314Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:57:49.614Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T10:58:47.542Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:12:30.761Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:12:40.597Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:12:44.979Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:21:58.303Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:23:40.511Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:27:16.038Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:27:20.511Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:27:25.501Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:27:36.206Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:27:41.003Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:35:23.561Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:46:48.185Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:46:52.210Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:47:00.127Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:47:04.732Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:47:10.579Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T11:47:15.508Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T12:03:07.168Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T12:03:17.565Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:35:11.264Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:35:28.783Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:35:46.795Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:38:29.473Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:38:50.190Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:38:57.794Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:39:08.634Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:40:08.079Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:41:34.954Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:42:11.079Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:42:38.772Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:42:56.462Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:44:05.152Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:44:26.663Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:44:30.820Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:49:31.167Z",
+        "feature": "contexts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:49:41.957Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:51:30.907Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:51:35.185Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:51:39.221Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T15:51:43.170Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:01:58.933Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:02:05.846Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:02:11.241Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:02:16.937Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:02:33.216Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:20:45.087Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:20:51.028Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:21:06.437Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:22:49.235Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:22:53.427Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:22:59.048Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:32:49.499Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T16:33:02.914Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:31:07.696Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:31:24.160Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:31:41.186Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:32:11.042Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:32:18.133Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:32:35.132Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:32:47.390Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:32:52.684Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:32:59.539Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:33:03.721Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:33:07.852Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:33:19.256Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:33:26.568Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:33:32.109Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:33:41.396Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:10.587Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:15.121Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:22.357Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:26.113Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:31.328Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:36.567Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:43.390Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:34:55.006Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:01.119Z",
+        "feature": "openings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:06.026Z",
+        "feature": "openings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:10.427Z",
+        "feature": "openings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:14.393Z",
+        "feature": "openings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:18.611Z",
+        "feature": "openings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:22.788Z",
+        "feature": "openings",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:27.151Z",
+        "feature": "[openingId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:31.621Z",
+        "feature": "[openingId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:35:35.756Z",
+        "feature": "[openingId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T05:58:11.155Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:00:55.704Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:12:45.324Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:19:09.223Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:19:21.641Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:29:35.954Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:37:15.561Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:45:11.284Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:45:23.482Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:45:29.638Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:45:44.747Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:50:40.107Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:50:50.774Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:53:19.881Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:53:24.312Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T06:53:33.674Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:16:52.051Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:17:03.310Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:17:13.460Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:17:26.843Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:17:31.169Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:17:37.977Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:17:42.864Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:18:01.531Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:33:40.737Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:33:49.088Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:33:59.131Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:37:12.319Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:37:25.750Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:37:41.818Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:44:28.057Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:44:39.558Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T08:44:52.017Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:08.064Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:14.201Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:26.943Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:37.764Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:47.612Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:53.019Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:09:57.422Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:10:02.433Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:10:07.752Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:10:20.053Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:10:28.564Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:10:35.419Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:11:27.762Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:15:15.746Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:15:20.374Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:15:42.108Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:15:56.759Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:17:25.842Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:46:50.326Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:58:01.186Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:58:08.656Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:58:13.740Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T09:58:17.983Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:19:10.122Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:19:15.113Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:19:49.516Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:26:35.743Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:28:30.050Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:29:39.581Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:54:52.534Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:55:11.173Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:55:18.052Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:55:24.309Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:55:32.870Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:55:39.751Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T10:55:50.225Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:11:56.276Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:23:49.917Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:23:58.680Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:24:05.140Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:24:10.666Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:24:16.831Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:24:24.533Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:24:31.032Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:33:17.813Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:33:23.496Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:33:42.656Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:33:51.307Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:34:04.316Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:34:22.172Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:50:27.012Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:50:31.667Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:50:46.086Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:53:45.976Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:53:51.144Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:53:55.159Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:53:59.616Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:54:24.809Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:54:37.130Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T11:54:43.825Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:04:06.008Z",
+        "feature": "stats",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:04:11.767Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:14:19.360Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:14:25.354Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:14:44.546Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:14:53.775Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:11.378Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:22.380Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:35.983Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:43.600Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:16:17.277Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:16:26.270Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:16:40.234Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:22:04.269Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:22:09.691Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:22:23.897Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:22:37.060Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T22:39:32.547Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T04:05:20.557Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T04:05:29.034Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T04:05:36.609Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T04:42:06.733Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T04:42:21.476Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T04:42:30.334Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T05:00:40.145Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T05:07:55.153Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T05:08:02.801Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T05:08:11.141Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T06:04:18.655Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T06:06:59.149Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T06:07:11.503Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:43:28.572Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:43:58.746Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:44:33.746Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:45:13.792Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:45:35.845Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:46:47.710Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:56:21.759Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:56:28.223Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:56:34.130Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:56:51.291Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:57:00.248Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:57:21.621Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:57:33.141Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T07:57:47.304Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:06:43.934Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:06:56.672Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:07:09.826Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:12:08.130Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:12:30.325Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:12:47.227Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:12:54.498Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:13:00.406Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:07.241Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:14.617Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:19.729Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:28.543Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:32.949Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:44.907Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:21:53.294Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:22:01.073Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:22:17.926Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:22:25.538Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:28:28.251Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:28:37.757Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:30:58.817Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:32:25.453Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:32:29.953Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:34:45.502Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:34:59.710Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T08:35:19.681Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T09:51:41.450Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T09:51:51.917Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T09:52:14.244Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T09:52:23.431Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T09:52:27.860Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T10:58:57.894Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T10:59:17.118Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T10:59:27.360Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T10:59:40.207Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T10:59:46.201Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T10:59:58.171Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:00:05.448Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:00:23.975Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:00:31.652Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:22:47.515Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:23:03.126Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:23:09.949Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:23:22.159Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-12T11:40:38.142Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:14:16.184Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:17:08.721Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:17:16.291Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:24:55.007Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:25:07.635Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:25:15.695Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:25:24.500Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:52:26.328Z",
+        "feature": "[sessionId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:52:37.890Z",
+        "feature": "sessions",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:52:57.710Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:53:51.583Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T04:53:55.512Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T05:03:45.013Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T05:03:52.681Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T05:04:47.628Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T05:04:53.168Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T05:05:03.038Z",
+        "feature": "[workId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:33:34.098Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:33:42.664Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:01.428Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:08.630Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:23.219Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:33.039Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:37.532Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:47.219Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-13T07:34:52.801Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:03:00.375Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:03:12.308Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:03:31.788Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:04:51.182Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:06:26.655Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:16:29.203Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:16:37.265Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:16:41.687Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:16:59.808Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:17:20.176Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:54:16.470Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:54:32.670Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:54:40.827Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:54:47.686Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:54:55.036Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:06.846Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:13.279Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:20.103Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:27.700Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:31.374Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:33.857Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:39.669Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:44.302Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:55:48.105Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:00.773Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:09.667Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:14.528Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:17.603Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:27.349Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:34.758Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:39.605Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:43.707Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:49.233Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:54.040Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:56:57.492Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:57:03.378Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:57:08.394Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:57:11.581Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:57:20.791Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:57:27.481Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T03:58:49.169Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T04:03:35.646Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T04:04:39.375Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T04:16:58.601Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:43:43.656Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:43:58.690Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:44:20.936Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:44:29.764Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:44:45.441Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:44:53.017Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:45:02.085Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:45:29.305Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:45:37.560Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:45:47.023Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:45:57.054Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:17.121Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:34.023Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:39.818Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:45.593Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:50.124Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:55.037Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:46:59.376Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:47:11.415Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:47:19.821Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:47:25.592Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:47:34.170Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:47:59.130Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:48:20.093Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:48:29.593Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:48:57.242Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T10:16:21.631Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T10:46:11.283Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T10:46:28.815Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T10:46:36.153Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:50:00.952Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:50:08.929Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:50:19.060Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:50:35.992Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:50:41.571Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:50:50.117Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:51:11.810Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:51:40.126Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T11:57:02.763Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T12:12:16.799Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T12:28:07.229Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T12:28:13.961Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T13:58:59.156Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T13:59:00.156Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T13:59:11.694Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T13:59:39.937Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T14:09:39.528Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T14:12:25.827Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T15:11:31.900Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T15:11:39.689Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T15:11:49.515Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T15:12:08.568Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T15:36:31.539Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T15:36:40.961Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T17:27:16.669Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T17:27:36.468Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T17:28:09.599Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T17:28:46.677Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T17:28:55.410Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T23:05:11.608Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T23:08:13.667Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T23:08:21.335Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:28:32.803Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:28:39.466Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:28:51.170Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:28:58.645Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:18.643Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:24.009Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:27.862Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:32.656Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:37.141Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:44.196Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:54.518Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:29:56.473Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:30:20.734Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:30:33.899Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:31:20.580Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:31:31.111Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:32:09.555Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:32:11.172Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T00:43:06.047Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:29:20.657Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:29:31.993Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:29:38.922Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:36:13.250Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:36:22.619Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:36:36.098Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:36:41.348Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:37:03.310Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:37:35.357Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T01:37:59.840Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T05:43:06.510Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T05:43:19.853Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T06:54:50.297Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T06:55:06.043Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T06:55:15.702Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T06:55:20.703Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T06:55:26.536Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T06:55:35.487Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T08:50:52.023Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-18T08:50:56.369Z",
+        "feature": "scripts",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:07:56.879Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:07:59.543Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:02.336Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:11.413Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:17.672Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:22.488Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:24.806Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:26.146Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T02:08:27.482Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T03:43:36.811Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T03:43:43.630Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T03:43:48.983Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T03:44:02.539Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T05:42:40.699Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T05:43:03.405Z",
+        "feature": "pro-analyze",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T05:43:16.048Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T05:43:25.714Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T09:43:49.207Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T09:43:56.135Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T13:49:49.603Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T13:49:58.185Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-19T17:13:43.057Z",
+        "feature": "synk-character-chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:20:54.547Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:23:45.969Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:24:27.223Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:24:57.081Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:25:19.492Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:25:46.076Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:26:05.346Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:26:45.944Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:27:42.421Z",
+        "feature": "overview",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:27:48.613Z",
+        "feature": "sessions",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:28:02.127Z",
+        "feature": "session",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:29:35.930Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:34:46.639Z",
+        "feature": "overview",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:35:08.257Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:35:13.240Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:35:22.586Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:35:53.308Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:46:23.535Z",
+        "feature": "chat",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:50:25.712Z",
+        "feature": "sessions",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:50:40.041Z",
+        "feature": "[sessionId]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:52:20.875Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:52:45.426Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:52:51.784Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:53:02.801Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:53:31.095Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:55:31.522Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T07:55:59.073Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-20T08:46:56.168Z",
+        "feature": "admin",
+        "phase": "do",
+        "action": "updated"
+      }
+    ]
+  }
+}

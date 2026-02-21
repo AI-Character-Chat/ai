@@ -4,14 +4,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import ChatHistorySidebar from '@/components/ChatHistorySidebar';
-import MainHeader from '@/components/MainHeader';
 import PersonaModal from '@/components/PersonaModal';
 import PersonaManager from '@/components/PersonaManager';
 import SearchModal from '@/components/HomePage/SearchModal';
 import NotificationsModal from '@/components/HomePage/NotificationsModal';
 import ProfileEditModal from '@/components/HomePage/ProfileEditModal';
-import { useLayout } from '@/contexts/LayoutContext';
 
 interface Banner {
   id: string;
@@ -76,7 +73,7 @@ interface Comment {
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { sidebarOpen, sidebarCollapsed } = useLayout();
+
   const [works, setWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWork, setSelectedWork] = useState<Work | null>(null);
@@ -230,14 +227,14 @@ export default function HomePage() {
               birthDate: data.birthDate ? data.birthDate.split('T')[0] : '',
               gender: data.gender || 'private',
             });
-            setProfileImage(data.image || null);
+            setProfileImage(data.image || '/default-profile.svg');
           } else {
             // API 실패 시 세션 데이터 사용
             setProfileForm((prev) => ({
               ...prev,
               nickname: session.user?.name || '',
             }));
-            setProfileImage(session.user?.image || null);
+            setProfileImage(session.user?.image || '/default-profile.svg');
           }
         } catch (error) {
           console.error('Failed to fetch profile:', error);
@@ -245,7 +242,7 @@ export default function HomePage() {
             ...prev,
             nickname: session.user?.name || '',
           }));
-          setProfileImage(session.user?.image || null);
+          setProfileImage(session.user?.image || '/default-profile.svg');
         }
       }
     };
@@ -329,7 +326,7 @@ export default function HomePage() {
           birthDate: data.birthDate ? data.birthDate.split('T')[0] : '',
           gender: data.gender || 'private',
         });
-        setProfileImage(data.image || null);
+        setProfileImage(data.image || '/default-profile.svg');
       }
     } catch (error) {
       console.error('Failed to save profile:', error);
@@ -797,26 +794,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header - 공통 컴포넌트 사용 (검색/알림 기능 내장) */}
-      <MainHeader
-        currentView={currentView}
-        onViewChange={(view) => {
-          setCurrentView(view);
-          if (view === 'works') {
-            window.history.replaceState({}, '', '/');
-          }
-        }}
-        profileImage={profileImage}
-        profileName={profileForm.nickname}
-      />
-
-      {/* Chat History Sidebar - 공통 컴포넌트 (Context 사용) */}
-      <ChatHistorySidebar />
-
-      {/* Main Content Wrapper - 헤더 높이만큼 상단 패딩, 사이드바 열리면 왼쪽 여백 추가 */}
-      <div className={`pt-16 transition-all duration-300 ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}`}>
-
+    <div>
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* 작품 목록 뷰 */}
@@ -1034,19 +1012,11 @@ export default function HomePage() {
             {/* User Info - 상단에 배치 */}
             <div className="flex items-center gap-4 mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl">
               <div className="relative">
-                {profileImage || session?.user?.image ? (
-                  <img
-                    src={profileImage || session?.user?.image || ''}
-                    alt={profileForm.nickname || session?.user?.name || ''}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-xl font-bold text-white">
-                      {profileForm.nickname?.[0] || session?.user?.name?.[0] || '?'}
-                    </span>
-                  </div>
-                )}
+                <img
+                  src={profileImage || session?.user?.image || '/default-profile.svg'}
+                  alt={profileForm.nickname || session?.user?.name || ''}
+                  className="w-16 h-16 rounded-full object-cover"
+                />
                 {/* Camera icon overlay */}
                 <button
                   onClick={() => setProfileEditOpen(true)}
@@ -1757,19 +1727,11 @@ export default function HomePage() {
                           className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-pink-500 transition-all"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {session.user.image ? (
-                            <img
-                              src={session.user.image}
-                              alt={session.user.name || ''}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-500 to-purple-600">
-                              <span className="text-sm font-bold text-white">
-                                {session.user.name?.[0] || '?'}
-                              </span>
-                            </div>
-                          )}
+                          <img
+                            src={session.user.image || '/default-profile.svg'}
+                            alt={session.user.name || ''}
+                            className="w-full h-full object-cover"
+                          />
                         </Link>
                         <div className="flex-1">
                           <div className="relative">
@@ -1856,19 +1818,11 @@ export default function HomePage() {
                                 className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-pink-500 transition-all"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {comment.user.image ? (
-                                  <img
-                                    src={comment.user.image}
-                                    alt={comment.user.name || ''}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-400 to-gray-500">
-                                    <span className="text-sm font-bold text-white">
-                                      {comment.user.name?.[0] || '?'}
-                                    </span>
-                                  </div>
-                                )}
+                                <img
+                                  src={comment.user.image || '/default-profile.svg'}
+                                  alt={comment.user.name || ''}
+                                  className="w-full h-full object-cover"
+                                />
                               </Link>
                               <div className="flex-1">
                                 <div className="flex items-center justify-between">
@@ -2064,19 +2018,11 @@ export default function HomePage() {
                                       className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-pink-500 transition-all"
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      {reply.user.image ? (
-                                        <img
-                                          src={reply.user.image}
-                                          alt={reply.user.name || ''}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-400 to-gray-500">
-                                          <span className="text-xs font-bold text-white">
-                                            {reply.user.name?.[0] || '?'}
-                                          </span>
-                                        </div>
-                                      )}
+                                      <img
+                                        src={reply.user.image || '/default-profile.svg'}
+                                        alt={reply.user.name || ''}
+                                        className="w-full h-full object-cover"
+                                      />
                                     </Link>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center justify-between">
@@ -2313,7 +2259,6 @@ export default function HomePage() {
           showSelectMode={false}
         />
       </main>
-      </div>
     </div>
   );
 }

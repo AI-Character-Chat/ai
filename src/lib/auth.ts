@@ -19,9 +19,24 @@ const prisma = new PrismaClient().$extends({
 // 기본 Prisma 클라이언트 (원본)
 const basePrisma = new PrismaClient();
 
+// SYNK 시그니처 기본 프로필 이미지
+export const DEFAULT_PROFILE_IMAGE = '/default-profile.svg';
+
 // 커스텀 어댑터 - AuthSession 테이블 사용
 const customAdapter = {
   ...PrismaAdapter(basePrisma as never),
+
+  // 첫 가입 시 기본 프로필 이미지 강제 설정
+  async createUser(data: { name?: string | null; email?: string | null; emailVerified?: Date | null; image?: string | null }) {
+    return basePrisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        emailVerified: data.emailVerified,
+        image: DEFAULT_PROFILE_IMAGE, // OAuth 이미지 무시, 항상 기본 프로필
+      },
+    });
+  },
 
   // Session 관련 메서드 오버라이드 (AuthSession 테이블 사용)
   async createSession(data: { sessionToken: string; userId: string; expires: Date }) {
@@ -96,12 +111,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: customAdapter as never,
   providers,
   callbacks: {
+    async signIn({ user }) {
+      // 로그인 시 이미지가 없으면 기본 프로필로 설정
+      if (user.id) {
+        const dbUser = await basePrisma.user.findUnique({ where: { id: user.id }, select: { image: true } });
+        if (!dbUser?.image) {
+          await basePrisma.user.update({
+            where: { id: user.id },
+            data: { image: DEFAULT_PROFILE_IMAGE },
+          });
+        }
+      }
+      return true;
+    },
     async session({ session, user }) {
       // 세션에 유저 ID + role 추가
       if (session.user) {
         session.user.id = user.id;
-        const dbUser = await basePrisma.user.findUnique({ where: { id: user.id }, select: { role: true } });
+        const dbUser = await basePrisma.user.findUnique({ where: { id: user.id }, select: { role: true, image: true } });
         (session.user as any).role = dbUser?.role || 'user';
+        // 항상 DB의 이미지 사용 (OAuth 이미지 대신 기본 프로필)
+        session.user.image = dbUser?.image || DEFAULT_PROFILE_IMAGE;
       }
       return session;
     },

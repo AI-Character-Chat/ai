@@ -9,6 +9,7 @@ import prisma from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { buildSystemInstruction, generateProAnalysis, generateEmbedding } from '@/lib/gemini';
 import { buildNarrativeContext, searchCharacterMemories, type MemoryScope } from '@/lib/narrative-memory';
+import { resolveConfig } from '@/lib/relationship-config';
 
 export async function POST(request: NextRequest) {
   const authSession = await auth();
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   const characters = session.work.characters;
+  const relConfig = resolveConfig(session.work.relationshipConfig);
 
   // 유저 이름 결정
   let effectiveUserName = session.userName;
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
     const contextResults = await Promise.all(
       characters.map(async (c) => {
         const [narrative, topicMemories] = await Promise.all([
-          buildNarrativeContext(scope, c.id, c.name, userMessage, embedding),
+          buildNarrativeContext(scope, c.id, c.name, userMessage, embedding, undefined, relConfig),
           searchCharacterMemories({
             scope,
             characterId: c.id,
@@ -97,8 +99,9 @@ export async function POST(request: NextRequest) {
       const rel = narrative.relationship;
       const lines: string[] = [`### ${character.name}`];
 
-      // 관계 수치
-      lines.push(`관계: ${rel.intimacyLevel} (친밀 ${rel.intimacyScore}, 신뢰 ${rel.trust}, 호감 ${rel.affection}, 존경 ${rel.respect}, 경쟁 ${rel.rivalry})`);
+      // 관계 수치 (동적 축)
+      const axisDisplay = relConfig.axes.map(a => `${a.label} ${rel.axisValues?.[a.key] ?? 0}`).join(', ');
+      lines.push(`관계: ${rel.intimacyLevel} (${axisDisplay})`);
 
       // 핵심 사실 (Identity)
       const identityFacts = rel.knownFacts.filter(f =>
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
     },
     characterNames: characters.map(c => c.name),
     memoryContext,
+    relationshipConfig: relConfig,
   });
 
   // DB 저장: 세션 proAnalysis + 메시지 metadata에 proAnalysisMetrics 추가

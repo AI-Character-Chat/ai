@@ -50,6 +50,7 @@ interface RelationshipItem {
   respect: number;
   rivalry: number;
   familiarity: number;
+  customAxes?: Record<string, number> | null;
   intimacyLevel: string;
   intimacyScore: number;
   knownFacts: string[];
@@ -60,6 +61,54 @@ interface RelationshipItem {
   nicknameForUser: string | null;
 }
 
+const DEFAULT_AXES = [
+  { key: 'trust', label: '신뢰', color: 'bg-blue-500' },
+  { key: 'affection', label: '호감', color: 'bg-pink-500' },
+  { key: 'respect', label: '존경', color: 'bg-purple-500' },
+  { key: 'rivalry', label: '경쟁', color: 'bg-red-500' },
+  { key: 'familiarity', label: '친숙', color: 'bg-green-500' },
+];
+
+const AXIS_COLORS = ['bg-blue-500', 'bg-pink-500', 'bg-purple-500', 'bg-red-500', 'bg-green-500', 'bg-yellow-500', 'bg-teal-500', 'bg-indigo-500', 'bg-orange-500', 'bg-cyan-500'];
+
+const DEFAULT_INTIMACY_LABELS: Record<string, string> = {
+  stranger: '낯선 사이',
+  acquaintance: '아는 사이',
+  friend: '친구',
+  close_friend: '절친',
+  intimate: '특별한 사이',
+};
+
+/** relationshipConfig에서 축 라벨 맵 파싱 */
+function parseAxisLabels(configStr?: string): Record<string, string> | null {
+  if (!configStr || configStr === '{}') return null;
+  try {
+    const config = JSON.parse(configStr) as { axes?: Array<{ key: string; label: string }> };
+    if (config.axes && config.axes.length > 0) {
+      return Object.fromEntries(config.axes.map(a => [a.key, a.label]));
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** 관계 아이템에서 동적 축 값 추출 */
+function getAxesForRelationship(r: RelationshipItem, axisLabels?: Record<string, string> | null): Array<{ key: string; label: string; color: string; value: number }> {
+  // customAxes가 있으면 커스텀 config (API에서 이미 파싱된 객체로 전달됨)
+  if (r.customAxes && Object.keys(r.customAxes).length > 0) {
+    return Object.entries(r.customAxes).map(([key, value], i) => ({
+      key,
+      label: axisLabels?.[key] || key,
+      color: AXIS_COLORS[i % AXIS_COLORS.length],
+      value: value ?? 0,
+    }));
+  }
+  // 기본 5축
+  return DEFAULT_AXES.map(a => ({
+    ...a,
+    value: (r as unknown as Record<string, number>)[a.key] ?? 0,
+  }));
+}
+
 interface SessionDetail {
   session: {
     id: string;
@@ -68,6 +117,7 @@ interface SessionDetail {
     turnCount: number;
     characters: Array<{ id: string; name: string }>;
     createdAt: string;
+    relationshipConfig?: string;
   };
   messages: MessageItem[];
   memories: MemoryItem[];
@@ -282,7 +332,7 @@ export default function MemoryAnalysisTab() {
                 <MemoriesView memories={detail.memories} />
               )}
               {subTab === 'relationships' && (
-                <RelationshipsView relationships={detail.relationships} />
+                <RelationshipsView relationships={detail.relationships} relationshipConfig={detail.session.relationshipConfig} />
               )}
             </div>
           </>
@@ -422,11 +472,18 @@ function MessagesView({
                       </div>
                       {rel && (
                         <div className="flex gap-2 mt-1 text-gray-500">
-                          <span>신뢰 {rel.trust as number}</span>
-                          <span>호감 {rel.affection as number}</span>
-                          <span>존경 {rel.respect as number}</span>
-                          <span>경쟁 {rel.rivalry as number}</span>
-                          <span>친숙 {rel.familiarity as number}</span>
+                          {rel.axisValues && rel.axisLabels
+                            ? Object.entries(rel.axisValues as Record<string, number>).map(([k, v]) => (
+                                <span key={k}>{(rel.axisLabels as Record<string, string>)[k] || k} {v}</span>
+                              ))
+                            : <>
+                                <span>신뢰 {rel.trust as number}</span>
+                                <span>호감 {rel.affection as number}</span>
+                                <span>존경 {rel.respect as number}</span>
+                                <span>경쟁 {rel.rivalry as number}</span>
+                                <span>친숙 {rel.familiarity as number}</span>
+                              </>
+                          }
                         </div>
                       )}
                       <div className="text-gray-400 mt-0.5">
@@ -561,28 +618,13 @@ function MemoriesView({ memories }: { memories: MemoryItem[] }) {
 // 서브탭 3: 관계 뷰
 // ============================================================
 
-function RelationshipsView({ relationships }: { relationships: RelationshipItem[] }) {
+function RelationshipsView({ relationships, relationshipConfig }: { relationships: RelationshipItem[]; relationshipConfig?: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const axisLabels = parseAxisLabels(relationshipConfig);
 
   if (relationships.length === 0) {
     return <div className="text-center text-gray-400 text-sm py-8">관계 데이터 없음</div>;
   }
-
-  const axes = [
-    { key: 'trust', label: '신뢰', color: 'bg-blue-500' },
-    { key: 'affection', label: '호감', color: 'bg-pink-500' },
-    { key: 'respect', label: '존경', color: 'bg-purple-500' },
-    { key: 'rivalry', label: '경쟁', color: 'bg-red-500' },
-    { key: 'familiarity', label: '친숙', color: 'bg-green-500' },
-  ] as const;
-
-  const intimacyLabels: Record<string, string> = {
-    stranger: '낯선 사이',
-    acquaintance: '아는 사이',
-    friend: '친구',
-    close_friend: '절친',
-    intimate: '특별한 사이',
-  };
 
   return (
     <div className="space-y-2">
@@ -598,19 +640,18 @@ function RelationshipsView({ relationships }: { relationships: RelationshipItem[
               <div className="flex items-center gap-3">
                 <h4 className="font-bold text-gray-900 dark:text-white">{r.characterName || r.characterId}</h4>
                 <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">
-                  {intimacyLabels[r.intimacyLevel] || r.intimacyLevel}
+                  {DEFAULT_INTIMACY_LABELS[r.intimacyLevel] || r.intimacyLevel}
                 </span>
                 {r.nicknameForUser && (
                   <span className="text-xs text-gray-500">호칭: {r.nicknameForUser}</span>
                 )}
               </div>
               <div className="flex items-center gap-3">
-                {/* 축약 5축 수치 */}
+                {/* 축약 수치 (동적) */}
                 <div className="hidden sm:flex gap-1.5 text-[10px] text-gray-400">
-                  <span>신뢰{r.trust.toFixed(0)}</span>
-                  <span>호감{r.affection.toFixed(0)}</span>
-                  <span>존경{r.respect.toFixed(0)}</span>
-                  <span>친숙{r.familiarity.toFixed(0)}</span>
+                  {getAxesForRelationship(r, axisLabels).slice(0, 4).map(a => (
+                    <span key={a.key}>{a.label}{a.value.toFixed(0)}</span>
+                  ))}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-400">
                   <span>{r.totalTurns}턴</span>
@@ -625,20 +666,20 @@ function RelationshipsView({ relationships }: { relationships: RelationshipItem[
             {/* 확장 디테일 */}
             {isExpanded && (
               <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700 pt-3 space-y-4">
-                {/* 5축 바 */}
+                {/* 관계 축 바 (동적) */}
                 <div>
-                  <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">관계 5축</div>
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">관계 축</div>
                   <div className="space-y-1.5">
-                    {axes.map(axis => (
+                    {getAxesForRelationship(r, axisLabels).map(axis => (
                       <div key={axis.key} className="flex items-center gap-2 text-xs">
                         <span className="w-8 text-gray-500 text-right">{axis.label}</span>
                         <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                           <div
                             className={`${axis.color} h-2.5 rounded-full transition-all`}
-                            style={{ width: `${r[axis.key]}%` }}
+                            style={{ width: `${axis.value}%` }}
                           />
                         </div>
-                        <span className="w-10 text-gray-600 dark:text-gray-300 font-medium">{r[axis.key].toFixed(0)}/100</span>
+                        <span className="w-10 text-gray-600 dark:text-gray-300 font-medium">{axis.value.toFixed(0)}/100</span>
                       </div>
                     ))}
                   </div>

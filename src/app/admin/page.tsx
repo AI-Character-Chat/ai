@@ -908,13 +908,7 @@ export default function AdminPage() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
-                                {user.image ? (
-                                  <img src={user.image} alt={user.name || ''} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
-                                    {user.name?.[0] || '?'}
-                                  </div>
-                                )}
+                                <img src={user.image || '/default-profile.svg'} alt={user.name || ''} className="w-full h-full object-cover" />
                               </div>
                               <div className="min-w-0">
                                 <p className="font-medium text-gray-900 dark:text-white truncate">{user.name || '이름 없음'}</p>
