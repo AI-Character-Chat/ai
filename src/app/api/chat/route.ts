@@ -367,7 +367,7 @@ export async function PUT(request: NextRequest) {
             pn => pn === c.name || pn.includes(c.name) || c.name.includes(pn) ||
               c.name.split(' ')[0] === pn || pn.split(' ')[0] === c.name.split(' ')[0]
           ))
-          .map(c => ({ name: c.name, profileImage: c.profileImage }));
+          .map(c => ({ name: c.name, profileImage: c.profileImage, prompt: c.prompt }));
 
         const characterDialogues = allTurns
           .filter(t => t.type === 'dialogue')

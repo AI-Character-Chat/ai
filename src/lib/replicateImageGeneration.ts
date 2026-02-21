@@ -149,8 +149,6 @@ export async function buildSDPrompt(
     .join('\n');
 
   const characterCount = characterProfiles.length;
-  const characterCountTag = characterCount === 1 ? '1girl' :
-    characterCount === 2 ? '2girls' : `${characterCount}girls`;
 
   const systemPrompt = `You are a Danbooru/Pony tag expert for anime image generation (ponynai3 / Pony-XL model).
 Convert the scene into Danbooru-style comma-separated tags optimized for Pony Diffusion.
@@ -158,8 +156,9 @@ Convert the scene into Danbooru-style comma-separated tags optimized for Pony Di
 RULES:
 - Output ONLY comma-separated English tags, no sentences.
 - Do NOT include score tags (score_9 etc.) — they are auto-prepended by the model.
-- Start with: masterpiece, best quality, absurdres, ${characterCountTag}
-- Depict ONLY the NPC characters, NOT the user/protagonist.
+- Start with: masterpiece, best quality, absurdres
+- Determine gender from character descriptions: use 1boy/1girl/2boys/2girls etc. accordingly. Do NOT default to "girl".
+- There are ${characterCount} NPC character(s). Depict ONLY the NPC characters, NOT the user/protagonist.
 - From the character descriptions, extract ONLY visual/appearance features using Compel weight syntax for important features:
   ✅ USE with weights: (silver hair:1.3), (red eyes:1.2), (black coat:1.2), scars, tattoos, cybernetic parts, wings, horns
   ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, motivations
@@ -203,7 +202,7 @@ Time: ${sceneState?.time || 'unknown'}`;
 
   // 폴백: 기본 태그
   return {
-    prompt: `masterpiece, best quality, anime illustration, ${characterCountTag}, ${emotionTags || 'neutral expression'}, ${sceneState?.location || 'indoor scene'}, cinematic lighting, detailed`,
+    prompt: `masterpiece, best quality, anime illustration, ${characterCount > 1 ? `${characterCount}persons` : '1person'}, ${emotionTags || 'neutral expression'}, ${sceneState?.location || 'indoor scene'}, cinematic lighting, detailed`,
     negativePrompt: defaultNegative,
   };
 }
