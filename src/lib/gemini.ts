@@ -816,7 +816,64 @@ export async function* generateStoryResponseStream(params: {
     }
   }
 
-  // 폴백: turn이 하나도 없을 때
+  // Flash 거부 시 Pro 모델로 자동 재시도
+  if (emittedTurns.length === 0 && characters.length > 0) {
+    console.warn('⚠️ Flash 모델 거부/빈 응답 감지, Pro 모델로 재시도...');
+    try {
+      const proRetryResult = await ai.models.generateContent({
+        model: MODEL_PRO,
+        config: {
+          systemInstruction,
+          temperature: 0.85,
+          topP: 0.9,
+          topK: 40,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+          safetySettings: SAFETY_SETTINGS,
+          thinkingConfig: { thinkingBudget: -1 },
+        },
+        contents,
+      });
+
+      const proText = proRetryResult.text?.trim();
+      if (proText) {
+        const proParsed = JSON.parse(proText);
+        const proTurns = (proParsed.turns || [])
+          .map((raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
+          .filter((t: StoryTurn | null): t is StoryTurn => t !== null && !isRefusalContent(t.content));
+
+        for (const turn of proTurns) {
+          console.log(`   🔄 Pro 재시도 turn ${emittedTurns.length + 1}: ${turn.type}`);
+          emittedTurns.push(turn);
+          yield { type: 'turn', turn };
+        }
+
+        if (proParsed.scene) {
+          parsedScene = {
+            location: proParsed.scene.location || sceneState.location,
+            time: proParsed.scene.time || sceneState.time,
+            presentCharacters: proParsed.scene.presentCharacters || sceneState.presentCharacters,
+          };
+        }
+        if (Array.isArray(proParsed.extractedFacts)) {
+          parsedFacts = proParsed.extractedFacts.filter((f: unknown) => typeof f === 'string' && f.length > 0);
+        }
+
+        // Pro 메타데이터 업데이트
+        const proUsage = proRetryResult.usageMetadata;
+        if (proUsage) {
+          lastUsageMetadata = proUsage;
+          lastFinishReason = (proRetryResult as any).candidates?.[0]?.finishReason || 'STOP';
+        }
+        console.log(`✅ Pro 재시도 성공 (${emittedTurns.length} turns)`);
+      }
+    } catch (proError) {
+      console.error('⚠️ Pro 모델 재시도도 실패:', proError instanceof Error ? proError.message : String(proError));
+    }
+  }
+
+  // 최종 폴백: Pro도 실패했을 때
   if (emittedTurns.length === 0 && characters.length > 0) {
     const fb1: StoryTurn = {
       type: 'narrator', characterId: '', characterName: '',
