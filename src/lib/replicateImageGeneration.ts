@@ -1,8 +1,9 @@
 /**
  * Replicate 기반 이미지 생성 모듈
  *
- * Animagine XL 4.0으로 캐릭터 일관성 확보 (Danbooru 태그 + 캐릭터 외모 묘사)
- * NSFW 제한 없음, 애니메 특화
+ * ponynai3 (tPonynai3_v7) — Pony-XL 기반 애니메 특화 모델
+ * score 시스템 + Danbooru 태그 + Compel 가중치
+ * NSFW 제한 없음, 871K+ runs
  */
 
 import Replicate from 'replicate';
@@ -20,9 +21,9 @@ import prisma from './prisma';
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN || '' });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-// 모델 (Replicate) — Animagine XL 4.0: 애니메 특화, NSFW 지원, Danbooru 태그
-// 커뮤니티 모델이라 model: 대신 version: 해시 사용 필요
-const ANIMAGINE_VERSION = '057e2276ac5dcd8d1575dc37b131f903df9c10c41aed53d47cd7d4f068c19fa5';
+// 모델 (Replicate) — ponynai3 (tPonynai3_v7): Pony-XL 애니메 특화, NSFW 무제한, 871K+ runs
+// prepend_preprompt=true → 자동으로 "score_9, score_8_up, score_7_up" 추가
+const PONYNAI3_VERSION = '848da0d3e5a762b8662592acd1818003a3b4672f513d7250895bd0d96c6a48c9';
 
 // ============================================
 // 타입 정의
@@ -151,35 +152,37 @@ export async function buildSDPrompt(
   const characterCountTag = characterCount === 1 ? '1girl' :
     characterCount === 2 ? '2girls' : `${characterCount}girls`;
 
-  const systemPrompt = `You are a Danbooru tag expert for anime image generation (Animagine XL model).
-Convert the FIRST narrator scene into Danbooru-style comma-separated tags.
+  const systemPrompt = `You are a Danbooru/Pony tag expert for anime image generation (ponynai3 / Pony-XL model).
+Convert the scene into Danbooru-style comma-separated tags optimized for Pony Diffusion.
 
 RULES:
 - Output ONLY comma-separated English tags, no sentences.
-- Start with: masterpiece, best quality, anime illustration
+- Do NOT include score tags (score_9 etc.) — they are auto-prepended by the model.
+- Start with: masterpiece, best quality, absurdres, ${characterCountTag}
 - Depict ONLY the NPC characters, NOT the user/protagonist.
-- From the character descriptions, extract ONLY visual/appearance features:
-  ✅ USE: hair color, hair length, hair style, eye color, skin color, body type, height, outfit, accessories, scars, tattoos, cybernetic parts, wings, horns, etc.
-  ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, age description in words, motivations.
-- The narrator text describes ONE specific scene moment. Convert that single scene into image tags.
-- Include expression/emotion tags for the NPC characters.
-- Include scene background tags (location, lighting, atmosphere) from the narrator text.
-- Character count tag: ${characterCountTag}
-- Max 60 tags total. English only.
+- From the character descriptions, extract ONLY visual/appearance features using Compel weight syntax for important features:
+  ✅ USE with weights: (silver hair:1.3), (red eyes:1.2), (black coat:1.2), scars, tattoos, cybernetic parts, wings, horns
+  ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, motivations
+- Include the character's pose/action from the narrator text.
+- Include expression/emotion tags.
+- Include scene background tags (location, lighting, atmosphere).
+- Max 50 tags total. English only.
 - Do NOT output negative prompt.
-- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally.`;
+- If the scene is NSFW/sexual, use appropriate Danbooru tags naturally (explicit, nipples, nude, etc.).
+- Use Compel weight syntax: (important_tag:1.3) for emphasis, max weight 1.5.`;
 
   const userPrompt = `Scene (ONE moment to depict):
 ${narratorText.substring(0, 300)}
 
-NPC Character Visual Features (extract ONLY appearance from these descriptions):
+NPC Character Visual Features (extract ONLY appearance):
 ${characterDescriptions || 'No descriptions available'}
 
 Emotion: ${emotionTags || 'neutral'}
 Location: ${sceneState?.location || 'unknown'}
 Time: ${sceneState?.time || 'unknown'}`;
 
-  const defaultNegative = 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name';
+  // ponynai3 전용 네거티브 — score 기반 품질 제어
+  const defaultNegative = 'score_6, score_5, score_4, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, username, blurry';
 
   try {
     const result = await ai.models.generateContent({
@@ -234,19 +237,20 @@ export async function generateSceneImageAsync(params: SceneImageParams): Promise
   console.log('[Replicate] SD 프롬프트:', sdPrompt.substring(0, 150) + '...');
 
   try {
-    // Animagine XL 4.0 — 애니메 특화 모델 (version 해시 사용)
-    console.log('[Replicate] Animagine XL 4.0 모델 사용');
+    // ponynai3 (tPonynai3_v7) — Pony-XL 애니메 특화, score 시스템
+    console.log('[Replicate] ponynai3 모델 사용');
     const prediction = await replicate.predictions.create({
-      version: ANIMAGINE_VERSION,
+      version: PONYNAI3_VERSION,
       input: {
         prompt: sdPrompt,
         negative_prompt: negativePrompt,
-        width: 1024,
-        height: 768,
-        num_inference_steps: 25,
-        guidance_scale: 7,
-        num_outputs: 1,
-        output_format: 'png',
+        width: 1184,
+        height: 864,
+        steps: 35,
+        cfg_scale: 5,
+        scheduler: 'Euler a',
+        prepend_preprompt: true,  // score_9, score_8_up, score_7_up 자동 추가
+        batch_size: 1,
       },
     });
 
