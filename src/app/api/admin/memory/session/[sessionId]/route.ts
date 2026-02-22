@@ -39,7 +39,6 @@ export async function GET(
         work: {
           select: {
             title: true,
-            relationshipConfig: true,
             characters: { select: { id: true, name: true } },
           },
         },
@@ -110,7 +109,6 @@ export async function GET(
           totalTurns: true,
           speechStyle: true,
           nicknameForUser: true,
-          customAxes: true,
           character: { select: { name: true } },
         },
       }),
@@ -124,7 +122,6 @@ export async function GET(
         turnCount: session.turnCount,
         characters: session.work.characters,
         createdAt: session.createdAt,
-        relationshipConfig: session.work.relationshipConfig || '{}',
       },
       messages: messages.map(m => ({
         ...m,
@@ -142,7 +139,6 @@ export async function GET(
         knownFacts: JSON.parse(r.knownFacts || '[]'),
         sharedExperiences: JSON.parse(r.sharedExperiences || '[]'),
         emotionalHistory: JSON.parse(r.emotionalHistory || '[]'),
-        customAxes: r.customAxes ? JSON.parse(r.customAxes) : null,
       })),
     });
   } catch (error) {

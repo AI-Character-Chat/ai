@@ -66,13 +66,21 @@ export default function ProfileEditModal({
                 accept="image/*"
                 className="hidden"
               />
-              <Image
-                src={profileImage || '/default-profile.svg'}
-                alt={profileForm.nickname || ''}
-                width={96}
-                height={96}
-                className="rounded-2xl object-cover"
-              />
+              {profileImage ? (
+                <Image
+                  src={profileImage}
+                  alt={profileForm.nickname || ''}
+                  width={96}
+                  height={96}
+                  className="rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                  <span className="text-3xl font-bold text-white">
+                    {profileForm.nickname?.[0] || '?'}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={() => profileImageInputRef.current?.click()}
                 disabled={profileImageUploading}

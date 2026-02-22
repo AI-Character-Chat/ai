@@ -226,13 +226,21 @@ export default function MainHeader({
                     aria-expanded={profileDropdownOpen}
                     aria-haspopup="true"
                   >
-                    <Image
-                      src={displayImage || '/default-profile.svg'}
-                      alt={displayName || ''}
-                      width={32}
-                      height={32}
-                      className="rounded-full object-cover"
-                    />
+                    {displayImage ? (
+                      <Image
+                        src={displayImage}
+                        alt={displayName || ''}
+                        width={32}
+                        height={32}
+                        className="rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                          {displayName?.[0] || '?'}
+                        </span>
+                      </div>
+                    )}
                   </button>
 
                   {/* Dropdown Menu */}

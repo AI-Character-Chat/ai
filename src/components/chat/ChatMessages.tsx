@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
 import type { ChatWork, ChatMessage, ChatCharacter, ResponseMetadata, ProAnalysisMetrics, CharacterMemoryDebugData, MemoryUpdateResult } from './useChatReducer';
-import MarkdownRenderer from '@/components/MarkdownRenderer';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -335,23 +334,13 @@ function ProAnalysisPopup({ proAnalysis, proMetrics, onClose }: {
   );
 }
 
-const DEFAULT_INTIMACY_LABELS: Record<string, string> = {
+const INTIMACY_LABELS: Record<string, string> = {
   stranger: '처음 만남',
   acquaintance: '아는 사이',
   friend: '친구',
   close_friend: '절친',
   intimate: '특별한 사이',
 };
-
-function getIntimacyLabel(rel: CharacterMemoryDebugData['relationship']): string {
-  const labels = rel.axisLabels;
-  // axisLabels가 있으면 커스텀 config → level key를 그대로 표시하되,
-  // 기본 레이블이 있으면 fallback
-  if (labels && Object.keys(labels).length > 0 && !DEFAULT_INTIMACY_LABELS[rel.intimacyLevel]) {
-    return rel.intimacyLevel; // 커스텀 레벨 key 그대로 (서버에서 이미 label로 변환됨)
-  }
-  return DEFAULT_INTIMACY_LABELS[rel.intimacyLevel] || rel.intimacyLevel;
-}
 
 const SURPRISE_LABELS: Record<string, { label: string; color: string }> = {
   save: { label: 'NEW', color: 'text-green-500' },
@@ -371,7 +360,7 @@ function MemoryDebugPanel({ memoryDebug, memoryUpdateResults }: {
   // 접힌 상태: 한 줄 요약
   const totalMemories = memoryDebug.reduce((s, d) => s + d.recentMemoriesCount, 0);
   const summaryLine = memoryDebug.map(d => {
-    const label = getIntimacyLabel(d.relationship);
+    const label = INTIMACY_LABELS[d.relationship.intimacyLevel] || d.relationship.intimacyLevel;
     return `${d.characterName}: ${label}`;
   }).join(' | ');
 
@@ -400,27 +389,17 @@ function MemoryDebugPanel({ memoryDebug, memoryUpdateResults }: {
               <div key={char.characterId} className="space-y-1">
                 <div className="font-medium text-gray-700 dark:text-gray-300">{char.characterName}</div>
 
-                {/* 관계 수치 (동적) */}
+                {/* 관계 수치 */}
                 <div className="flex flex-wrap gap-x-2 text-gray-500 dark:text-gray-400">
-                  <span>{getIntimacyLabel(char.relationship)}</span>
+                  <span>{INTIMACY_LABELS[char.relationship.intimacyLevel] || char.relationship.intimacyLevel}</span>
                   <span>|</span>
-                  {char.relationship.axisValues && char.relationship.axisLabels
-                    ? Object.entries(char.relationship.axisValues).map(([key, val]) => (
-                        <span key={key}>
-                          {char.relationship.axisLabels![key] || key}{' '}
-                          <b className="text-gray-700 dark:text-gray-300">{val.toFixed(0)}</b>
-                        </span>
-                      ))
-                    : <>
-                        <span>신뢰 <b className="text-gray-700 dark:text-gray-300">{char.relationship.trust.toFixed(0)}</b></span>
-                        <span>호감 <b className="text-gray-700 dark:text-gray-300">{char.relationship.affection.toFixed(0)}</b></span>
-                        <span>존경 <b className="text-gray-700 dark:text-gray-300">{char.relationship.respect.toFixed(0)}</b></span>
-                        {char.relationship.rivalry > 0 && (
-                          <span>경쟁 <b className="text-orange-500">{char.relationship.rivalry.toFixed(0)}</b></span>
-                        )}
-                        <span>친숙 <b className="text-gray-700 dark:text-gray-300">{char.relationship.familiarity.toFixed(0)}</b></span>
-                      </>
-                  }
+                  <span>신뢰 <b className="text-gray-700 dark:text-gray-300">{char.relationship.trust.toFixed(0)}</b></span>
+                  <span>호감 <b className="text-gray-700 dark:text-gray-300">{char.relationship.affection.toFixed(0)}</b></span>
+                  <span>존경 <b className="text-gray-700 dark:text-gray-300">{char.relationship.respect.toFixed(0)}</b></span>
+                  {char.relationship.rivalry > 0 && (
+                    <span>경쟁 <b className="text-orange-500">{char.relationship.rivalry.toFixed(0)}</b></span>
+                  )}
+                  <span>친숙 <b className="text-gray-700 dark:text-gray-300">{char.relationship.familiarity.toFixed(0)}</b></span>
                 </div>
 
                 {/* 감정 흐름 */}
@@ -479,21 +458,7 @@ export default function ChatMessages({
 }: ChatMessagesProps) {
   const [openMetadataId, setOpenMetadataId] = useState<string | null>(null);
   const [openProAnalysisId, setOpenProAnalysisId] = useState<string | null>(null);
-  const [profileCharacter, setProfileCharacter] = useState<{ id: string; name: string; profileImage: string | null; prompt?: string } | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
   const sidebarMargin = sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : '';
-
-  const handleCharacterClick = useCallback(async (char: ChatCharacter) => {
-    setProfileCharacter({ ...char });
-    setProfileLoading(true);
-    try {
-      const res = await fetch(`/api/characters/${char.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProfileCharacter({ id: data.id, name: data.name, profileImage: data.profileImage, prompt: data.prompt });
-      }
-    } catch { /* 무시 */ } finally { setProfileLoading(false); }
-  }, []);
 
   const handleInfoClick = useCallback((messageId: string) => {
     setOpenMetadataId(prev => prev === messageId ? null : messageId);
@@ -603,18 +568,15 @@ export default function ChatMessages({
           return (
             <div key={message.id} className="relative">
               <div className="flex items-start gap-3 animate-fade-in-up">
-                <button
-                  onClick={() => character && handleCharacterClick(character)}
-                  className={`w-10 h-10 rounded-full ${getCharacterColor(message.characterId, work.characters)} flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary-400 transition-all`}
-                >
+                <div className={`w-10 h-10 rounded-full ${getCharacterColor(message.characterId, work.characters)} flex-shrink-0 flex items-center justify-center overflow-hidden`}>
                   {character?.profileImage ? (
                     <img src={character.profileImage} alt={character.name} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-sm font-bold text-white">{character?.name?.[0] || 'AI'}</span>
+                    <span className="text-sm font-bold text-white">{character?.name?.[0] || '?'}</span>
                   )}
-                </button>
+                </div>
                 <div className="flex-1 min-w-0">
-                  <button onClick={() => character && handleCharacterClick(character)} className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer">{character?.name || '알 수 없음'}</button>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{character?.name || '알 수 없음'}</p>
                   <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 shadow-sm">
                     {message.generatedImageUrl && (
                       <div className="mb-3 -mx-2 -mt-1">
@@ -700,44 +662,6 @@ export default function ChatMessages({
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         </button>
-      )}
-
-      {/* Character Profile Modal */}
-      {profileCharacter && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setProfileCharacter(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* Header with image */}
-            <div className="relative bg-gradient-to-br from-primary-500 to-purple-600 h-24">
-              <button onClick={() => setProfileCharacter(null)} className="absolute top-3 right-3 text-white/80 hover:text-white p-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="px-6 pb-6">
-              <div className="-mt-12 mb-3">
-                <div className={`w-24 h-24 rounded-full border-4 border-white dark:border-gray-800 overflow-hidden mx-auto ${getCharacterColor(profileCharacter.id, work.characters)} flex items-center justify-center`}>
-                  {profileCharacter.profileImage ? (
-                    <img src={profileCharacter.profileImage} alt={profileCharacter.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-3xl font-bold text-white">{profileCharacter.name[0]}</span>
-                  )}
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">{profileCharacter.name}</h3>
-              {profileLoading ? (
-                <div className="flex justify-center py-4">
-                  <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : profileCharacter.prompt ? (
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 max-h-60 overflow-y-auto">
-                  <MarkdownRenderer
-                    content={profileCharacter.prompt.length > 800 ? profileCharacter.prompt.slice(0, 800) + '...' : profileCharacter.prompt}
-                    className="text-sm"
-                  />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
       )}
     </main>
   );

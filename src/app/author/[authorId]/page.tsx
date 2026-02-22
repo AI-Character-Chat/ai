@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
+import MainHeader from '@/components/MainHeader';
+import ChatHistorySidebar from '@/components/ChatHistorySidebar';
+import { useLayout } from '@/contexts/LayoutContext';
 
 interface Author {
   id: string;
@@ -44,6 +47,7 @@ export default function AuthorPage() {
   const authorId = params.authorId as string;
   const { data: session } = useSession();
   const router = useRouter();
+  const { sidebarOpen, sidebarCollapsed } = useLayout();
 
   const [author, setAuthor] = useState<Author | null>(null);
   const [works, setWorks] = useState<Work[]>([]);
@@ -130,8 +134,16 @@ export default function AuthorPage() {
   const isOwnProfile = session?.user?.id === author.id;
 
   return (
-    <div>
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen">
+      {/* Header - 공통 컴포넌트 사용 (검색/알림 기능 내장) */}
+      <MainHeader />
+
+      {/* Chat History Sidebar - 공통 컴포넌트 (Context 사용) */}
+      <ChatHistorySidebar />
+
+      {/* Main Content Wrapper - 헤더 높이만큼 상단 패딩, 사이드바 열리면 왼쪽 여백 추가 */}
+      <div className={`pt-16 transition-all duration-300 ${sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : ''}`}>
+        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           {/* 페이지 타이틀 & 뒤로가기 */}
           <div className="flex items-center gap-3 mb-6">
             <button
@@ -332,6 +344,8 @@ export default function AuthorPage() {
             </div>
           )}
         </main>
+      </div>
+
     </div>
   );
 }

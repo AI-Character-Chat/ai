@@ -129,7 +129,7 @@ export default function ChatContainer() {
         messageType: msg.messageType,
         createdAt: msg.createdAt,
         character: msg.character || null,
-        generatedImageUrl: msg.imageUrl || msg.generatedImageUrl || null,
+        generatedImageUrl: msg.generatedImageUrl || null,
       }));
 
       dispatch({ type: 'LOAD_SESSION', session, messages });
@@ -388,9 +388,6 @@ export default function ChatContainer() {
       // SSE 처리 중 메시지를 누적하기 위한 로컬 배열 (dispatch 사이 시차 문제 방지)
       let localNewMessages: ChatMessage[] = [];
       let lastAiMessageId = '';
-      // 이미지 생성용 데이터 캡처
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let sceneImageData: { presentCharacters?: any[]; characterDialogues?: any[]; sceneUpdate?: any } = {};
 
       while (true) {
         const { value, done } = await reader.read();
@@ -472,12 +469,6 @@ export default function ChatContainer() {
                   dispatch({ type: 'UPDATE_SESSION', session: updatedSess });
                   chatCache.updateSession(parsed.session.id, updatedSess);
                 }
-                // 이미지 생성용 데이터 캡처
-                sceneImageData = {
-                  presentCharacters: parsed.presentCharacters,
-                  characterDialogues: parsed.characterDialogues,
-                  sceneUpdate: parsed.sceneUpdate,
-                };
                 break;
 
               case 'memory_update':
@@ -497,6 +488,7 @@ export default function ChatContainer() {
                 // Pro 분석 트리거 (별도 API — Vercel serverless 타임아웃 회피)
                 if (lastAiMessageId && parsed.aiResponseSummary) {
                   const proMsgId = lastAiMessageId;
+                  // 분석 중 상태 표시
                   dispatch({
                     type: 'SET_PRO_ANALYSIS_METRICS',
                     messageId: proMsgId,
@@ -519,11 +511,6 @@ export default function ChatContainer() {
                     })
                     .catch(() => {});
                 }
-
-                // [임시 비활성화] 장면 이미지 자동 생성 (Replicate) — 이미지 품질 개선 후 재활성화 예정
-                // if (lastAiMessageId && sceneImageData.presentCharacters) {
-                //   ... (이미지 생성 코드 비활성화)
-                // }
                 break;
             }
           } catch (parseError) {

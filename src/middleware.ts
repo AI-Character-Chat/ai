@@ -63,16 +63,6 @@ function getRateLimitConfig(
     return { limit: 10, windowMs: MINUTE };
   }
 
-  // 장면 이미지 생성 (Replicate) - 분당 15회
-  if (pathname.startsWith('/api/generate-scene-image')) {
-    return { limit: 15, windowMs: MINUTE };
-  }
-
-  // 캐릭터 초상화 생성 - 분당 5회 (비용 높음)
-  if (pathname.includes('/generate-portrait')) {
-    return { limit: 5, windowMs: MINUTE };
-  }
-
   // 파일 업로드 - 분당 20회
   if (pathname.startsWith('/api/upload')) {
     return { limit: 20, windowMs: MINUTE };

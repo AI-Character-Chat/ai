@@ -81,8 +81,6 @@ export interface CharacterMemoryDebugData {
     respect: number;
     rivalry: number;
     familiarity: number;
-    axisValues?: Record<string, number>;
-    axisLabels?: Record<string, string>;
   };
   recentMemoriesCount: number;
   recentMemories: Array<{ interpretation: string; importance: number }>;
@@ -180,7 +178,6 @@ export type ChatAction =
   | { type: 'SET_MENU'; open: boolean }
   | { type: 'ADD_GENERATING_IMAGE'; messageId: string }
   | { type: 'REMOVE_GENERATING_IMAGE'; messageId: string }
-  | { type: 'UPDATE_MESSAGE_IMAGE'; messageId: string; imageUrl: string }
   | { type: 'SET_RESPONSE_METADATA'; messageId: string; metadata: ResponseMetadata }
   | { type: 'SET_PRO_ANALYSIS_METRICS'; messageId: string; metrics: ProAnalysisMetrics }
   | { type: 'SET_MEMORY_UPDATE'; messageId: string; results: MemoryUpdateResult[] }
@@ -236,14 +233,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       next.delete(action.messageId);
       return { ...state, generatingImages: next };
     }
-
-    case 'UPDATE_MESSAGE_IMAGE':
-      return {
-        ...state,
-        messages: state.messages.map(m =>
-          m.id === action.messageId ? { ...m, generatedImageUrl: action.imageUrl } : m
-        ),
-      };
 
     case 'SET_RESPONSE_METADATA':
       return {

@@ -1,35 +1,14 @@
 {
   "version": "1.0",
-  "enabled": true,
+  "enabled": false,
   "teamName": "",
   "feature": "embedding-memory-search",
   "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-02-21T09:14:40.426Z",
-  "lastUpdated": "2026-02-21T09:17:19.112Z",
-  "teammates": [
-    {
-      "name": "ade9ffc",
-      "role": "general-purpose",
-      "model": "sonnet",
-      "status": "completed",
-      "currentTask": null,
-      "taskId": null,
-      "startedAt": "2026-02-21T09:14:40.428Z",
-      "lastActivityAt": "2026-02-21T09:17:19.111Z"
-    },
-    {
-      "name": "a79adab",
-      "role": "general-purpose",
-      "model": "sonnet",
-      "status": "completed",
-      "currentTask": null,
-      "taskId": null,
-      "startedAt": "2026-02-21T09:14:47.296Z",
-      "lastActivityAt": "2026-02-21T09:16:24.329Z"
-    }
-  ],
+  "startedAt": "2026-02-22T01:01:58.701Z",
+  "lastUpdated": "2026-02-22T01:46:36.239Z",
+  "teammates": [],
   "progress": {
     "totalTasks": 0,
     "completedTasks": 0,

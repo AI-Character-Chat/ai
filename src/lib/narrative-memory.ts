@@ -8,20 +8,6 @@
 
 import { PrismaClient } from '@prisma/client';
 import { generateEmbedding } from './gemini';
-import {
-  type RelationshipConfig,
-  DEFAULT_RELATIONSHIP_CONFIG,
-  resolveConfig,
-  isDefaultConfig,
-  getAxisValues,
-  calculateScore,
-  calculateLevel,
-  translateLevel,
-  applyCorrelations,
-  getDefaultAxisValues,
-  generateTraits,
-  getBehaviorGuide,
-} from './relationship-config';
 
 const prisma = new PrismaClient();
 
@@ -359,15 +345,11 @@ export interface RelationshipState {
   characterName: string;
   intimacyLevel: string;
   intimacyScore: number;
-  // 기존 5축 (역방향 호환)
   trust: number;
   affection: number;
   respect: number;
   rivalry: number;
   familiarity: number;
-  // 동적 축
-  axisValues: Record<string, number>;
-  config: RelationshipConfig;
   relationshipLabel?: string;
   speechStyle: string;
   nicknameForUser?: string;
@@ -382,7 +364,13 @@ export interface MemoryProcessingResult {
   surpriseAction: 'reinforce' | 'skip' | 'save' | 'no_facts';
   surpriseScore: number;
   adjustedImportance: number;
-  relationshipUpdate: Record<string, number>;
+  relationshipUpdate: {
+    trustDelta: number;
+    affectionDelta: number;
+    respectDelta: number;
+    rivalryDelta: number;
+    familiarityDelta: number;
+  };
   newFactsCount: number;
 }
 
@@ -540,11 +528,9 @@ export async function endScene(sceneId: string, summary?: string) {
  * 관계 데이터를 RelationshipState로 변환
  */
 function mapRelationshipToState(
-  r: { characterId: string; intimacyLevel: string; intimacyScore: number; trust: number; affection: number; respect: number; rivalry: number; familiarity: number; relationshipLabel: string | null; speechStyle: string; nicknameForUser: string | null; knownFacts: string; sharedExperiences: string; emotionalHistory: string; customAxes?: string },
-  characterName: string,
-  config: RelationshipConfig = DEFAULT_RELATIONSHIP_CONFIG,
+  r: { characterId: string; intimacyLevel: string; intimacyScore: number; trust: number; affection: number; respect: number; rivalry: number; familiarity: number; relationshipLabel: string | null; speechStyle: string; nicknameForUser: string | null; knownFacts: string; sharedExperiences: string; emotionalHistory: string },
+  characterName: string
 ): RelationshipState {
-  const axisValues = getAxisValues(r as Record<string, unknown>, config);
   return {
     characterId: r.characterId,
     characterName,
@@ -555,8 +541,6 @@ function mapRelationshipToState(
     respect: r.respect,
     rivalry: r.rivalry,
     familiarity: r.familiarity,
-    axisValues,
-    config,
     relationshipLabel: r.relationshipLabel || undefined,
     speechStyle: r.speechStyle,
     nicknameForUser: r.nicknameForUser || undefined,
@@ -573,8 +557,7 @@ function mapRelationshipToState(
 export async function getOrCreateRelationship(
   scope: MemoryScope,
   characterId: string,
-  characterName: string,
-  config: RelationshipConfig = DEFAULT_RELATIONSHIP_CONFIG,
+  characterName: string
 ): Promise<RelationshipState> {
   // 1차: 크로스세션 검색 (userId+workId+characterId)
   let relationship = await prisma.userCharacterRelationship.findFirst({
@@ -598,23 +581,20 @@ export async function getOrCreateRelationship(
 
   if (!relationship) {
     // 신규 생성 (크로스세션 필드 포함)
-    const createData: Record<string, unknown> = {
-      sessionId: scope.sessionId,
-      userId: scope.userId,
-      workId: scope.workId,
-      characterId,
-      intimacyLevel: config.levels[0]?.key || 'stranger',
-      intimacyScore: 0,
-      speechStyle: 'formal',
-    };
-    // 커스텀 config → customAxes에 초기값 저장
-    if (!isDefaultConfig(config)) {
-      createData.customAxes = JSON.stringify(getDefaultAxisValues(config.axes));
-    }
-    relationship = await prisma.userCharacterRelationship.create({ data: createData as any });
+    relationship = await prisma.userCharacterRelationship.create({
+      data: {
+        sessionId: scope.sessionId,
+        userId: scope.userId,
+        workId: scope.workId,
+        characterId,
+        intimacyLevel: 'stranger',
+        intimacyScore: 0,
+        speechStyle: 'formal',
+      },
+    });
   }
 
-  return mapRelationshipToState(relationship, characterName, config);
+  return mapRelationshipToState(relationship, characterName);
 }
 
 /**
@@ -625,14 +605,18 @@ export async function updateRelationship(
   characterId: string,
   sceneId: string | undefined,
   updates: {
-    axisDeltas?: Record<string, number>;
+    intimacyDelta?: number;
+    trustDelta?: number;
+    affectionDelta?: number;
+    respectDelta?: number;
+    rivalryDelta?: number;
+    familiarityDelta?: number;
     newLabel?: string;
     newFacts?: string[];
     newExperience?: string;
     speechStyleChange?: string;
     nicknameChange?: string;
-  },
-  config: RelationshipConfig = DEFAULT_RELATIONSHIP_CONFIG,
+  }
 ) {
   // 크로스세션 검색 → 레거시 폴백
   const relationship = await prisma.userCharacterRelationship.findFirst({
@@ -648,49 +632,54 @@ export async function updateRelationship(
     lastInteraction: new Date(),
   };
 
-  // 현재 축 값 로드
-  const currentValues = getAxisValues(relationship as Record<string, unknown>, config);
-  const axisDeltas = updates.axisDeltas || {};
+  // 다축 관계 업데이트
+  const axes = [
+    { key: 'trust', delta: updates.trustDelta, current: relationship.trust },
+    { key: 'affection', delta: updates.affectionDelta, current: relationship.affection },
+    { key: 'respect', delta: updates.respectDelta, current: relationship.respect },
+    { key: 'rivalry', delta: updates.rivalryDelta, current: relationship.rivalry },
+    { key: 'familiarity', delta: updates.familiarityDelta, current: relationship.familiarity },
+  ];
 
-  // 축별 델타 적용
-  const newValues: Record<string, number> = {};
-  for (const axis of config.axes) {
-    const delta = axisDeltas[axis.key] || 0;
-    const max = 100;
-    newValues[axis.key] = Math.max(0, Math.min(max, currentValues[axis.key] + delta));
-  }
-
-  // 축 간 상관 보정
-  applyCorrelations(newValues, config.correlations);
-
-  // DB에 축 값 저장
-  if (isDefaultConfig(config)) {
-    // default: 기존 5축 컬럼에 직접 write
-    for (const axis of config.axes) {
-      if (newValues[axis.key] !== currentValues[axis.key]) {
-        data[axis.key] = newValues[axis.key];
-      }
+  const axisValues: Record<string, number> = {};
+  for (const axis of axes) {
+    if (axis.delta) {
+      const newVal = Math.max(0, Math.min(100, axis.current + axis.delta));
+      data[axis.key] = newVal;
+      axisValues[axis.key] = newVal;
+    } else {
+      axisValues[axis.key] = axis.current;
     }
-  } else {
-    // custom: customAxes JSON에 write
-    data.customAxes = JSON.stringify(newValues);
   }
 
-  // intimacyScore 자동 계산
-  const newScore = calculateScore(newValues, config.weights);
+  // intimacyScore 자동 계산 (5축 가중 평균)
+  const newScore = Math.max(0, Math.min(100,
+    axisValues.affection * 0.35 +
+    axisValues.trust * 0.25 +
+    axisValues.familiarity * 0.25 +
+    axisValues.respect * 0.15 -
+    axisValues.rivalry * 0.1
+  ));
   data.intimacyScore = newScore;
 
-  // 레벨 자동 업데이트
-  const newLevel = calculateLevel(newScore, newValues, config.levels);
+  // 레거시 intimacyDelta 지원 (다축이 없을 때 폴백)
+  if (updates.intimacyDelta && !updates.affectionDelta && !updates.trustDelta) {
+    data.intimacyScore = Math.max(0, Math.min(100, relationship.intimacyScore + updates.intimacyDelta));
+  }
+
+  // 친밀도 레벨 자동 업데이트
+  const finalScore = data.intimacyScore as number;
+  const newLevel = getIntimacyLevel(finalScore);
   if (newLevel !== relationship.intimacyLevel) {
     data.intimacyLevel = newLevel;
 
+    // 관계 변화 기록
     if (sceneId) {
       await prisma.relationshipChange.create({
         data: {
           relationshipId: relationship.id,
           sceneId,
-          changeType: newScore > relationship.intimacyScore ? 'intimacy_up' : 'intimacy_down',
+          changeType: finalScore > relationship.intimacyScore ? 'intimacy_up' : 'intimacy_down',
           previousValue: relationship.intimacyLevel,
           newValue: newLevel,
         },
@@ -714,7 +703,7 @@ export async function updateRelationship(
     data.relationshipLabel = updates.newLabel;
   }
 
-  // 새로 알게 된 사실 (충돌 감지 적용)
+  // 새로 알게 된 사실 (충돌 감지 적용 — 같은 주제의 기존 fact는 최신 값으로 교체)
   if (updates.newFacts && updates.newFacts.length > 0) {
     const existingFacts: string[] = JSON.parse(relationship.knownFacts);
     const resolvedFacts = resolveFactConflicts(existingFacts, updates.newFacts);
@@ -725,6 +714,7 @@ export async function updateRelationship(
   if (updates.newExperience) {
     const experiences: string[] = JSON.parse(relationship.sharedExperiences);
     experiences.push(updates.newExperience);
+    // 영구 기억: 모든 경험 보존
     data.sharedExperiences = JSON.stringify(experiences);
   }
 
@@ -745,16 +735,26 @@ export async function updateRelationship(
 }
 
 /**
+ * 친밀도 점수 → 레벨 변환
+ */
+function getIntimacyLevel(score: number): string {
+  if (score >= 80) return 'intimate';
+  if (score >= 60) return 'close_friend';
+  if (score >= 40) return 'friend';
+  if (score >= 20) return 'acquaintance';
+  return 'stranger';
+}
+
+/**
  * 유저+작품의 모든 캐릭터 관계 가져오기 (크로스세션)
  */
-export async function getAllRelationships(scope: MemoryScope, config?: RelationshipConfig): Promise<RelationshipState[]> {
+export async function getAllRelationships(scope: MemoryScope): Promise<RelationshipState[]> {
   const relationships = await prisma.userCharacterRelationship.findMany({
     where: { userId: scope.userId, workId: scope.workId },
     include: { character: true },
   });
 
-  const resolvedConfig = config || DEFAULT_RELATIONSHIP_CONFIG;
-  return relationships.map((r) => mapRelationshipToState(r, r.character.name, resolvedConfig));
+  return relationships.map((r) => mapRelationshipToState(r, r.character.name));
 }
 
 // ============================================================
@@ -1171,16 +1171,14 @@ export async function buildNarrativeContext(
   userMessage?: string,
   cachedEmbedding?: number[],
   cachedScene?: SceneContext | null,
-  config?: RelationshipConfig,
 ): Promise<{
   relationship: RelationshipState;
   recentMemories: Array<{ interpretation: string; importance: number }>;
   sceneContext: SceneContext | null;
   narrativePrompt: string;
 }> {
-  const resolvedConfig = config || DEFAULT_RELATIONSHIP_CONFIG;
   // 1. 관계 상태 가져오기 (크로스세션)
-  const relationship = await getOrCreateRelationship(scope, characterId, characterName, resolvedConfig);
+  const relationship = await getOrCreateRelationship(scope, characterId, characterName);
 
   // 2. 임베딩: 캐시된 것 사용, 없으면 생성 (1회만)
   let queryEmbedding: number[] | undefined = cachedEmbedding && cachedEmbedding.length > 0
@@ -1230,23 +1228,19 @@ function generateNarrativePrompt(
 ): string {
   const lines: string[] = [];
 
-  // 관계 상태 (동적 축)
-  const cfg = relationship.config;
-  const vals = relationship.axisValues;
+  // 관계 상태 (다축)
   lines.push(`[${characterName}의 유저에 대한 인식]`);
-  lines.push(`- 관계 단계: ${translateLevel(relationship.intimacyLevel, cfg.levels)}`);
-  lines.push(`- ${cfg.axes.map(a => `${a.label}: ${(vals[a.key] ?? 0).toFixed(0)}`).join(' | ')}`);
+  lines.push(`- 관계 단계: ${translateIntimacyLevel(relationship.intimacyLevel)}`);
+  lines.push(`- 신뢰: ${relationship.trust.toFixed(0)} | 호감: ${relationship.affection.toFixed(0)} | 존경: ${relationship.respect.toFixed(0)} | 경쟁심: ${relationship.rivalry.toFixed(0)} | 친숙도: ${relationship.familiarity.toFixed(0)}`);
 
-  // 관계 특성 요약 (동적)
-  const traits = generateTraits(vals, cfg);
-  if (traits.length > 0) lines.push(`- 핵심 특성: ${traits.join(', ')}`);
-
-  // 행동 가이드 (레벨 가이드 + 동적 축 가이드)
-  const guides = getBehaviorGuide(relationship.intimacyLevel, vals, cfg);
-  if (guides.length > 0) {
-    lines.push(`\n[${characterName}의 유저에 대한 태도 가이드]`);
-    guides.forEach(g => lines.push(`- ${g}`));
-  }
+  // 관계 특성 요약 (높은/낮은 축 강조)
+  const traits: string[] = [];
+  if (relationship.trust >= 70) traits.push('깊이 신뢰함');
+  else if (relationship.trust <= 30) traits.push('불신');
+  if (relationship.affection >= 70) traits.push('강한 애착');
+  if (relationship.respect >= 70) traits.push('높은 존경');
+  if (relationship.rivalry >= 50) traits.push('라이벌 의식');
+  if (traits.length > 0) lines.push(`- 핵심 감정: ${traits.join(', ')}`);
 
   if (relationship.relationshipLabel) {
     lines.push(`- 유저를 "${relationship.relationshipLabel}"(으)로 인식`);
@@ -1320,6 +1314,20 @@ function generateNarrativePrompt(
   return lines.join('\n');
 }
 
+/**
+ * 친밀도 레벨 번역
+ */
+function translateIntimacyLevel(level: string): string {
+  const translations: Record<string, string> = {
+    stranger: '처음 만난 사이',
+    acquaintance: '아는 사이',
+    friend: '친구',
+    close_friend: '절친한 친구',
+    intimate: '특별한 사이',
+  };
+  return translations[level] || level;
+}
+
 // ============================================================
 // 대화 분석 및 기억 추출 (Gemini 응답 후 호출)
 // ============================================================
@@ -1342,41 +1350,43 @@ export async function processConversationForMemory(params: {
     characterName: string;
     content: string;
     emotion?: { primary: string; intensity: number };
-    relationshipDelta?: Record<string, number>;
+    relationshipDelta?: {
+      trust?: number;
+      affection?: number;
+      respect?: number;
+      rivalry?: number;
+      familiarity?: number;
+    };
   }>;
   extractedFacts?: string[];
   emotionalMoment?: boolean;
-  config?: RelationshipConfig;
 }): Promise<MemoryProcessingResult[]> {
   const { scope, sceneId, userMessage, characterResponses, extractedFacts, emotionalMoment } =
     params;
-  const config = params.config || DEFAULT_RELATIONSHIP_CONFIG;
-  const configDefaultDeltas = config.defaultDeltas || {};
 
   // extractedFacts를 Personal(knownFacts) / Action(sharedExperiences) 분리
+  // Personal: 이름, 나이, 취미, 선호 등 유저의 속성 → knownFacts
+  // Action: 행동, 약속, 계획, 상황 등 일시적 사건 → sharedExperiences
   const personalFacts = extractedFacts?.filter(f => !isActionFact(f));
   const actionFacts = extractedFacts?.filter(f => isActionFact(f));
 
   const results: MemoryProcessingResult[] = [];
 
   for (const response of characterResponses) {
-    // 1. 관계 업데이트 (동적 축, 크로스세션)
-    const proDelta = response.relationshipDelta || {};
-    // 축별 델타: Pro 델타 + 기본 델타 (Pro가 0이면 기본값 사용)
-    const axisDeltas: Record<string, number> = {};
-    for (const axis of config.axes) {
-      const proVal = proDelta[axis.key];
-      const defaultVal = configDefaultDeltas[axis.key] || 0;
-      // emotionalMoment이고 default config의 affection이면 +3
-      const emotionalBoost = emotionalMoment && axis.key === 'affection' && isDefaultConfig(config) ? 2 : 0;
-      axisDeltas[axis.key] = (proVal ?? 0) + (proVal ? 0 : defaultVal) + emotionalBoost;
-    }
-
+    // 1. 관계 업데이트 (다축, 크로스세션)
+    const delta = response.relationshipDelta || {};
+    const relDelta = {
+      trustDelta: delta.trust || 0,
+      affectionDelta: delta.affection || (emotionalMoment ? 3 : 1),
+      respectDelta: delta.respect || 0,
+      rivalryDelta: delta.rivalry || 0,
+      familiarityDelta: delta.familiarity || 0.5,
+    };
     await updateRelationship(scope, response.characterId, sceneId, {
-      axisDeltas,
+      ...relDelta,
       newFacts: personalFacts && personalFacts.length > 0 ? personalFacts : undefined,
       newExperience: actionFacts && actionFacts.length > 0 ? actionFacts.join(' | ') : undefined,
-    }, config);
+    });
 
     // 2. 감정 히스토리 누적
     if (response.emotion) {
@@ -1393,6 +1403,7 @@ export async function processConversationForMemory(params: {
             intensity: response.emotion.intensity,
             at: new Date().toISOString(),
           });
+          // 최대 10개 유지 (FIFO)
           const trimmed = history.slice(-10);
           await prisma.userCharacterRelationship.update({
             where: { id: rel.id },
@@ -1404,10 +1415,13 @@ export async function processConversationForMemory(params: {
       }
     }
 
-    // 3. 캐릭터 기억 저장
+    // 3. 캐릭터 기억 저장 (캐릭터 해석은 추후 AI로 생성)
     let surpriseResult: { action: 'reinforce' | 'skip' | 'save' | 'no_facts'; surpriseScore: number; adjustedImportance: number } = { action: 'no_facts', surpriseScore: 0, adjustedImportance: 0 };
     if (extractedFacts && extractedFacts.length > 0) {
+      // 간단한 해석 생성 (추후 AI로 고도화)
       const interpretation = `유저가 "${extractedFacts.join(', ')}"에 대해 이야기했다`;
+
+      // emotion 타입 변환 (primary → emotion)
       const emotionalResponse = response.emotion
         ? { emotion: response.emotion.primary, intensity: response.emotion.intensity }
         : undefined;
@@ -1430,7 +1444,7 @@ export async function processConversationForMemory(params: {
       surpriseAction: surpriseResult.action,
       surpriseScore: surpriseResult.surpriseScore,
       adjustedImportance: surpriseResult.adjustedImportance,
-      relationshipUpdate: axisDeltas,
+      relationshipUpdate: relDelta,
       newFactsCount: extractedFacts?.length || 0,
     });
   }
