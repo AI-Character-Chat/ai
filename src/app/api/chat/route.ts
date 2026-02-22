@@ -41,12 +41,11 @@ export async function POST(request: NextRequest) {
       ]);
     }
 
-    // 페르소나 + 작품 + 유저 프로필을 병렬 조회
-    const [persona, work, userProfile] = await Promise.all([
+    // 페르소나 + 작품 조회를 병렬로 (2개 순차 → 1개 병렬)
+    const [persona, work] = await Promise.all([
       personaId
         ? prisma.persona.findUnique({ where: { id: personaId } })
-        // personaId 없으면 기본 페르소나 조회
-        : prisma.persona.findFirst({ where: { userId, isDefault: true } }),
+        : Promise.resolve(null),
       prisma.work.findUnique({
         where: { id: workId },
         include: {
@@ -55,11 +54,6 @@ export async function POST(request: NextRequest) {
             ? { where: { id: openingId } }
             : { where: { isDefault: true } },
         },
-      }),
-      // 유저 프로필 (페르소나 없을 때 폴백)
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true, gender: true, birthDate: true, bio: true },
       }),
     ]);
 
@@ -70,34 +64,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '오프닝이 설정되지 않았습니다.' }, { status: 400 });
     }
 
-    // 페르소나 결정: 선택 페르소나 > 기본 페르소나 > 유저 프로필
-    let userPersona: { name: string; age: number | null; gender: string; description: string | null };
+    // 페르소나 결정
+    let userPersona = {
+      name: finalUserName,
+      age: null as number | null,
+      gender: 'private',
+      description: null as string | null,
+    };
     if (persona && persona.userId === userId) {
       userPersona = { name: persona.name, age: persona.age, gender: persona.gender, description: persona.description };
-    } else {
-      // 유저 프로필에서 나이 계산
-      const age = userProfile?.birthDate
-        ? Math.floor((Date.now() - userProfile.birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-        : null;
-      userPersona = {
-        name: finalUserName,
-        age,
-        gender: userProfile?.gender || 'private',
-        description: userProfile?.bio || null,
-      };
     }
 
     const opening = work.openings[0];
     const allCharacterNames = work.characters.map(c => c.name);
 
-    // 오프닝에 지정된 등장 캐릭터 사용, 없으면 첫 캐릭터 1명으로 시작
-    let initialCharacters: string[];
-    try {
-      const openingChars = JSON.parse(opening.initialCharacters || '[]') as string[];
-      initialCharacters = openingChars.length > 0 ? openingChars : allCharacterNames.slice(0, 1);
-    } catch {
-      initialCharacters = allCharacterNames.slice(0, 1);
-    }
+    // 첫 캐릭터 1명으로 시작 (나머지는 AI가 스토리 흐름에 따라 유기적으로 등장시킴)
+    const initialCharacters = allCharacterNames.slice(0, 1);
 
     // 세션 + 오프닝 메시지를 트랜잭션으로 (2번 DB 호출 → 1번)
     const [session] = await prisma.$transaction([
@@ -367,7 +349,7 @@ export async function PUT(request: NextRequest) {
             pn => pn === c.name || pn.includes(c.name) || c.name.includes(pn) ||
               c.name.split(' ')[0] === pn || pn.split(' ')[0] === c.name.split(' ')[0]
           ))
-          .map(c => ({ name: c.name, profileImage: c.profileImage, prompt: c.prompt }));
+          .map(c => ({ name: c.name, profileImage: c.profileImage }));
 
         const characterDialogues = allTurns
           .filter(t => t.type === 'dialogue')
@@ -421,7 +403,6 @@ export async function PUT(request: NextRequest) {
           session: {
             workId: session.workId,
             proAnalysis: session.proAnalysis,
-            relationshipConfig: session.work.relationshipConfig,
           },
           authUserId: authSession.user!.id!,
           workId: session.workId,

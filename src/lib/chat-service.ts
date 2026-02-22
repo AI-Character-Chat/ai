@@ -24,7 +24,6 @@ import {
   MemoryProcessingResult,
 } from '@/lib/narrative-memory';
 import { LorebookEntry, Character } from '@prisma/client';
-import { resolveConfig, type RelationshipConfig } from '@/lib/relationship-config';
 
 // 요약 Race Condition 방지
 const summarizingSessionIds = new Set<string>();
@@ -65,7 +64,7 @@ export interface ChatContextParams {
     intimacy: number;
     turnCount: number;
     userPersona: string | null;
-    work: { lorebook: LorebookEntry[]; relationshipConfig?: string };
+    work: { lorebook: LorebookEntry[] };
   };
   olderMessages: MessageWithCharacter[];
   recentMessages: MessageWithCharacter[];
@@ -88,8 +87,6 @@ export interface CharacterMemoryDebug {
     respect: number;
     rivalry: number;
     familiarity: number;
-    axisValues?: Record<string, number>;
-    axisLabels?: Record<string, string>;
   };
   recentMemoriesCount: number;
   recentMemories: Array<{ interpretation: string; importance: number }>;
@@ -126,7 +123,6 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
 
   // 크로스세션 메모리 스코프
   const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
-  const relConfig = resolveConfig(session.work.relationshipConfig);
 
   // 유저 페르소나 (한 번만 파싱, route.ts에서도 재사용)
   let userPersona: UserPersona | undefined;
@@ -176,7 +172,7 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
 
   const narrativeContexts = await Promise.all(
     presentChars.map((c) =>
-      buildNarrativeContext(memoryScope, c.id, c.name, content, queryEmbedding, preScene, relConfig)
+      buildNarrativeContext(memoryScope, c.id, c.name, content, queryEmbedding, preScene)
         .catch((e) => {
            console.error(`[NarrativeMemory] Build context failed for ${c.name}:`, e);
            return { narrativePrompt: '', relationship: null, recentMemories: [], sceneContext: null };
@@ -199,14 +195,7 @@ export async function buildChatContext(params: ChatContextParams): Promise<ChatC
       respect: ctx.relationship.respect,
       rivalry: ctx.relationship.rivalry,
       familiarity: ctx.relationship.familiarity,
-      axisValues: ctx.relationship.axisValues,
-      axisLabels: Object.fromEntries(relConfig.axes.map(a => [a.key, a.label])),
-    } : {
-      intimacyLevel: relConfig.levels[0]?.key || 'stranger',
-      trust: 50, affection: 50, respect: 50, rivalry: 0, familiarity: 0,
-      axisValues: Object.fromEntries(relConfig.axes.map(a => [a.key, a.defaultValue])),
-      axisLabels: Object.fromEntries(relConfig.axes.map(a => [a.key, a.label])),
-    },
+    } : { intimacyLevel: 'stranger', trust: 50, affection: 50, respect: 50, rivalry: 0, familiarity: 0 },
     recentMemoriesCount: ctx.recentMemories.length,
     recentMemories: ctx.recentMemories,
     emotionalHistory: ctx.relationship?.emotionalHistory || [],
@@ -235,7 +224,6 @@ export interface ImmediateMemoryParams {
   session: {
     workId: string;
     proAnalysis: string | null;
-    relationshipConfig?: string;
   };
   authUserId: string;
   workId: string;
@@ -249,11 +237,13 @@ export interface ImmediateMemoryParams {
 export async function processImmediateMemory(params: ImmediateMemoryParams): Promise<MemoryProcessingResult[]> {
   const { sessionId, preSceneId, content, allTurns, session, authUserId, workId, extractedFacts } = params;
   const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
-  const config = resolveConfig(session.relationshipConfig);
   const dialogueTurns = allTurns.filter((t) => t.type === 'dialogue');
 
-  // Pro 분석에서 동적 관계 델타 추출
-  let relationshipDeltas: Record<string, Record<string, number>> = {};
+  // Pro 분석에서 다축 관계 델타 추출
+  let relationshipDeltas: Record<string, {
+    trust?: number; affection?: number; respect?: number;
+    rivalry?: number; familiarity?: number;
+  }> = {};
   if (session.proAnalysis) {
     try {
       const jsonMatch = session.proAnalysis.match(/```json\s*([\s\S]*?)```/);
@@ -281,7 +271,6 @@ export async function processImmediateMemory(params: ImmediateMemoryParams): Pro
     emotionalMoment: dialogueTurns.some((t) =>
       ['sad', 'angry', 'surprised', 'happy'].includes(t.emotion.primary) && t.emotion.intensity > 0.7
     ),
-    config,
   });
 }
 

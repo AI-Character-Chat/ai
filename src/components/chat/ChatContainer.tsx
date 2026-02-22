@@ -520,89 +520,10 @@ export default function ChatContainer() {
                     .catch(() => {});
                 }
 
-                // 장면 이미지 자동 생성 (Replicate) — 첫 번째 나레이션만 사용
-                if (lastAiMessageId && sceneImageData.presentCharacters) {
-                  const firstNarrator = localNewMessages.find(m => m.messageType === 'narrator');
-                  const imgMsgId = firstNarrator?.id || lastAiMessageId;
-                  const narratorText = firstNarrator?.content || '';
-
-                  if (narratorText) {
-                    // 대화 경계 기반 캐릭터 감지: 첫 narrator ~ 두 번째 narrator 사이의 dialogue 캐릭터만 추출
-                    const firstNarratorIdx = localNewMessages.findIndex(m => m.messageType === 'narrator');
-                    const secondNarratorIdx = localNewMessages.findIndex(
-                      (m, i) => i > firstNarratorIdx && m.messageType === 'narrator'
-                    );
-                    const boundary = secondNarratorIdx === -1 ? localNewMessages.length : secondNarratorIdx;
-
-                    const firstSceneCharNames = new Set<string>();
-                    for (let i = firstNarratorIdx + 1; i < boundary; i++) {
-                      const m = localNewMessages[i];
-                      if (m.messageType === 'dialogue' && m.character?.name) {
-                        firstSceneCharNames.add(m.character.name);
-                      }
-                    }
-
-                    const relevantProfiles = (sceneImageData.presentCharacters as Array<{ name: string; profileImage: string | null; prompt?: string }>)
-                      .filter(c => firstSceneCharNames.has(c.name));
-                    const relevantDialogues = (sceneImageData.characterDialogues as Array<{ name: string; dialogue?: string; emotion?: { primary: string; intensity: number } }>)
-                      ?.filter(d => firstSceneCharNames.has(d.name)) || [];
-
-                    dispatch({ type: 'ADD_GENERATING_IMAGE', messageId: imgMsgId });
-
-                    const triggerSceneImage = async () => {
-                      try {
-                        const res = await fetch('/api/generate-scene-image', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            sessionId: sendingSessionId,
-                            messageId: imgMsgId,
-                            narratorText,
-                            characterProfiles: relevantProfiles.length > 0 ? relevantProfiles : sceneImageData.presentCharacters,
-                            characterDialogues: relevantDialogues,
-                            sceneState: sceneImageData.sceneUpdate
-                              ? { location: sceneImageData.sceneUpdate.location, time: sceneImageData.sceneUpdate.time }
-                              : undefined,
-                          }),
-                        });
-
-                        if (!res.ok) throw new Error('Image generation request failed');
-                        const data = await res.json();
-
-                        // 캐시 히트 → 즉시 표시
-                        if (data.imageUrl) {
-                          dispatch({ type: 'UPDATE_MESSAGE_IMAGE', messageId: imgMsgId, imageUrl: data.imageUrl });
-                          dispatch({ type: 'REMOVE_GENERATING_IMAGE', messageId: imgMsgId });
-                          return;
-                        }
-
-                        // 폴링 (3초 간격, 최대 20회 = 60초)
-                        if (data.predictionId) {
-                          for (let i = 0; i < 20; i++) {
-                            await new Promise(r => setTimeout(r, 3000));
-                            const pollRes = await fetch(
-                              `/api/generate-scene-image?predictionId=${data.predictionId}&messageId=${imgMsgId}`
-                            );
-                            if (!pollRes.ok) break;
-                            const pollData = await pollRes.json();
-
-                            if (pollData.status === 'succeeded' && pollData.imageUrl) {
-                              dispatch({ type: 'UPDATE_MESSAGE_IMAGE', messageId: imgMsgId, imageUrl: pollData.imageUrl });
-                              break;
-                            }
-                            if (pollData.status === 'failed') break;
-                          }
-                        }
-                      } catch (e) {
-                        console.error('[SceneImage] 생성 실패:', e);
-                      } finally {
-                        dispatch({ type: 'REMOVE_GENERATING_IMAGE', messageId: imgMsgId });
-                      }
-                    };
-
-                    triggerSceneImage();
-                  }
-                }
+                // [임시 비활성화] 장면 이미지 자동 생성 (Replicate) — 이미지 품질 개선 후 재활성화 예정
+                // if (lastAiMessageId && sceneImageData.presentCharacters) {
+                //   ... (이미지 생성 코드 비활성화)
+                // }
                 break;
             }
           } catch (parseError) {
