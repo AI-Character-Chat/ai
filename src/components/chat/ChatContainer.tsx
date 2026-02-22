@@ -527,6 +527,22 @@ export default function ChatContainer() {
                   const narratorText = firstNarrator?.content || '';
 
                   if (narratorText) {
+                    // 첫 나레이션에 등장하는 캐릭터만 필터 (후속 나레이션 캐릭터 제외)
+                    const relevantProfiles = (sceneImageData.presentCharacters as Array<{ name: string; profileImage: string | null; prompt?: string }>)
+                      .filter(c => {
+                        const name = c.name.toLowerCase();
+                        const firstName = name.split(' ')[0];
+                        const text = narratorText.toLowerCase();
+                        return text.includes(name) || text.includes(firstName);
+                      });
+                    const relevantDialogues = (sceneImageData.characterDialogues as Array<{ name: string; dialogue?: string; emotion?: { primary: string; intensity: number } }>)
+                      ?.filter(d => {
+                        const name = d.name.toLowerCase();
+                        const firstName = name.split(' ')[0];
+                        const text = narratorText.toLowerCase();
+                        return text.includes(name) || text.includes(firstName);
+                      }) || [];
+
                     dispatch({ type: 'ADD_GENERATING_IMAGE', messageId: imgMsgId });
 
                     const triggerSceneImage = async () => {
@@ -538,8 +554,8 @@ export default function ChatContainer() {
                             sessionId: sendingSessionId,
                             messageId: imgMsgId,
                             narratorText,
-                            characterProfiles: sceneImageData.presentCharacters,
-                            characterDialogues: sceneImageData.characterDialogues,
+                            characterProfiles: relevantProfiles.length > 0 ? relevantProfiles : sceneImageData.presentCharacters,
+                            characterDialogues: relevantDialogues,
                             sceneState: sceneImageData.sceneUpdate
                               ? { location: sceneImageData.sceneUpdate.location, time: sceneImageData.sceneUpdate.time }
                               : undefined,
