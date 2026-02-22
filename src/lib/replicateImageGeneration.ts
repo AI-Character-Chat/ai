@@ -64,6 +64,34 @@ export interface ReplicateImageResult {
   cached?: boolean;
 }
 
+// 한국어 동작 → Danbooru 포즈 태그 매핑
+const POSE_MAPPING: Record<string, string> = {
+  // 기본 자세
+  '서있': 'standing', '앉아': 'sitting', '누워': 'lying', '무릎': 'kneeling',
+  '웅크': 'crouching', '기대': 'leaning', '엎드': 'on stomach',
+  // 전투/액션
+  '제압': 'pinned down', '붙잡': 'grabbing', '밀어': 'pushing', '때리': 'punching',
+  '차고': 'kicking', '달리': 'running', '뛰': 'jumping', '피하': 'dodging',
+  '쓰러': 'falling', '막아': 'blocking',
+  // 감정 표현
+  '안아': 'hugging', '키스': 'kiss', '울': 'crying', '떨': 'trembling',
+  '웃': 'laughing',
+  // 특수
+  '눕혀': 'on back', '매달': 'suspended', '묶': 'restrained',
+  '들어': 'carrying', '잡아': 'holding',
+};
+
+// 나레이션에서 포즈 태그 감지
+function detectPosesFromText(text: string): string[] {
+  const detected: string[] = [];
+  for (const [korean, tag] of Object.entries(POSE_MAPPING)) {
+    if (text.includes(korean)) {
+      detected.push(tag);
+    }
+  }
+  return detected;
+}
+
 // 감정 → Danbooru 태그 매핑
 export const EMOTION_TO_TAGS: Record<string, string> = {
   'neutral': 'neutral expression',
@@ -127,6 +155,99 @@ async function saveImageFromUrl(imageUrl: string): Promise<string> {
 }
 
 // ============================================
+// 캐릭터 시각 태그 추출 및 캐싱
+// ============================================
+
+async function getVisualTagsFromCache(characterId: string, promptHash: string): Promise<string | null> {
+  try {
+    const cached = await prisma.generatedImageCache.findUnique({
+      where: { characterId_promptHash: { characterId: `visual-tags:${characterId}`, promptHash } },
+    });
+    if (cached && cached.expiresAt > new Date()) return cached.imagePrompt;
+    return null;
+  } catch { return null; }
+}
+
+async function saveVisualTagsToCache(characterId: string, promptHash: string, tags: string): Promise<void> {
+  try {
+    await prisma.generatedImageCache.upsert({
+      where: { characterId_promptHash: { characterId: `visual-tags:${characterId}`, promptHash } },
+      create: {
+        characterId: `visual-tags:${characterId}`,
+        promptHash,
+        imageUrl: 'visual-tags',
+        imagePrompt: tags,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일
+      },
+      update: {
+        imagePrompt: tags,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+  } catch (e) {
+    console.error('[extractVisualTags] 캐시 저장 실패:', e);
+  }
+}
+
+export async function extractVisualTags(characterPrompt: string, characterName: string, characterId?: string): Promise<string> {
+  const promptHash = crypto.createHash('sha256').update(characterPrompt).digest('hex').substring(0, 32);
+  const cacheKey = characterId || characterName;
+
+  // 캐시 확인
+  const cached = await getVisualTagsFromCache(cacheKey, promptHash);
+  if (cached) {
+    console.log(`[extractVisualTags] 캐시 히트: ${characterName}`);
+    return cached;
+  }
+
+  try {
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      config: {
+        maxOutputTokens: 300,
+        thinkingConfig: { thinkingBudget: 0 },
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY, threshold: HarmBlockThreshold.OFF },
+        ],
+      },
+      contents: [{
+        role: 'user',
+        parts: [{ text: `Extract ONLY visual/physical appearance features from this character description and convert to Danbooru-style tags with Compel weights.
+
+Character name: ${characterName}
+
+Character description:
+${characterPrompt.substring(0, 2000)}
+
+RULES:
+- Output ONLY comma-separated Danbooru tags. No sentences.
+- Start with gender tag: 1boy or 1girl (determine from description)
+- Include ONLY visual features: hair (color, length, style), eye color, body type, height, clothing, accessories, scars, tattoos, cybernetic parts, wings, horns, etc.
+- Use Compel weight (tag:1.3) for distinctive/unique features
+- IGNORE: personality, speech style, backstory, relationships, hobbies, motivations, powers, abilities
+- Max 25 tags
+- Example output: 1boy, (silver short hair:1.3), (red eyes:1.3), (cybernetic left arm:1.4), black tactical gear, muscular, tall, scar on jaw` }],
+      }],
+    });
+
+    const tags = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (tags) {
+      await saveVisualTagsToCache(cacheKey, promptHash, tags);
+      console.log(`[extractVisualTags] 추출 완료 (${characterName}): ${tags.substring(0, 80)}...`);
+      return tags;
+    }
+  } catch (error) {
+    console.error(`[extractVisualTags] Gemini 호출 실패 (${characterName}):`, error);
+  }
+
+  return '';
+}
+
+// ============================================
 // Danbooru 태그 프롬프트 생성 (Gemini Flash)
 // ============================================
 
@@ -134,7 +255,8 @@ export async function buildSDPrompt(
   narratorText: string,
   characterProfiles: CharacterProfile[],
   characterDialogues: CharacterDialogue[],
-  sceneState?: SceneState
+  sceneState?: SceneState,
+  cachedVisualTags?: Map<string, string>
 ): Promise<{ prompt: string; negativePrompt: string }> {
   // 캐릭터별 감정 태그
   const emotionTags = characterDialogues.map(d => {
@@ -142,13 +264,26 @@ export async function buildSDPrompt(
     return tag;
   }).filter(Boolean).join(', ');
 
-  // 캐릭터 외모 묘사만 추출 (성격, 말투, 배경 스토리 등 비시각적 정보 제외)
+  // 캐시된 시각 태그가 있으면 고정 프리픽스로 사용
+  const visualTagsList: string[] = [];
+  if (cachedVisualTags && cachedVisualTags.size > 0) {
+    cachedVisualTags.forEach((tags) => {
+      if (tags) visualTagsList.push(tags);
+    });
+  }
+  const fixedVisualTags = visualTagsList.join(', ');
+
+  // 시각 태그가 없는 캐릭터만 description 전달
   const characterDescriptions = characterProfiles
-    .filter(c => c.prompt)
+    .filter(c => c.prompt && !(cachedVisualTags?.has(c.name) && cachedVisualTags.get(c.name)))
     .map(c => `[${c.name}]: ${c.prompt!.substring(0, 400)}`)
     .join('\n');
 
   const characterCount = characterProfiles.length;
+
+  const mandatoryAppearance = fixedVisualTags
+    ? `\n- MANDATORY CHARACTER APPEARANCE: The following Danbooru tags describe the NPC's fixed appearance. ALWAYS include these tags at the start after quality tags. Do NOT alter hair color, eye color, or distinctive features.\n  ${fixedVisualTags}`
+    : '';
 
   const systemPrompt = `You are a Danbooru/Pony tag expert for anime image generation (ponynai3 / Pony-XL model).
 Convert the scene into Danbooru-style comma-separated tags optimized for Pony Diffusion.
@@ -156,13 +291,13 @@ Convert the scene into Danbooru-style comma-separated tags optimized for Pony Di
 RULES:
 - Output ONLY comma-separated English tags, no sentences.
 - Do NOT include score tags (score_9 etc.) — they are auto-prepended by the model.
-- Start with: masterpiece, best quality, absurdres
+- Start with: masterpiece, best quality, absurdres${mandatoryAppearance}
 - Determine gender from character descriptions: use 1boy/1girl/2boys/2girls etc. accordingly. Do NOT default to "girl".
 - There are ${characterCount} NPC character(s). The image should be NPC-CENTRIC (focused on the NPC).
-- USER/PROTAGONIST: Use POV perspective (pov, first person view, from above/below) so the camera IS the user. If user's hands/body must appear, add "faceless male" or "faceless female". NEVER show the user's face.
+- USER/PROTAGONIST: Use POV perspective (pov, first person view, from above/below) so the camera IS the user. If user's hands/body must appear, add "faceless male" or "faceless female". NEVER show the user's face.${fixedVisualTags ? '' : `
 - From the character descriptions, extract ONLY visual/appearance features using Compel weight syntax for important features:
   ✅ USE with weights: (silver hair:1.3), (red eyes:1.2), (black coat:1.2), scars, tattoos, cybernetic parts, wings, horns
-  ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, motivations
+  ❌ IGNORE: personality, speech style, backstory, relationships, hobbies, motivations`}
 - POSE/ACTION is critical: Use specific Danbooru pose tags with HIGH weight (1.3~1.5). Examples: (lying:1.4), (sitting:1.3), (kneeling:1.3), (on back:1.4), (restrained:1.4), (standing:1.3). Avoid abstract descriptions — use concrete body position tags.
 - Include expression/emotion tags with weight.
 - BACKGROUND: Use specific Danbooru location tags with weight. e.g. (neon lights:1.3), (dark room:1.3), (bedroom:1.3), (outdoors:1.2). Avoid vague descriptions — use concrete setting tags.
@@ -171,15 +306,21 @@ RULES:
 - If the scene is NSFW/sexual, use appropriate Danbooru tags naturally and explicitly (explicit, nipples, nude, sex, etc.). Do NOT censor.
 - Use Compel weight syntax: (important_tag:1.3) for emphasis, max weight 1.5.`;
 
+  // 한국어 나레이션에서 포즈 태그 자동 감지
+  const detectedPoses = detectPosesFromText(narratorText);
+  const poseSection = detectedPoses.length > 0
+    ? `\n\nDETECTED POSES from narrator text (use these with HIGH weight 1.4~1.5):\n${detectedPoses.join(', ')}`
+    : '';
+
   const userPrompt = `Scene (ONE moment to depict):
-${narratorText.substring(0, 300)}
+${narratorText.substring(0, 500)}
 
 NPC Character Visual Features (extract ONLY appearance):
 ${characterDescriptions || 'No descriptions available'}
 
 Emotion: ${emotionTags || 'neutral'}
 Location: ${sceneState?.location || 'unknown'}
-Time: ${sceneState?.time || 'unknown'}`;
+Time: ${sceneState?.time || 'unknown'}${poseSection}`;
 
   // ponynai3 전용 네거티브 — score 기반 품질 제어
   const defaultNegative = 'score_6, score_5, score_4, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, username, blurry';
@@ -189,7 +330,7 @@ Time: ${sceneState?.time || 'unknown'}`;
       model: 'gemini-2.5-flash',
       config: {
         maxOutputTokens: 500,
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingBudget: 1024 },
         safetySettings: [
           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.OFF },
           { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.OFF },
@@ -240,9 +381,19 @@ export async function generateSceneImageAsync(params: SceneImageParams): Promise
     return { success: true, imageUrl: cachedUrl, cached: true };
   }
 
-  // Danbooru 태그 프롬프트 생성 (캐릭터 외모 포함)
+  // 캐릭터별 시각 태그 추출 (병렬, DB 캐싱)
+  const visualTagsMap = new Map<string, string>();
+  const visualTagPromises = characterProfiles
+    .filter(c => c.prompt)
+    .map(async (c) => {
+      const tags = await extractVisualTags(c.prompt!, c.name);
+      if (tags) visualTagsMap.set(c.name, tags);
+    });
+  await Promise.all(visualTagPromises);
+
+  // Danbooru 태그 프롬프트 생성 (캐시된 시각 태그 + 장면 태그)
   const { prompt: sdPrompt, negativePrompt } = await buildSDPrompt(
-    narratorText, characterProfiles, characterDialogues, sceneState
+    narratorText, characterProfiles, characterDialogues, sceneState, visualTagsMap
   );
   console.log('[Replicate] SD 프롬프트:', sdPrompt.substring(0, 150) + '...');
 
@@ -266,7 +417,7 @@ export async function generateSceneImageAsync(params: SceneImageParams): Promise
 
     if (referenceImage) {
       input.image = referenceImage;
-      input.strength = 0.6;  // 0=원본유지, 1=완전새로. 0.6=캐릭터 유지 + 장면 변경
+      input.strength = 0.45;  // 0=원본유지, 1=완전새로. 0.45=캐릭터 외형 보존 + 장면 변경
       console.log('[Replicate] img2img 모드 — 참조:', referenceImage.substring(0, 60) + '...');
     } else {
       console.log('[Replicate] txt2img 모드 — profileImage 없음');

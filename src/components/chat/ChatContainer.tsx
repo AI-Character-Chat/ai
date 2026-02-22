@@ -527,21 +527,25 @@ export default function ChatContainer() {
                   const narratorText = firstNarrator?.content || '';
 
                   if (narratorText) {
-                    // 첫 나레이션에 등장하는 캐릭터만 필터 (후속 나레이션 캐릭터 제외)
+                    // 대화 경계 기반 캐릭터 감지: 첫 narrator ~ 두 번째 narrator 사이의 dialogue 캐릭터만 추출
+                    const firstNarratorIdx = localNewMessages.findIndex(m => m.messageType === 'narrator');
+                    const secondNarratorIdx = localNewMessages.findIndex(
+                      (m, i) => i > firstNarratorIdx && m.messageType === 'narrator'
+                    );
+                    const boundary = secondNarratorIdx === -1 ? localNewMessages.length : secondNarratorIdx;
+
+                    const firstSceneCharNames = new Set<string>();
+                    for (let i = firstNarratorIdx + 1; i < boundary; i++) {
+                      const m = localNewMessages[i];
+                      if (m.messageType === 'dialogue' && m.character?.name) {
+                        firstSceneCharNames.add(m.character.name);
+                      }
+                    }
+
                     const relevantProfiles = (sceneImageData.presentCharacters as Array<{ name: string; profileImage: string | null; prompt?: string }>)
-                      .filter(c => {
-                        const name = c.name.toLowerCase();
-                        const firstName = name.split(' ')[0];
-                        const text = narratorText.toLowerCase();
-                        return text.includes(name) || text.includes(firstName);
-                      });
+                      .filter(c => firstSceneCharNames.has(c.name));
                     const relevantDialogues = (sceneImageData.characterDialogues as Array<{ name: string; dialogue?: string; emotion?: { primary: string; intensity: number } }>)
-                      ?.filter(d => {
-                        const name = d.name.toLowerCase();
-                        const firstName = name.split(' ')[0];
-                        const text = narratorText.toLowerCase();
-                        return text.includes(name) || text.includes(firstName);
-                      }) || [];
+                      ?.filter(d => firstSceneCharNames.has(d.name)) || [];
 
                     dispatch({ type: 'ADD_GENERATING_IMAGE', messageId: imgMsgId });
 
