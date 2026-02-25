@@ -278,6 +278,20 @@ export async function PUT(request: NextRequest) {
           sceneState: { location: session.currentLocation, time: session.currentTime, presentCharacters, recentEvents },
         })) {
           switch (event.type) {
+            // 토큰 단위 스트리밍: turn 시작 알림 (DB 저장 없이 즉시 전송)
+            case 'turn-start':
+              send('turn_start', {
+                turnType: event.turnType,
+                characterName: event.characterName,
+                characterId: event.characterId,
+              });
+              break;
+
+            // 토큰 단위 스트리밍: 부분 content delta (DB 저장 없이 즉시 전송)
+            case 'turn-delta':
+              send('turn_delta', { content: event.content });
+              break;
+
             case 'turn': {
               allTurns.push(event.turn);
               // 턴이 완성되는 즉시 DB 저장 + SSE 전송

@@ -388,6 +388,8 @@ export default function ChatContainer() {
       // SSE 처리 중 메시지를 누적하기 위한 로컬 배열 (dispatch 사이 시차 문제 방지)
       let localNewMessages: ChatMessage[] = [];
       let lastAiMessageId = '';
+      // 토큰 단위 스트리밍: 현재 스트리밍 중인 메시지의 임시 ID
+      let currentStreamingTempId: string | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -421,14 +423,40 @@ export default function ChatContainer() {
             switch (eventType) {
               case 'user_message':
                 if (!userMessageReplaced) {
-                  // temp 메시지를 실제 메시지로 교체 - ADD_MESSAGE 대신 직접 교체
                   const realUserMsg: ChatMessage = { ...parsed, messageType: 'user' };
-                  // 임시 메시지 제거 후 실제 메시지 추가를 위해 LOAD_SESSION은 부적합
-                  // dispatch로 처리하기 어려우므로, 실제 ID만 기록
                   localNewMessages.push(realUserMsg);
                   userMessageReplaced = true;
                 }
                 break;
+
+              // 토큰 단위 스트리밍: turn 시작 — 빈 플레이스홀더 생성
+              case 'turn_start': {
+                const tempId = `streaming-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                currentStreamingTempId = tempId;
+                const character = parsed.turnType === 'dialogue' && parsed.characterName
+                  ? state.work?.characters.find(c => c.name === parsed.characterName) || null
+                  : null;
+                dispatch({
+                  type: 'STREAM_START',
+                  tempId,
+                  messageType: parsed.turnType === 'narrator' ? 'narrator' : 'dialogue',
+                  characterId: parsed.characterId || null,
+                  character: character ? { id: character.id, name: character.name, profileImage: character.profileImage } : null,
+                });
+                break;
+              }
+
+              // 토큰 단위 스트리밍: content delta 추가
+              case 'turn_delta': {
+                if (currentStreamingTempId && parsed.content) {
+                  dispatch({
+                    type: 'STREAM_DELTA',
+                    tempId: currentStreamingTempId,
+                    content: parsed.content,
+                  });
+                }
+                break;
+              }
 
               case 'narrator': {
                 const narratorMsg: ChatMessage = {
@@ -439,7 +467,13 @@ export default function ChatContainer() {
                   createdAt: new Date().toISOString(),
                   character: null,
                 };
-                dispatch({ type: 'ADD_MESSAGE', message: narratorMsg });
+                if (currentStreamingTempId) {
+                  // 스트리밍 메시지를 DB 저장된 최종 메시지로 교체
+                  dispatch({ type: 'STREAM_COMPLETE', tempId: currentStreamingTempId, message: narratorMsg });
+                  currentStreamingTempId = null;
+                } else {
+                  dispatch({ type: 'ADD_MESSAGE', message: narratorMsg });
+                }
                 localNewMessages.push(narratorMsg);
                 lastAiMessageId = narratorMsg.id;
                 break;
@@ -447,7 +481,12 @@ export default function ChatContainer() {
 
               case 'character_response': {
                 const charMsg: ChatMessage = { ...parsed, messageType: 'dialogue' as const };
-                dispatch({ type: 'ADD_MESSAGE', message: charMsg });
+                if (currentStreamingTempId) {
+                  dispatch({ type: 'STREAM_COMPLETE', tempId: currentStreamingTempId, message: charMsg });
+                  currentStreamingTempId = null;
+                } else {
+                  dispatch({ type: 'ADD_MESSAGE', message: charMsg });
+                }
                 localNewMessages.push(charMsg);
                 lastAiMessageId = charMsg.id;
                 break;

@@ -608,6 +608,8 @@ export async function generateStoryResponse(params: {
 
 export type StreamEvent =
   | { type: 'turn'; turn: StoryTurn }
+  | { type: 'turn-start'; turnIndex: number; turnType: 'narrator' | 'dialogue'; characterName: string; characterId: string }
+  | { type: 'turn-delta'; turnIndex: number; content: string }
   | { type: 'scene'; scene: { location: string; time: string; presentCharacters: string[] } }
   | { type: 'extractedFacts'; facts: string[] }
   | { type: 'metadata'; metadata: ResponseMetadata };
@@ -662,9 +664,9 @@ export function extractNewTurnsFromBuffer(
   buffer: string,
   alreadyProcessed: number,
   characters: Array<{ id: string; name: string }>,
-): { newTurns: StoryTurn[]; totalObjectCount: number } {
+): { newTurns: StoryTurn[]; totalObjectCount: number; lastCompleteEndPos: number } {
   const turnsMatch = buffer.match(/"turns"\s*:\s*\[/);
-  if (!turnsMatch || turnsMatch.index === undefined) return { newTurns: [], totalObjectCount: alreadyProcessed };
+  if (!turnsMatch || turnsMatch.index === undefined) return { newTurns: [], totalObjectCount: alreadyProcessed, lastCompleteEndPos: 0 };
 
   const arrayStart = turnsMatch.index + turnsMatch[0].length;
   const newTurns: StoryTurn[] = [];
@@ -674,6 +676,7 @@ export function extractNewTurnsFromBuffer(
   let escapeNext = false;
   let turnStart = -1;
   let objectCount = 0;
+  let lastCompleteEnd = arrayStart;
 
   while (pos < buffer.length) {
     const ch = buffer[pos];
@@ -690,6 +693,7 @@ export function extractNewTurnsFromBuffer(
       depth--;
       if (depth === 0 && turnStart !== -1) {
         objectCount++;
+        lastCompleteEnd = pos + 1;
         if (objectCount > alreadyProcessed) {
           try {
             const turnJson = buffer.substring(turnStart, pos + 1);
@@ -707,7 +711,81 @@ export function extractNewTurnsFromBuffer(
     pos++;
   }
 
-  return { newTurns, totalObjectCount: objectCount };
+  return { newTurns, totalObjectCount: objectCount, lastCompleteEndPos: lastCompleteEnd };
+}
+
+/**
+ * 스트리밍 중 아직 완성되지 않은 turn 객체에서 type/character/content 추출
+ * 토큰 단위 스트리밍을 위해 부분 content를 점진적으로 전달
+ */
+function extractPartialTurnInfo(
+  buffer: string,
+  searchStartPos: number,
+  characters: Array<{ id: string; name: string }>,
+): { turnType: string; characterName: string; characterId: string; contentSoFar: string } | null {
+  const remaining = buffer.substring(searchStartPos);
+
+  // 불완전한 turn 객체의 시작 { 찾기
+  const objStart = remaining.indexOf('{');
+  if (objStart === -1) return null;
+  const partial = remaining.substring(objStart);
+
+  // type 필드 추출 (필수)
+  const typeMatch = partial.match(/"type"\s*:\s*"([^"]*)"/);
+  if (!typeMatch) return null;
+
+  // character 필드 추출
+  const charMatch = partial.match(/"character"\s*:\s*"([^"]*)"/);
+  const charName = charMatch ? charMatch[1] : '';
+
+  // content 필드에서 부분 텍스트 추출
+  const contentKeyMatch = partial.match(/"content"\s*:\s*"/);
+  let content = '';
+  if (contentKeyMatch && contentKeyMatch.index !== undefined) {
+    const valueStart = contentKeyMatch.index + contentKeyMatch[0].length;
+    let i = valueStart;
+    while (i < partial.length) {
+      const ch = partial[i];
+      if (ch === '\\') {
+        if (i + 1 < partial.length) {
+          const next = partial[i + 1];
+          if (next === '"') content += '"';
+          else if (next === 'n') content += '\n';
+          else if (next === 't') content += '\t';
+          else if (next === '\\') content += '\\';
+          else if (next === '/') content += '/';
+          else content += next;
+          i += 2;
+        } else {
+          break; // 불완전한 이스케이프 시퀀스 — 다음 청크에서 처리
+        }
+      } else if (ch === '"') {
+        break; // content 문자열 종료
+      } else {
+        content += ch;
+        i++;
+      }
+    }
+  }
+
+  // 캐릭터 ID 해석
+  let characterId = '';
+  if (typeMatch[1] !== 'narrator' && charName) {
+    const char = characters.find(
+      (c) => c.name === charName ||
+             c.name.includes(charName) ||
+             charName.includes(c.name) ||
+             c.name.toLowerCase() === charName.toLowerCase()
+    );
+    characterId = char?.id || '';
+  }
+
+  return {
+    turnType: typeMatch[1],
+    characterName: charName,
+    characterId,
+    contentSoFar: content,
+  };
 }
 
 export async function* generateStoryResponseStream(params: {
@@ -745,6 +823,10 @@ export async function* generateStoryResponseStream(params: {
   let lastFinishReason = 'STOP';
 
   let chunkIndex = 0;
+  // 토큰 단위 스트리밍: 부분 turn 추적
+  let currentStreamingTurnType: string | null = null;
+  let lastPartialContentLength = 0;
+
   for await (const chunk of stream) {
     chunkIndex++;
     if (chunk.usageMetadata) lastUsageMetadata = chunk.usageMetadata;
@@ -764,15 +846,49 @@ export async function* generateStoryResponseStream(params: {
     buffer += text;
 
     // 새로 완성된 turn 객체 추출
-    const { newTurns, totalObjectCount } = extractNewTurnsFromBuffer(
+    const { newTurns, totalObjectCount, lastCompleteEndPos } = extractNewTurnsFromBuffer(
       buffer, processedObjectCount, characters
     );
-    processedObjectCount = totalObjectCount;
 
-    for (const turn of newTurns) {
-      console.log(`   🔄 스트리밍 turn ${emittedTurns.length + 1}: ${turn.type} (chunk #${chunkIndex})`);
-      emittedTurns.push(turn);
-      yield { type: 'turn', turn };
+    // 완성된 turn 처리
+    if (newTurns.length > 0) {
+      // 이전 부분 스트리밍 상태 초기화
+      currentStreamingTurnType = null;
+      lastPartialContentLength = 0;
+      processedObjectCount = totalObjectCount;
+
+      for (const turn of newTurns) {
+        console.log(`   🔄 스트리밍 turn ${emittedTurns.length + 1}: ${turn.type} (chunk #${chunkIndex})`);
+        emittedTurns.push(turn);
+        yield { type: 'turn', turn };
+      }
+    }
+
+    // 토큰 단위 스트리밍: 아직 완성되지 않은 turn에서 부분 content 추출
+    const partial = extractPartialTurnInfo(buffer, lastCompleteEndPos, characters);
+    if (partial && partial.turnType) {
+      if (currentStreamingTurnType === null) {
+        // 새 turn 시작 감지 — turn-start 이벤트
+        currentStreamingTurnType = partial.turnType;
+        yield {
+          type: 'turn-start',
+          turnIndex: emittedTurns.length,
+          turnType: partial.turnType === 'narrator' ? 'narrator' : 'dialogue',
+          characterName: partial.characterName,
+          characterId: partial.characterId,
+        };
+      }
+
+      // content가 성장했으면 delta 전송
+      if (partial.contentSoFar.length > lastPartialContentLength) {
+        const delta = partial.contentSoFar.substring(lastPartialContentLength);
+        yield {
+          type: 'turn-delta',
+          turnIndex: emittedTurns.length,
+          content: delta,
+        };
+        lastPartialContentLength = partial.contentSoFar.length;
+      }
     }
   }
 

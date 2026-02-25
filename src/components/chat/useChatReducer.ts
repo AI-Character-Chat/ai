@@ -171,6 +171,9 @@ export type ChatAction =
   | { type: 'LOAD_WORK'; work: ChatWork }
   | { type: 'LOAD_SESSION'; session: ChatSessionData; messages: ChatMessage[] }
   | { type: 'ADD_MESSAGE'; message: ChatMessage }
+  | { type: 'STREAM_START'; tempId: string; messageType: 'narrator' | 'dialogue'; characterId: string | null; character: ChatCharacter | null }
+  | { type: 'STREAM_DELTA'; tempId: string; content: string }
+  | { type: 'STREAM_COMPLETE'; tempId: string; message: ChatMessage }
   | { type: 'UPDATE_SESSION'; session: Partial<ChatSessionData> }
   | { type: 'SET_SENDING'; sending: boolean }
   | { type: 'SET_INPUT'; text: string }
@@ -207,6 +210,40 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'ADD_MESSAGE':
       return { ...state, messages: [...state.messages, action.message] };
+
+    // 토큰 단위 스트리밍: 빈 메시지 플레이스홀더 생성
+    case 'STREAM_START':
+      return {
+        ...state,
+        messages: [...state.messages, {
+          id: action.tempId,
+          characterId: action.characterId,
+          content: '',
+          messageType: action.messageType,
+          createdAt: new Date().toISOString(),
+          character: action.character,
+        }],
+      };
+
+    // 토큰 단위 스트리밍: content 증분 추가
+    case 'STREAM_DELTA':
+      return {
+        ...state,
+        messages: state.messages.map(m =>
+          m.id === action.tempId
+            ? { ...m, content: m.content + action.content }
+            : m
+        ),
+      };
+
+    // 토큰 단위 스트리밍: DB 저장 완료된 최종 메시지로 교체
+    case 'STREAM_COMPLETE':
+      return {
+        ...state,
+        messages: state.messages.map(m =>
+          m.id === action.tempId ? action.message : m
+        ),
+      };
 
     case 'UPDATE_SESSION':
       return state.session
