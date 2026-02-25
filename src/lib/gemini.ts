@@ -725,7 +725,7 @@ export async function* generateStoryResponseStream(params: {
     model: MODEL_FLASH,
     config: {
       systemInstruction,
-      temperature: 1.5,
+      temperature: 1.2,
       topP: 0.95,
       topK: 50,
       maxOutputTokens: 8192,
