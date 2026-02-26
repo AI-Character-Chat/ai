@@ -150,7 +150,7 @@ const RESPONSE_SCHEMA = {
           },
           content: {
             type: Type.STRING,
-            description: '턴 내용',
+            description: '나레이션은 오감 묘사 위주, 대사는 캐릭터 말투 그대로',
           },
           emotion: {
             type: Type.STRING,
@@ -273,7 +273,7 @@ export function buildContents(params: {
   // 현재 상황 (데이터만)
   sections.push(`## 상황\n${params.sceneState.location}, ${params.sceneState.time}\n등장: ${params.sceneState.presentCharacters.join(', ')}`);
 
-  // 대화 이력 — 순정 테스트 (지시 제거)
+  // 대화 이력
   if (params.conversationHistory) {
     sections.push(`## 대화 이력\n${params.conversationHistory}`);
   } else {
@@ -286,7 +286,6 @@ export function buildContents(params: {
   // post-history 리마인더
   sections.push(`※ 각 캐릭터 말투를 설정 그대로 유지`);
 
-  // 순정 테스트: prefill 제거, 단일 user 메시지만
   return [
     {
       role: 'user' as const,
