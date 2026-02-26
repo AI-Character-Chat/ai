@@ -283,8 +283,8 @@ export function buildContents(params: {
   // 유저 메시지
   sections.push(`## ${params.userName}의 입력\n${params.userMessage}`);
 
-  // post-history 말투 리마인더
-  sections.push(`※ 각 캐릭터 말투를 설정 그대로 유지`);
+  // post-history 리마인더
+  sections.push(`※ 각 캐릭터 말투를 설정 그대로 유지. Show emotions through body language & sensory details, never state feelings directly.`);
 
   // 순정 테스트: prefill 제거, 단일 user 메시지만
   return [
