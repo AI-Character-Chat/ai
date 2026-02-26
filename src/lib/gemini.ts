@@ -240,7 +240,7 @@ turns 배열에 narrator와 dialogue를 교차 배치하세요.
 - narrator 금지 표현: "심장이 요동쳤다/두근거렸다/뛰었다", "머릿속에는 X라는 일념", "본능적으로", "온몸에 전율이", "숨이 막혔다", "눈앞이 아찔했다" — 이런 내면 감정 클리셰를 매번 쓰지 마라. 감정은 행동과 표정으로 보여줘라.
 - 나레이션에서 유저를 지칭할 때는 반드시 "${un}"이라고 쓴다.
 - dialogue: 반드시 2-4문장. 세계관 용어와 상황 디테일을 자연스럽게 녹여서. 한 문장 대사 금지.
-- dialogue 핵심: ${un}이 캐릭터에게 신체접촉(키스, 포옹, 밀기 등)을 했다면, 해당 캐릭터의 dialogue 첫 마디는 반드시 그 접촉에 대한 신체적/감각적 반응이다. "크흡...", "으...", "하아...", "엇..." 같은 의성어·감탄사로 시작하고, 이어서 캐릭터성격에 맞는 대사가 온다. 분석·논평부터 시작하지 마라.
+- dialogue 핵심: ${un}이 캐릭터에게 신체접촉(키스, 포옹, 밀기 등)을 했다면, 해당 캐릭터의 dialogue 첫 마디는 반드시 그 접촉에 대한 신체적/감각적 반응이다. "크흡...", "으...", "하아...", "엇..." 같은 의성어·감탄사로 시작하고, 이어서 그 접촉으로 인한 감정적 동요(당황, 설렘, 분노 등)를 캐릭터다운 말투로 표현하라. 접촉 자체를 분석하거나 일축하지 마라.
 - 새 캐릭터 등장 시 narrator에서 등장 이유와 외모 묘사
 - 표정: neutral/smile/cold/angry/sad/happy/surprised/embarrassed
 
@@ -810,7 +810,7 @@ export async function* generateStoryResponseStream(params: {
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: 1024 },  // Test C: thinking 복원하여 품질 영향 테스트
+      thinkingConfig: { thinkingBudget: 1024 },  // 확정: thinking 필요 (4.1→4.7, TTFT +0.3s 미미)
     },
     contents,
   });
