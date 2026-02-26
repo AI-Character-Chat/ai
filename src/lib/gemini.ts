@@ -346,7 +346,7 @@ export function buildContents(params: {
     if (params.userPersona.description) {
       personaParts.push(params.userPersona.description);
     }
-    sections.push(`## 유저 (${params.userPersona.name})\n${personaParts.join('\n')}`);
+    sections.push(`## 유저 (${params.userPersona.name})\n${personaParts.join('\n')}\n※ 이 정보는 서술 참고용이다. 캐릭터가 첫 만남부터 유저의 상세 정보(나이, 능력, 취향 등)를 이미 아는 것처럼 나열하지 마라. 이름 정도만 알 수 있고, 나머지는 대화 속에서 자연스럽게 알아가는 것처럼 행동하라. 나레이션에서 유저 외모/특징 묘사 시에만 참고하라.`);
   }
 
   // 캐릭터별 기억 (narrative-memory 결과)
