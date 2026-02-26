@@ -1097,12 +1097,8 @@ export async function generateSessionSummary(
     .join('\n')
     .substring(0, 4000);
 
-  const prompt = `다음 대화를 3~5문장으로 핵심만 요약해주세요. 인물 관계 변화, 주요 사건, 현재 상황을 포함하세요.
-${existingSummary ? `\n이전 요약:\n${existingSummary}\n` : ''}
-최근 대화:
-${messagesText}
-
-요약:`;
+  const prompt = `3~5문장 요약.
+${existingSummary ? `이전: ${existingSummary}\n` : ''}${messagesText}`;
 
   try {
     const result = await ai.models.generateContent({
