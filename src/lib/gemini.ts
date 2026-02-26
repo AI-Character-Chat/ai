@@ -152,6 +152,10 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: '턴 내용',
           },
+          sensory: {
+            type: Type.STRING,
+            description: 'narrator일 때 오감(시각·청각·촉각·후각) 묘사. dialogue일 때 빈 문자열.',
+          },
           emotion: {
             type: Type.STRING,
             description: 'dialogue일 때 표정. narrator일 때 "neutral".',
@@ -161,7 +165,7 @@ const RESPONSE_SCHEMA = {
             description: '0.0~1.0',
           },
         },
-        required: ['type', 'character', 'content', 'emotion', 'emotionIntensity'],
+        required: ['type', 'character', 'content', 'sensory', 'emotion', 'emotionIntensity'],
       },
     },
     scene: {
@@ -347,7 +351,7 @@ export async function generateStoryResponse(params: {
       }
 
       // JSON 파싱
-      let parsed: { turns?: Array<{ type: string; character: string; content: string; emotion: string; emotionIntensity?: number }>; scene?: { location: string; time: string; presentCharacters: string[] } };
+      let parsed: { turns?: Array<{ type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }>; scene?: { location: string; time: string; presentCharacters: string[] } };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -363,13 +367,16 @@ export async function generateStoryResponse(params: {
 
       // turns 파싱
       const turns: StoryTurn[] = (parsed.turns || [])
-        .map((turn: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => {
+        .map((turn: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }) => {
           if (turn.type === 'narrator') {
+            const sensory = turn.sensory?.trim() || '';
+            const rawContent = turn.content?.trim() || '';
+            const mergedContent = sensory ? `${sensory} ${rawContent}` : rawContent;
             return {
               type: 'narrator' as const,
               characterId: '',
               characterName: '',
-              content: turn.content?.trim() || '',
+              content: mergedContent,
               emotion: { primary: 'neutral', intensity: 0.5 },
             };
           }
@@ -486,10 +493,12 @@ export type StreamEvent =
   | { type: 'metadata'; metadata: ResponseMetadata };
 
 function parseSingleTurn(
-  raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number },
+  raw: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number },
   characters: Array<{ id: string; name: string }>,
 ): StoryTurn | null {
-  const content = raw.content?.trim() || '';
+  const rawContent = raw.content?.trim() || '';
+  const sensory = raw.type === 'narrator' ? (raw.sensory?.trim() || '') : '';
+  const content = sensory ? `${sensory} ${rawContent}` : rawContent;
   if (!content) return null;
 
   if (raw.type === 'narrator') {
@@ -774,7 +783,7 @@ export async function* generateStoryResponseStream(params: {
 
       // 스트리밍 중 누락된 turn 보완
       const allTurns = (parsed.turns || [])
-        .map((raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
+        .map((raw: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
         .filter((t: StoryTurn | null): t is StoryTurn => t !== null);
 
       for (let i = emittedTurns.length; i < allTurns.length; i++) {
@@ -798,7 +807,7 @@ export async function* generateStoryResponseStream(params: {
       }
       const repaired = repairTruncatedJson(fullText, sceneState);
       const repairedTurns = (repaired.turns || [])
-        .map((raw: { type: string; character: string; content: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
+        .map((raw: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }) => parseSingleTurn(raw, characters))
         .filter((t: StoryTurn | null): t is StoryTurn => t !== null);
 
       for (let i = emittedTurns.length; i < repairedTurns.length; i++) {
