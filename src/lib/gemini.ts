@@ -284,7 +284,7 @@ export function buildContents(params: {
   sections.push(`## ${params.userName}의 입력\n${params.userMessage}`);
 
   // post-history 리마인더
-  sections.push(`※ 각 캐릭터 말투를 설정 그대로 유지. Show emotions through body language & sensory details, never state feelings directly.`);
+  sections.push(`※ 각 캐릭터 말투를 설정 그대로 유지하고, 감정은 표정·몸짓·감각 묘사로 보여주세요.`);
 
   // 순정 테스트: prefill 제거, 단일 user 메시지만
   return [
