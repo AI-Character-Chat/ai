@@ -198,10 +198,11 @@ export function buildSystemInstruction(params: {
 }): string {
   const parts: string[] = [];
 
-  // 응답 규칙 — 순정 테스트 (프롬프트 최소화)
+  // 응답 규칙 — 프롬프트 1개씩 추가 테스트
   const un = params.userName;
   parts.push(`당신은 유저(${un})와 함께 인터랙티브 소설을 공동 집필하는 작가입니다.
-나레이션에서 유저를 "${un}"으로 지칭하세요.`);
+나레이션에서 유저를 "${un}"으로 지칭하세요.
+각 캐릭터의 말투(반말/존댓말/은어 등)를 캐릭터 설정에 맞게 처음부터 끝까지 일관되게 유지하세요.`);
 
   // 세계관 (작품별 고정 - 전체 포함)
   if (params.worldSetting) {
