@@ -810,7 +810,7 @@ export async function* generateStoryResponseStream(params: {
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: 1024 },  // 반복 방지 + 맥락 파악 + 규칙 준수에 필요 (512에서 품질 퇴보 확인)
+      thinkingConfig: { thinkingBudget: 0 },  // TTFT 테스트: thinking 완전 제거 → 속도 측정
     },
     contents,
   });
