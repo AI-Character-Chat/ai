@@ -1226,35 +1226,12 @@ function generateNarrativePrompt(
   memories: Array<{ interpretation: string; importance: number }>,
   scene: SceneContext | null
 ): string {
-  const lines: string[] = [];
-
-  // 관계 수치 (데이터만, 지시 없음)
-  lines.push(`[${characterName}]`);
-  lines.push(`- 신뢰: ${relationship.trust.toFixed(0)} | 호감: ${relationship.affection.toFixed(0)} | 존경: ${relationship.respect.toFixed(0)} | 경쟁심: ${relationship.rivalry.toFixed(0)} | 친숙도: ${relationship.familiarity.toFixed(0)}`);
-
-  // 알고 있는 사실 (DB 데이터만)
-  if (relationship.knownFacts.length > 0) {
-    lines.push(`\n[알고 있는 사실]`);
-    relationship.knownFacts.forEach(fact => lines.push(`- ${fact}`));
-  }
-
-  // 기억 (DB 데이터만)
-  if (memories.length > 0) {
-    lines.push(`\n[기억]`);
-    memories.forEach((m) => {
-      lines.push(`- ${m.interpretation}`);
-    });
-  }
-
-  // 공유 경험 (DB 데이터만)
-  if (relationship.sharedExperiences.length > 0) {
-    lines.push(`\n[공유 경험]`);
-    relationship.sharedExperiences.slice(-15).forEach((exp) => {
-      lines.push(`- ${exp}`);
-    });
-  }
-
-  return lines.join('\n');
+  const parts: string[] = [];
+  parts.push(`[${characterName}] 신뢰${relationship.trust.toFixed(0)} 호감${relationship.affection.toFixed(0)} 존경${relationship.respect.toFixed(0)} 경쟁${relationship.rivalry.toFixed(0)} 친숙${relationship.familiarity.toFixed(0)}`);
+  if (relationship.knownFacts.length > 0) parts.push(`사실: ${relationship.knownFacts.join('; ')}`);
+  if (memories.length > 0) parts.push(`기억: ${memories.map(m => m.interpretation).join('; ')}`);
+  if (relationship.sharedExperiences.length > 0) parts.push(`경험: ${relationship.sharedExperiences.slice(-15).join('; ')}`);
+  return parts.join('\n');
 }
 
 /**
