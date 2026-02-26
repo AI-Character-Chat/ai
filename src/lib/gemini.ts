@@ -150,7 +150,7 @@ const RESPONSE_SCHEMA = {
           },
           content: {
             type: Type.STRING,
-            description: '나레이션은 오감 묘사 위주, 대사는 캐릭터 말투 그대로',
+            description: '턴 내용',
           },
           emotion: {
             type: Type.STRING,
