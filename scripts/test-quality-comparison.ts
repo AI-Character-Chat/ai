@@ -38,17 +38,41 @@ const MSGS = [
   { id:'T10', msg:'나 사실 고소공포증이 있어. 그리고 고양이를 키우고 있어, 이름은 나비.', purpose:'다중 개인정보 추출' },
 ];
 
+// Gemini API 공식 가격 ($/1M tokens, Standard Tier, ≤200k)
+const PRICING = {
+  flash: { input: 0.30, cached: 0.03, output: 2.50 },   // output includes thinking
+  pro:   { input: 1.25, output: 10.00 },                  // output includes thinking
+};
+
 interface Turn { type: 'narrator'|'dialogue'; characterName?: string; content: string; }
+interface ProMetrics { promptTokens: number; outputTokens: number; thinkingTokens: number; totalTokens: number; timeMs: number; analysis: string; }
 interface Result {
   turns: Turn[];
   meta: Record<string, any>;
   firstDeltaMs: number|null;
   firstTurnMs: number|null;
+  lastAiMessageId: string;
+  aiResponseSummary: string;
+  proMetrics: ProMetrics | null;
+}
+
+function calcFlashCost(meta: Record<string, any>): number {
+  const inp = meta.promptTokens || 0;
+  const out = meta.outputTokens || 0;
+  const cached = meta.cachedTokens || 0;
+  const think = meta.thinkingTokens || 0;
+  return ((inp - cached) * PRICING.flash.input + cached * PRICING.flash.cached + (out + think) * PRICING.flash.output) / 1_000_000;
+}
+
+function calcProCost(pm: ProMetrics): number {
+  const inputCost = (pm.promptTokens || 0) * PRICING.pro.input / 1_000_000;
+  const outputCost = ((pm.outputTokens || 0) + (pm.thinkingTokens || 0)) * PRICING.pro.output / 1_000_000;
+  return inputCost + outputCost;
 }
 
 async function sendAndCollect(config: Config, sessionId: string, message: string): Promise<Result> {
   const t0 = Date.now();
-  const r: Result = { turns: [], meta: {}, firstDeltaMs: null, firstTurnMs: null };
+  const r: Result = { turns: [], meta: {}, firstDeltaMs: null, firstTurnMs: null, lastAiMessageId: '', aiResponseSummary: '', proMetrics: null };
   const res = await fetchAuth(config, '/api/chat', { method: 'PUT', body: JSON.stringify({ sessionId, content: message }) });
   if (!res.ok) throw new Error(`API ${res.status}`);
   const reader = res.body!.getReader();
@@ -66,12 +90,40 @@ async function sendAndCollect(config: Config, sessionId: string, message: string
       try {
         const p = JSON.parse(d); const ms = Date.now() - t0;
         if (ev === 'turn_delta' && r.firstDeltaMs === null) r.firstDeltaMs = ms;
-        if (ev === 'narrator') { if (!r.firstTurnMs) r.firstTurnMs = ms; r.turns.push({ type:'narrator', content: p.content }); }
-        if (ev === 'character_response') { if (!r.firstTurnMs) r.firstTurnMs = ms; r.turns.push({ type:'dialogue', characterName: p.character?.name||'?', content: p.content }); }
+        if (ev === 'narrator') {
+          if (!r.firstTurnMs) r.firstTurnMs = ms;
+          r.turns.push({ type:'narrator', content: p.content });
+          if (p.id) r.lastAiMessageId = p.id;
+        }
+        if (ev === 'character_response') {
+          if (!r.firstTurnMs) r.firstTurnMs = ms;
+          r.turns.push({ type:'dialogue', characterName: p.character?.name||'?', content: p.content });
+          if (p.id) r.lastAiMessageId = p.id;
+        }
         if (ev === 'response_metadata') r.meta = p;
+        if (ev === 'done' && p.aiResponseSummary) r.aiResponseSummary = p.aiResponseSummary;
       } catch {}
     }
   }
+
+  // Pro 분석 호출 (클라이언트와 동일한 흐름)
+  if (r.lastAiMessageId && r.aiResponseSummary) {
+    try {
+      const proRes = await fetchAuth(config, '/api/chat/pro-analyze', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, messageId: r.lastAiMessageId, userMessage: message, aiResponseSummary: r.aiResponseSummary }),
+      });
+      if (proRes.ok) {
+        const proData = await proRes.json();
+        if (proData.analysis) {
+          r.proMetrics = proData;
+        }
+      }
+    } catch (e) {
+      console.warn('  ⚠️ Pro 분석 실패:', e);
+    }
+  }
+
   return r;
 }
 
@@ -90,7 +142,8 @@ async function main() {
   console.log(`🎬 세션: ${sd.session.id}\n`);
 
   const results: Array<{ id: string; msg: string; purpose: string; result: Result }> = [];
-  let totalCost = 0;
+  let totalFlashCost = 0;
+  let totalProCost = 0;
 
   for (let i = 0; i < MSGS.length; i++) {
     const t = MSGS[i];
@@ -98,23 +151,23 @@ async function main() {
     const result = await sendAndCollect(config, sd.session.id, t.msg);
     results.push({ ...t, result });
 
-    const inp = result.meta.promptTokens || 0;
-    const out = result.meta.outputTokens || 0;
-    const cached = result.meta.cachedTokens || 0;
-    const think = result.meta.thinkingTokens || 0;
-    // Gemini Flash 공식 가격 ($/1M tokens, Standard Tier, ≤200k)
-    const cost = ((inp - cached) * 0.30 + cached * 0.03 + (out + think) * 2.50) / 1_000_000;
-    totalCost += cost;
+    const flashCost = calcFlashCost(result.meta);
+    const proCost = result.proMetrics ? calcProCost(result.proMetrics) : 0;
+    const turnCost = flashCost + proCost;
+    totalFlashCost += flashCost;
+    totalProCost += proCost;
 
     for (const turn of result.turns) {
       if (turn.type === 'narrator') console.log(`  [나레이션] ${turn.content}`);
       else console.log(`  [${turn.characterName}] ${turn.content}`);
     }
-    console.log(`  📊 TTFT: ${result.firstDeltaMs ?? result.firstTurnMs}ms | total: ${result.meta.totalMs||'?'}ms | ${inp}→${out}tok | $${cost.toFixed(5)}\n`);
+    const proInfo = result.proMetrics ? `Pro: ${result.proMetrics.promptTokens}→${result.proMetrics.outputTokens}tok ${result.proMetrics.timeMs}ms $${proCost.toFixed(4)}` : 'Pro: N/A';
+    console.log(`  📊 TTFT: ${result.firstDeltaMs ?? result.firstTurnMs}ms | total: ${result.meta.totalMs||'?'}ms | Flash: ${result.meta.promptTokens}→${result.meta.outputTokens}tok $${flashCost.toFixed(4)} | ${proInfo} | 턴합계: $${turnCost.toFixed(4)}\n`);
     if (i < MSGS.length - 1) await new Promise(r => setTimeout(r, 2000));
   }
 
   // 리포트
+  const totalCost = totalFlashCost + totalProCost;
   console.log('\n══════════════════════════════════════════════════');
   console.log('📊 우리 서비스 10턴 종합 리포트');
   console.log('══════════════════════════════════════════════════\n');
@@ -122,18 +175,26 @@ async function main() {
   const totals = results.map(r => r.result.meta.totalMs || 0).filter(v => v > 0);
   console.log(`  평균 체감 TTFT: ${ttfts.length ? Math.round(ttfts.reduce((a,b)=>a+b,0)/ttfts.length) : 0}ms`);
   console.log(`  평균 총 응답:   ${totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0}ms`);
+  console.log(`  ─── 비용 내역 ───`);
+  console.log(`  Flash 총 비용:  $${totalFlashCost.toFixed(4)}`);
+  console.log(`  Pro 총 비용:    $${totalProCost.toFixed(4)}`);
   console.log(`  10턴 총 비용:   $${totalCost.toFixed(4)}`);
-  console.log(`  턴당 평균 비용: $${(totalCost/10).toFixed(5)}\n`);
+  console.log(`  턴당 평균 비용: $${(totalCost/10).toFixed(5)}`);
+  console.log(`  턴당 Flash:     $${(totalFlashCost/10).toFixed(5)}`);
+  console.log(`  턴당 Pro:       $${(totalProCost/10).toFixed(5)}\n`);
 
   console.log('──── 턴별 응답 전문 ────\n');
   for (const r of results) {
+    const fc = calcFlashCost(r.result.meta);
+    const pc = r.result.proMetrics ? calcProCost(r.result.proMetrics) : 0;
     console.log(`### ${r.id}: ${r.msg}`);
     console.log(`목적: ${r.purpose}`);
     for (const turn of r.result.turns) {
       if (turn.type === 'narrator') console.log(`[나레이션] ${turn.content}`);
       else console.log(`[${turn.characterName}] ${turn.content}`);
     }
-    console.log(`메타: TTFT=${r.result.firstDeltaMs ?? r.result.firstTurnMs}ms, total=${r.result.meta.totalMs}ms, tok=${r.result.meta.promptTokens}→${r.result.meta.outputTokens}\n`);
+    console.log(`메타: TTFT=${r.result.firstDeltaMs ?? r.result.firstTurnMs}ms, total=${r.result.meta.totalMs}ms, tok=${r.result.meta.promptTokens}→${r.result.meta.outputTokens}`);
+    console.log(`비용: Flash=$${fc.toFixed(4)} + Pro=$${pc.toFixed(4)} = $${(fc+pc).toFixed(4)}\n`);
   }
 }
 
