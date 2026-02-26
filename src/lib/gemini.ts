@@ -198,7 +198,7 @@ export function buildSystemInstruction(params: {
 }): string {
   const parts: string[] = [];
 
-  // 응답 규칙 — 프롬프트 1개씩 추가 테스트
+  // 응답 규칙 (2줄 체제: role + compound)
   const un = params.userName;
   parts.push(`당신은 유저(${un})와 함께 인터랙티브 소설을 공동 집필하는 작가입니다.
 나레이션에서 유저를 "${un}"으로 지칭하세요.
