@@ -680,7 +680,7 @@ export async function* generateStoryResponseStream(params: {
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: 512 },  // 순정 테스트: 1024→512
+      thinkingConfig: { thinkingBudget: 1024 },
     },
     contents,
   });
