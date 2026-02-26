@@ -810,7 +810,7 @@ export async function* generateStoryResponseStream(params: {
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
-      thinkingConfig: { thinkingBudget: 0 },  // TTFT 테스트: thinking 완전 제거 → 속도 측정
+      thinkingConfig: { thinkingBudget: 0 },  // Flash는 thinking 제거 (TTFT 47% 개선: 8.3s→4.3s). 품질 보완은 Pro 디렉팅이 담당
     },
     contents,
   });
