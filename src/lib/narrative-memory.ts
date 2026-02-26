@@ -1228,88 +1228,31 @@ function generateNarrativePrompt(
 ): string {
   const lines: string[] = [];
 
-  // 관계 상태 (다축)
-  lines.push(`[${characterName}의 유저에 대한 인식]`);
-  lines.push(`- 관계 단계: ${translateIntimacyLevel(relationship.intimacyLevel)}`);
+  // 관계 수치 (데이터만, 지시 없음)
+  lines.push(`[${characterName}]`);
   lines.push(`- 신뢰: ${relationship.trust.toFixed(0)} | 호감: ${relationship.affection.toFixed(0)} | 존경: ${relationship.respect.toFixed(0)} | 경쟁심: ${relationship.rivalry.toFixed(0)} | 친숙도: ${relationship.familiarity.toFixed(0)}`);
 
-  // 관계 특성 요약 (높은/낮은 축 강조)
-  const traits: string[] = [];
-  if (relationship.trust >= 70) traits.push('깊이 신뢰함');
-  else if (relationship.trust <= 30) traits.push('불신');
-  if (relationship.affection >= 70) traits.push('강한 애착');
-  if (relationship.respect >= 70) traits.push('높은 존경');
-  if (relationship.rivalry >= 50) traits.push('라이벌 의식');
-  if (traits.length > 0) lines.push(`- 핵심 감정: ${traits.join(', ')}`);
-
-  if (relationship.relationshipLabel) {
-    lines.push(`- 유저를 "${relationship.relationshipLabel}"(으)로 인식`);
+  // 알고 있는 사실 (DB 데이터만)
+  if (relationship.knownFacts.length > 0) {
+    lines.push(`\n[알고 있는 사실]`);
+    relationship.knownFacts.forEach(fact => lines.push(`- ${fact}`));
   }
 
-  // 말투 가이드
-  const speechGuide = {
-    formal: '존댓말, 조심스러운 태도',
-    casual: '반말, 편한 태도',
-    intimate: '애칭 사용, 친밀한 태도',
-  };
-  lines.push(`- 말투: ${speechGuide[relationship.speechStyle as keyof typeof speechGuide] || '상황에 맞게'}`);
-
-  if (relationship.nicknameForUser) {
-    lines.push(`- 유저를 "${relationship.nicknameForUser}"(이)라고 부름`);
-  }
-
-  // ---- 프롬프트 배치 전략 (Lost-in-the-Middle 방지) ----
-  // LLM은 프롬프트 시작과 끝을 잘 기억하고, 중간은 무시하는 경향 (U-shaped curve).
-  // 배치 순서: 관계상태(Top) → Moment/기억/경험(Middle) → Identity(Bottom, 유저 메시지 직전)
-  // → Identity가 유저 메시지와 가장 가까워 Flash 어텐션 극대화
-
-  const identityFacts = relationship.knownFacts.filter(f => isIdentityFact(f));
-  const momentFacts = relationship.knownFacts.filter(f => !isIdentityFact(f));
-
-  // [Middle] Moment facts — 최근 알게 된 변동 정보 (최근 20개)
-  if (momentFacts.length > 0) {
-    lines.push(`\n[${characterName}이 최근 알게 된 것]`);
-    momentFacts.forEach(fact => lines.push(`- ${fact}`));
-  }
-
-  // [Middle] 최근 기억 (캐릭터 해석)
+  // 기억 (DB 데이터만)
   if (memories.length > 0) {
-    lines.push(`\n[${characterName}의 최근 기억]`);
+    lines.push(`\n[기억]`);
     memories.forEach((m) => {
       lines.push(`- ${m.interpretation}`);
     });
   }
 
-  // [Middle] 공유 경험 (행동/약속/상황 포함)
+  // 공유 경험 (DB 데이터만)
   if (relationship.sharedExperiences.length > 0) {
-    lines.push(`\n[함께한 중요한 순간들]`);
+    lines.push(`\n[공유 경험]`);
     relationship.sharedExperiences.slice(-15).forEach((exp) => {
       lines.push(`- ${exp}`);
     });
   }
-
-  // [Middle] 최근 감정 흐름
-  if (relationship.emotionalHistory.length > 0) {
-    lines.push(`\n[${characterName}의 최근 감정 흐름]`);
-    const recentEmotions = relationship.emotionalHistory.slice(-5);
-    lines.push(`- ${recentEmotions.map(e => `${e.emotion}(${(e.intensity * 100).toFixed(0)}%)`).join(' → ')}`);
-  }
-
-  // [Middle] 현재 장면 분위기
-  if (scene && scene.emotionalTone.mood) {
-    lines.push(`\n[현재 장면 분위기]`);
-    lines.push(`- ${scene.emotionalTone.mood} (강도: ${(scene.emotionalTone.intensity * 100).toFixed(0)}%)`);
-  }
-
-  // [Bottom — 유저 메시지 직전] Identity facts — 전량 주입 + 볼드 강조
-  // 프롬프트 끝에 배치하여 Flash 모델 어텐션 극대화
-  if (identityFacts.length > 0) {
-    lines.push(`\n[${characterName}이 유저에 대해 확실히 아는 사실 — 유저가 물으면 반드시 이 정보로 대답할 것]`);
-    identityFacts.forEach(fact => lines.push(`- **${fact}**`));
-  }
-
-  // 기억 정확성 지시
-  lines.push(`\n[중요] 위에 명시된 정보만 활용하세요. 유저의 이름, 나이, 직업 등 구체적 사실을 확실히 기억하지 못하면 추측하지 말고 자연스럽게 다시 물어보거나 "기억이 흐릿하다"고 표현하세요.`);
 
   return lines.join('\n');
 }

@@ -136,7 +136,7 @@ const RESPONSE_SCHEMA = {
   properties: {
     turns: {
       type: Type.ARRAY,
-      description: '나레이션과 대사를 교차 배치. 최소 5개 이상.',
+      description: '응답 턴 배열',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -150,7 +150,7 @@ const RESPONSE_SCHEMA = {
           },
           content: {
             type: Type.STRING,
-            description: 'narrator: 감각+심리 포함 2-3문장 묘사. dialogue: 세계관 디테일이 녹아든 2-4문장 대사.',
+            description: '턴 내용',
           },
           emotion: {
             type: Type.STRING,
@@ -158,7 +158,7 @@ const RESPONSE_SCHEMA = {
           },
           emotionIntensity: {
             type: Type.NUMBER,
-            description: 'dialogue일 때 감정 강도 0.0~1.0. narrator일 때 0.5.',
+            description: '0.0~1.0',
           },
         },
         required: ['type', 'character', 'content', 'emotion', 'emotionIntensity'],
@@ -172,7 +172,7 @@ const RESPONSE_SCHEMA = {
         presentCharacters: {
           type: Type.ARRAY,
           items: { type: Type.STRING },
-          description: '이 턴 종료 시점에 장면에 있는 모든 캐릭터 이름. dialogue 턴에 등장한 캐릭터는 반드시 포함해야 한다.',
+          description: '장면에 있는 캐릭터 이름',
         },
       },
       required: ['location', 'time', 'presentCharacters'],
@@ -180,7 +180,7 @@ const RESPONSE_SCHEMA = {
     extractedFacts: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: '유저가 이번 턴에서 새로 밝힌 개인정보나 중요 사실 (이름, 취향, 직업, 감정, 비밀, 과거 경험 등). 유저가 새로운 정보를 밝히지 않았으면 빈 배열.',
+      description: '유저가 밝힌 새 정보. 없으면 빈 배열.',
     },
   },
   required: ['turns', 'scene', 'extractedFacts'],
@@ -269,21 +269,8 @@ export function buildContents(params: {
     sections.push(`## 이전 대화 요약 (장기 기억)\n${params.sessionSummary}`);
   }
 
-  // 디렉터 노트 (Pro 분석 결과 - 하이브리드 아키텍처)
-  if (params.proAnalysis) {
-    sections.push(`## 디렉터 노트 (이전 분석)\n${params.proAnalysis}`);
-  }
-
-  // 첫 등장 가이드
-  const newChars = params.sceneState.presentCharacters.filter(
-    name => !(params.previousPresentCharacters || []).includes(name)
-  );
-  const firstAppearance = newChars.length > 0
-    ? `\n(첫등장: ${newChars.join(', ')} → 외모+등장묘사 필수)`
-    : '';
-
-  // 현재 상황
-  sections.push(`## 상황\n${params.sceneState.location}, ${params.sceneState.time}\n등장: ${params.sceneState.presentCharacters.join(', ')}${firstAppearance}`);
+  // 현재 상황 (데이터만)
+  sections.push(`## 상황\n${params.sceneState.location}, ${params.sceneState.time}\n등장: ${params.sceneState.presentCharacters.join(', ')}`);
 
   // 대화 이력 — 순정 테스트 (지시 제거)
   if (params.conversationHistory) {
