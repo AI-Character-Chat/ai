@@ -181,7 +181,7 @@ const RESPONSE_SCHEMA = {
         },
         plotEvent: {
           type: Type.STRING,
-          description: '이번 턴에서 새로 발생한 핵심 사건 1줄. 이전과 다른 새로운 전개여야 함.',
+          description: 'New plot event this turn, one sentence',
         },
       },
       required: ['location', 'time', 'presentCharacters', 'plotEvent'],
