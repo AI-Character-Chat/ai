@@ -74,7 +74,77 @@ export async function GET(request: NextRequest) {
     }
 
     if (publicOnly) {
-      // 공개 작품 전체 (메인 페이지용) 또는 특정 작가 작품
+      const tab = url.searchParams.get('tab');
+      const period = url.searchParams.get('period') as 'realtime' | 'daily' | 'weekly' | 'monthly' | null;
+      const limit = parseInt(url.searchParams.get('limit') || '20');
+
+      // 탭별 분기 처리
+      if (tab) {
+        const commonInclude = {
+          author: {
+            select: { id: true, name: true, image: true, bio: true },
+          },
+          characters: {
+            select: { id: true, name: true, profileImage: true },
+          },
+          openings: {
+            orderBy: { order: 'asc' as const },
+          },
+          _count: {
+            select: { characters: true, openings: true, lorebook: true, chatSessions: true, likes: true },
+          },
+        };
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let works: any[];
+
+        if (tab === 'home-trending') {
+          // 급상승 신작: 최근 30일 내 공개된 작품, 채팅 세션 수 기준 정렬
+          works = await prisma.work.findMany({
+            where: { visibility: 'public', publishedAt: { gte: thirtyDaysAgo } },
+            include: commonInclude,
+            orderBy: { chatSessions: { _count: 'desc' } },
+            take: Math.min(limit, 10),
+          });
+        } else if (tab === 'home-new') {
+          // 신작추천: 최신 공개순
+          works = await prisma.work.findMany({
+            where: { visibility: 'public', publishedAt: { not: null } },
+            include: commonInclude,
+            orderBy: { publishedAt: 'desc' },
+            take: Math.min(limit, 10),
+          });
+        } else if (tab === 'new-ranking') {
+          // 신작랭킹: 최근 30일 내 공개된 작품, 기간 내 인기순
+          works = await prisma.work.findMany({
+            where: { visibility: 'public', publishedAt: { gte: thirtyDaysAgo } },
+            include: commonInclude,
+            orderBy: { chatSessions: { _count: 'desc' } },
+            take: limit,
+          });
+        } else if (tab === 'ranking') {
+          // 전체 랭킹: 모든 공개 작품, 기간 내 인기순
+          works = await prisma.work.findMany({
+            where: { visibility: 'public' },
+            include: commonInclude,
+            orderBy: { chatSessions: { _count: 'desc' } },
+            take: limit,
+          });
+        } else {
+          works = [];
+        }
+
+        const worksWithParsedTags = works.map((work) => ({
+          ...work,
+          tags: safeJsonParse(work.tags, []),
+        }));
+
+        return NextResponse.json(worksWithParsedTags);
+      }
+
+      // 기존: 공개 작품 전체 (메인 페이지용) 또는 특정 작가 작품
       const whereClause: { visibility: string; authorId?: string } = {
         visibility: 'public',
       };
