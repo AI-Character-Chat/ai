@@ -94,6 +94,7 @@ export interface StoryResponse {
     time: string;
     presentCharacters: string[];
   };
+  plotEvent: string;
   metadata: ResponseMetadata;
 }
 
@@ -178,8 +179,12 @@ const RESPONSE_SCHEMA = {
           items: { type: Type.STRING },
           description: '장면에 있는 캐릭터 이름',
         },
+        plotEvent: {
+          type: Type.STRING,
+          description: '이번 턴에서 새로 발생한 핵심 사건 1줄. 이전과 다른 새로운 전개여야 함.',
+        },
       },
-      required: ['location', 'time', 'presentCharacters'],
+      required: ['location', 'time', 'presentCharacters', 'plotEvent'],
     },
     extractedFacts: {
       type: Type.ARRAY,
@@ -351,7 +356,7 @@ export async function generateStoryResponse(params: {
       }
 
       // JSON 파싱
-      let parsed: { turns?: Array<{ type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }>; scene?: { location: string; time: string; presentCharacters: string[] } };
+      let parsed: { turns?: Array<{ type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }>; scene?: { location: string; time: string; presentCharacters: string[]; plotEvent?: string } };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -449,6 +454,7 @@ export async function generateStoryResponse(params: {
           time: parsed.scene?.time || sceneState.time,
           presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
         },
+        plotEvent: parsed.scene?.plotEvent || '',
         metadata,
       };
 
@@ -488,7 +494,7 @@ export type StreamEvent =
   | { type: 'turn'; turn: StoryTurn }
   | { type: 'turn-start'; turnIndex: number; turnType: 'narrator' | 'dialogue'; characterName: string; characterId: string }
   | { type: 'turn-delta'; turnIndex: number; content: string }
-  | { type: 'scene'; scene: { location: string; time: string; presentCharacters: string[] } }
+  | { type: 'scene'; scene: { location: string; time: string; presentCharacters: string[] }; plotEvent: string }
   | { type: 'extractedFacts'; facts: string[] }
   | { type: 'metadata'; metadata: ResponseMetadata };
 
@@ -775,6 +781,7 @@ export async function* generateStoryResponseStream(params: {
   // 스트림 완료 - 누락된 turn + scene + extractedFacts 파싱
   const fullText = buffer.trim();
   let parsedScene: { location: string; time: string; presentCharacters: string[] } | null = null;
+  let parsedPlotEvent = '';
   let parsedFacts: string[] = [];
 
   if (fullText) {
@@ -796,6 +803,7 @@ export async function* generateStoryResponseStream(params: {
         time: parsed.scene?.time || sceneState.time,
         presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
       };
+      parsedPlotEvent = parsed.scene?.plotEvent || '';
 
       // extractedFacts 파싱
       if (Array.isArray(parsed.extractedFacts)) {
@@ -855,6 +863,7 @@ export async function* generateStoryResponseStream(params: {
       time: sceneState.time,
       presentCharacters: sceneState.presentCharacters,
     },
+    plotEvent: parsedPlotEvent,
   };
 
   // extractedFacts (유저가 밝힌 새로운 정보)
@@ -1002,7 +1011,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 function repairTruncatedJson(
   text: string,
   sceneState: SceneState,
-): { turns: Array<{ type: string; character: string; content: string; emotion: string }>; scene: { location: string; time: string; presentCharacters: string[] } } {
+): { turns: Array<{ type: string; character: string; content: string; emotion: string }>; scene: { location: string; time: string; presentCharacters: string[]; plotEvent: string } } {
   // turns 배열에서 완성된 항목만 추출
   const turns: Array<{ type: string; character: string; content: string; emotion: string }> = [];
   const turnPattern = /\{\s*"type"\s*:\s*"(narrator|dialogue)"\s*,\s*"character"\s*:\s*"([^"]*)"\s*,\s*"content"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"emotion"\s*:\s*"([^"]*)"\s*\}/g;
@@ -1024,6 +1033,7 @@ function repairTruncatedJson(
       location: sceneState.location,
       time: sceneState.time,
       presentCharacters: sceneState.presentCharacters,
+      plotEvent: '',
     },
   };
 }
@@ -1036,12 +1046,13 @@ function parseMarkdownFallback(
   text: string,
   characters: Array<{ id: string; name: string }>,
   sceneState: SceneState,
-): { turns: Array<{ type: string; character: string; content: string; emotion: string }>; scene: { location: string; time: string; presentCharacters: string[] } } {
+): { turns: Array<{ type: string; character: string; content: string; emotion: string }>; scene: { location: string; time: string; presentCharacters: string[]; plotEvent: string } } {
   const turns: Array<{ type: string; character: string; content: string; emotion: string }> = [];
   const scene = {
     location: sceneState.location,
     time: sceneState.time,
     presentCharacters: sceneState.presentCharacters,
+    plotEvent: '',
   };
 
   // 나레이션 추출

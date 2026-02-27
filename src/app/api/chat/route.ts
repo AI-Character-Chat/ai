@@ -270,6 +270,7 @@ export async function PUT(request: NextRequest) {
         let responseMetadataFromAI: any = null;
         let lastAiMessageId = '';
         let extractedFacts: string[] = [];
+        let plotEvent = '';
 
         for await (const event of generateStoryResponseStream({
           systemInstruction,
@@ -313,6 +314,7 @@ export async function PUT(request: NextRequest) {
             }
             case 'scene':
               updatedScene = event.scene;
+              plotEvent = event.plotEvent || '';
               break;
             case 'extractedFacts':
               extractedFacts = event.facts;
@@ -329,14 +331,11 @@ export async function PUT(request: NextRequest) {
 
         // [5] 세션 업데이트
         const newEvents: string[] = [];
-        newEvents.push(`${effectiveUserName}: ${content.substring(0, 50)}`);
-        const firstNarrator = allTurns.find(t => t.type === 'narrator');
-        const firstDialogue = allTurns.find(t => t.type === 'dialogue');
-        if (firstNarrator) {
-          newEvents.push(`[상황] ${firstNarrator.content.substring(0, 60)}...`);
-        }
-        if (firstDialogue) {
-          newEvents.push(`${firstDialogue.characterName}: ${firstDialogue.content.substring(0, 40)}...`);
+        // plotEvent가 있으면 이벤트 기반, 없으면 기존 폴백
+        if (plotEvent) {
+          newEvents.push(plotEvent);
+        } else {
+          newEvents.push(`${effectiveUserName}: ${content.substring(0, 50)}`);
         }
 
         // dialogue 턴에 등장한 캐릭터를 presentCharacters에 자동 추가
