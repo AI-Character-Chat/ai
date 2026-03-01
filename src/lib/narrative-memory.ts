@@ -1230,7 +1230,7 @@ function generateNarrativePrompt(
   parts.push(`[${characterName}] 신뢰${relationship.trust.toFixed(0)} 호감${relationship.affection.toFixed(0)} 존경${relationship.respect.toFixed(0)} 경쟁${relationship.rivalry.toFixed(0)} 친숙${relationship.familiarity.toFixed(0)}`);
   if (relationship.knownFacts.length > 0) parts.push(`사실: ${relationship.knownFacts.join('; ')}`);
   if (memories.length > 0) parts.push(`기억: ${memories.map(m => m.interpretation).join('; ')}`);
-  if (relationship.sharedExperiences.length > 0) parts.push(`경험: ${relationship.sharedExperiences.slice(-15).join('; ')}`);
+  if (relationship.sharedExperiences.length > 0) parts.push(`경험: ${relationship.sharedExperiences.slice(-30).join('; ')}`);
   return parts.join('\n');
 }
 
