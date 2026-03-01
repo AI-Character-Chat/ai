@@ -164,7 +164,7 @@ const RESPONSE_SCHEMA = {
           },
           emotion: {
             type: Type.STRING,
-            description: '표정 또는 분위기',
+            description: 'dialogue일 때 표정. narrator일 때 "neutral".',
           },
           emotionIntensity: {
             type: Type.NUMBER,
