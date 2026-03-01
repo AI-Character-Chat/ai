@@ -160,7 +160,7 @@ const RESPONSE_SCHEMA = {
           },
           ambience: {
             type: Type.STRING,
-            description: '소리나 냄새 1줄. dialogue일 때 빈 문자열.',
+            description: '소리나 냄새 1줄',
           },
           emotion: {
             type: Type.STRING,
