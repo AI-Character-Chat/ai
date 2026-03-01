@@ -198,7 +198,7 @@ const RESPONSE_SCHEMA = {
     extractedFacts: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: '유저가 밝힌 새 정보. 없으면 빈 배열.',
+      description: '유저가 밝힌 개인정보를 "주제: 내용" 형식으로 추출(예: "이름: 김민수", "나이: 25", "알레르기: 초콜릿"). 없으면 빈 배열.',
     },
   },
   required: ['turns', 'scene', 'extractedFacts'],
