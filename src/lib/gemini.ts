@@ -192,12 +192,8 @@ const RESPONSE_SCHEMA = {
           type: Type.STRING,
           description: '이번 턴의 핵심 사건 1줄',
         },
-        stakes: {
-          type: Type.STRING,
-          description: '이번 씬에서 걸린 것 1줄',
-        },
       },
-      required: ['location', 'time', 'presentCharacters', 'plotEvent', 'stakes'],
+      required: ['location', 'time', 'presentCharacters', 'plotEvent'],
     },
     extractedFacts: {
       type: Type.ARRAY,
