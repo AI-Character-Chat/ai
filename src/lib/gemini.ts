@@ -138,6 +138,7 @@ const RESPONSE_SCHEMA = {
     turns: {
       type: Type.ARRAY,
       description: '응답 턴 배열',
+      minItems: '6',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -155,7 +156,7 @@ const RESPONSE_SCHEMA = {
           },
           sensory: {
             type: Type.STRING,
-            description: 'narrator일 때 오감(시각·청각·촉각·후각) 묘사. dialogue일 때 빈 문자열.',
+            description: '소리 또는 냄새 한 줄. dialogue일 때 빈 문자열.',
           },
           emotion: {
             type: Type.STRING,
@@ -165,8 +166,12 @@ const RESPONSE_SCHEMA = {
             type: Type.NUMBER,
             description: '0.0~1.0',
           },
+          characterAction: {
+            type: Type.STRING,
+            description: '등장인물의 물리적 동작 1줄',
+          },
         },
-        required: ['type', 'character', 'content', 'sensory', 'emotion', 'emotionIntensity'],
+        required: ['type', 'character', 'content', 'sensory', 'emotion', 'emotionIntensity', 'characterAction'],
       },
     },
     scene: {
@@ -374,14 +379,12 @@ export async function generateStoryResponse(params: {
       const turns: StoryTurn[] = (parsed.turns || [])
         .map((turn: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }) => {
           if (turn.type === 'narrator') {
-            const sensory = turn.sensory?.trim() || '';
             const rawContent = turn.content?.trim() || '';
-            const mergedContent = sensory ? `${sensory} ${rawContent}` : rawContent;
             return {
               type: 'narrator' as const,
               characterId: '',
               characterName: '',
-              content: mergedContent,
+              content: rawContent,
               emotion: { primary: 'neutral', intensity: 0.5 },
             };
           }
@@ -502,9 +505,7 @@ function parseSingleTurn(
   raw: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number },
   characters: Array<{ id: string; name: string }>,
 ): StoryTurn | null {
-  const rawContent = raw.content?.trim() || '';
-  const sensory = raw.type === 'narrator' ? (raw.sensory?.trim() || '') : '';
-  const content = sensory ? `${sensory} ${rawContent}` : rawContent;
+  const content = raw.content?.trim() || '';
   if (!content) return null;
 
   if (raw.type === 'narrator') {
@@ -692,7 +693,7 @@ export async function* generateStoryResponseStream(params: {
       temperature: 1.2,
       topP: 0.95,
       topK: 50,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 12288,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       safetySettings: SAFETY_SETTINGS,
