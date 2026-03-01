@@ -174,12 +174,8 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: '등장인물의 물리적 동작 1줄',
           },
-          tension: {
-            type: Type.STRING,
-            description: '이번 턴의 긴장 요소 1줄',
-          },
         },
-        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction', 'tension'],
+        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction'],
       },
     },
     scene: {
@@ -196,8 +192,12 @@ const RESPONSE_SCHEMA = {
           type: Type.STRING,
           description: '이번 턴의 핵심 사건 1줄',
         },
+        stakes: {
+          type: Type.STRING,
+          description: '이번 씬에서 걸린 것 1줄',
+        },
       },
-      required: ['location', 'time', 'presentCharacters', 'plotEvent'],
+      required: ['location', 'time', 'presentCharacters', 'plotEvent', 'stakes'],
     },
     extractedFacts: {
       type: Type.ARRAY,
