@@ -156,7 +156,11 @@ const RESPONSE_SCHEMA = {
           },
           sensory: {
             type: Type.STRING,
-            description: '소리 또는 냄새 한 줄. dialogue일 때 빈 문자열.',
+            description: '감각 묘사 한 문장. dialogue일 때 빈 문자열.',
+          },
+          ambience: {
+            type: Type.STRING,
+            description: '소리나 냄새 1줄. dialogue일 때 빈 문자열.',
           },
           emotion: {
             type: Type.STRING,
@@ -171,7 +175,7 @@ const RESPONSE_SCHEMA = {
             description: '등장인물의 물리적 동작 1줄',
           },
         },
-        required: ['type', 'character', 'content', 'sensory', 'emotion', 'emotionIntensity', 'characterAction'],
+        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction'],
       },
     },
     scene: {
