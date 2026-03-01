@@ -174,8 +174,12 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: '등장인물의 물리적 동작 1줄',
           },
+          tension: {
+            type: Type.STRING,
+            description: '이번 턴의 긴장 요소 1줄',
+          },
         },
-        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction'],
+        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction', 'tension'],
       },
     },
     scene: {
