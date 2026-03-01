@@ -156,7 +156,7 @@ const RESPONSE_SCHEMA = {
           },
           sensory: {
             type: Type.STRING,
-            description: '감각 묘사 한 문장. dialogue일 때 빈 문자열.',
+            description: '감각 묘사 한 문장',
           },
           ambience: {
             type: Type.STRING,
