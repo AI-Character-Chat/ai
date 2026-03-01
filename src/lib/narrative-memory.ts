@@ -1218,32 +1218,6 @@ export async function buildNarrativeContext(
 }
 
 /**
- * 관계 수치 → 자연어 변환 (AI에게 행동 맥락 제공, 캐릭터 IP 침해 없이)
- */
-function describeRelationshipState(r: RelationshipState): string {
-  const parts: string[] = [];
-
-  // 친숙도 기반 관계 단계
-  if (r.familiarity < 10) parts.push('처음 만남');
-  else if (r.familiarity < 30) parts.push('알게 된 지 얼마 안 됨');
-  else if (r.familiarity < 60) parts.push('점점 알아가는 중');
-  else if (r.familiarity < 80) parts.push('꽤 친해진 사이');
-  else parts.push('매우 가까운 사이');
-
-  // 두드러진 감정만 (neutral 50 기준, 큰 편차만 언급)
-  const traits: string[] = [];
-  if (r.trust < 30) traits.push('경계');
-  else if (r.trust > 70) traits.push('신뢰');
-  if (r.affection < 30) traits.push('냉담');
-  else if (r.affection > 70) traits.push('호감');
-  if (r.respect > 70) traits.push('존경');
-  if (r.rivalry > 40) traits.push('경쟁심');
-
-  if (traits.length > 0) parts.push(traits.join(', '));
-  return parts.join(' — ');
-}
-
-/**
  * 서사 프롬프트 생성 (Gemini에 주입할 컨텍스트)
  */
 function generateNarrativePrompt(
@@ -1253,7 +1227,7 @@ function generateNarrativePrompt(
   scene: SceneContext | null
 ): string {
   const parts: string[] = [];
-  parts.push(`[${characterName}] ${describeRelationshipState(relationship)}`);
+  parts.push(`[${characterName}] 신뢰${relationship.trust.toFixed(0)} 호감${relationship.affection.toFixed(0)} 존경${relationship.respect.toFixed(0)} 경쟁${relationship.rivalry.toFixed(0)} 친숙${relationship.familiarity.toFixed(0)}`);
   if (relationship.knownFacts.length > 0) parts.push(`사실: ${relationship.knownFacts.join('; ')}`);
   if (memories.length > 0) parts.push(`기억: ${memories.map(m => m.interpretation).join('; ')}`);
   if (relationship.sharedExperiences.length > 0) parts.push(`경험: ${relationship.sharedExperiences.slice(-15).join('; ')}`);
