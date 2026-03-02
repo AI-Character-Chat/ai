@@ -288,6 +288,24 @@ export function buildContents(params: {
     sections.push(`## 이전 대화 요약 (장기 기억)\n${params.sessionSummary}`);
   }
 
+  // Pro 디렉팅 (이전 턴의 분석 결과에서 directing 추출)
+  if (params.proAnalysis) {
+    try {
+      const jsonMatch = params.proAnalysis.match(/```json\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        if (parsed.directing) {
+          const lines = Object.entries(parsed.directing).map(
+            ([name, dir]) => `[${name}] ${dir}`
+          );
+          if (lines.length > 0) {
+            sections.push(`## 디렉터 노트\n${lines.join('\n')}`);
+          }
+        }
+      }
+    } catch { /* 파싱 실패 시 무시 */ }
+  }
+
   // 현재 상황 (데이터만)
   sections.push(`## 상황\n${params.sceneState.location}, ${params.sceneState.time}\n등장: ${params.sceneState.presentCharacters.join(', ')}`);
 
@@ -930,7 +948,7 @@ export async function generateProAnalysis(params: {
 }): Promise<ProAnalysisResult> {
   const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames, memoryContext } = params;
 
-  const analysisPrompt = `이번 턴의 대화를 분석하고, 각 캐릭터와 유저 사이의 관계 변화를 JSON으로 반환하세요.
+  const analysisPrompt = `이번 턴의 대화를 분석하세요.
 
 등장인물: ${characterNames.join(', ')}
 장소: ${sceneState.location}, 시간: ${sceneState.time}
@@ -938,9 +956,9 @@ export async function generateProAnalysis(params: {
 이전 요약: ${conversationSummary}
 ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${currentTurnSummary}
 
-관계 변화를 아래 형식으로 출력 (변화 없는 축은 0, 범위 -10~+10):
+아래 형식으로 출력:
 \`\`\`json
-{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}}
+{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "이 캐릭터가 다음 턴에서 취할 감정·태도·행동 방향 1줄"}}
 \`\`\``;
 
   const startTime = Date.now();
