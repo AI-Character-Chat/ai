@@ -288,19 +288,23 @@ export function buildContents(params: {
     sections.push(`## 이전 대화 요약 (장기 기억)\n${params.sessionSummary}`);
   }
 
-  // Pro 디렉팅 (이전 턴의 분석 결과에서 directing 추출)
+  // Pro 디렉팅 (이전 턴의 분석 결과에서 directing + sceneBeat 추출)
   if (params.proAnalysis) {
     try {
       const jsonMatch = params.proAnalysis.match(/```json\s*([\s\S]*?)```/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
+        const noteLines: string[] = [];
+        if (parsed.sceneBeat) {
+          noteLines.push(`[씬 전개] ${parsed.sceneBeat}`);
+        }
         if (parsed.directing) {
-          const lines = Object.entries(parsed.directing).map(
-            ([name, dir]) => `[${name}] ${dir}`
-          );
-          if (lines.length > 0) {
-            sections.push(`## 디렉터 노트\n${lines.join('\n')}`);
+          for (const [name, dir] of Object.entries(parsed.directing)) {
+            noteLines.push(`[${name}] ${dir}`);
           }
+        }
+        if (noteLines.length > 0) {
+          sections.push(`## 디렉터 노트\n${noteLines.join('\n')}`);
         }
       }
     } catch { /* 파싱 실패 시 무시 */ }
@@ -958,7 +962,7 @@ ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${current
 
 아래 형식으로 출력:
 \`\`\`json
-{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "이 캐릭터가 다음 턴에서 취할 감정·태도·행동 방향 1줄"}}
+{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "이 캐릭터가 다음 턴에서 취할 감정·태도·행동 방향 1줄"}, "sceneBeat": "다음 턴에서 일어날 구체적 사건·전개 1줄(장소변화/인물등장/갈등심화/반전 등)"}
 \`\`\``;
 
   const startTime = Date.now();
