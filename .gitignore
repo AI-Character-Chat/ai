@@ -57,3 +57,20 @@ coverage/
 
 # 작업 진행 상태 (세션 간 공유용, 커밋 불필요)
 docs/work-status.md
+
+# bkit 도구 상태
+.bkit/
+docs/.pdca-status.json
+docs/.pdca-snapshots/
+docs/.bkit-memory.json
+
+# Claude Code 설정
+.claude/
+
+# Vercel 환경변수 (로컬)
+.env.vercel
+
+# 테스트 실행 결과 데이터 (일회성)
+scripts/quality-test-data-*.json
+scripts/quality-test-report-*.txt
+scripts/memory-test-report-*.txt
