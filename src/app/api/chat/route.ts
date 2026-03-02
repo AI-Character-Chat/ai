@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
     const opening = work.openings[0];
     const allCharacterNames = work.characters.map(c => c.name);
 
-    // 첫 캐릭터 1명으로 시작 (나머지는 AI가 스토리 흐름에 따라 유기적으로 등장시킴)
-    const initialCharacters = allCharacterNames.slice(0, 1);
+    // 최대 3명으로 시작 (T1부터 다중 캐릭터 등장 유도)
+    const initialCharacters = allCharacterNames.slice(0, 3);
 
     // 세션 + 오프닝 메시지를 트랜잭션으로 (2번 DB 호출 → 1번)
     const [session] = await prisma.$transaction([

@@ -118,6 +118,14 @@ export default function HomePage() {
   const [rankingWorks, setRankingWorks] = useState<Work[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
+  // 홈 탭 확장 섹션 (더보기)
+  const [expandedSection, setExpandedSection] = useState<'trending' | 'new' | 'all' | null>(null);
+
+  // 홈 탭 가로 스크롤 refs
+  const trendingScrollRef = useRef<HTMLDivElement>(null);
+  const newWorksScrollRef = useRef<HTMLDivElement>(null);
+  const allWorksScrollRef = useRef<HTMLDivElement>(null);
+
   // 배너
   const [banners, setBanners] = useState<Banner[]>([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
@@ -1066,31 +1074,129 @@ export default function HomePage() {
               <>
                 {/* 급상승중인 신작 */}
                 <section className="mb-10">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">급상승중인 신작</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">급상승중인 신작</h3>
+                    {trendingWorks.length > 5 && (
+                      <button
+                        onClick={() => setExpandedSection(expandedSection === 'trending' ? null : 'trending')}
+                        className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                      >
+                        {expandedSection === 'trending' ? '접기' : '더보기'}
+                      </button>
+                    )}
+                  </div>
                   {trendingWorks.length === 0 ? (
                     <p className="text-sm text-gray-500 dark:text-gray-400 py-4">아직 급상승 신작이 없습니다.</p>
-                  ) : (
+                  ) : expandedSection === 'trending' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                       {trendingWorks.map((work) => renderWorkCard(work))}
+                    </div>
+                  ) : (
+                    <div className="relative group/scroll">
+                      <div
+                        ref={trendingScrollRef}
+                        className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                      >
+                        {trendingWorks.map((work) => (
+                          <div key={work.id} className="flex-shrink-0 w-[calc((100%-64px)/5)] min-w-[150px]">
+                            {renderWorkCard(work)}
+                          </div>
+                        ))}
+                      </div>
+                      {trendingWorks.length > 5 && (
+                        <>
+                          <button
+                            onClick={() => trendingScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity z-10"
+                          >
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => trendingScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity z-10"
+                          >
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </section>
 
                 {/* 신작추천 */}
                 <section className="mb-10">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">신작추천</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">신작추천</h3>
+                    {newWorks.length > 5 && (
+                      <button
+                        onClick={() => setExpandedSection(expandedSection === 'new' ? null : 'new')}
+                        className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                      >
+                        {expandedSection === 'new' ? '접기' : '더보기'}
+                      </button>
+                    )}
+                  </div>
                   {newWorks.length === 0 ? (
                     <p className="text-sm text-gray-500 dark:text-gray-400 py-4">아직 신작이 없습니다.</p>
-                  ) : (
+                  ) : expandedSection === 'new' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                       {newWorks.map((work) => renderWorkCard(work))}
+                    </div>
+                  ) : (
+                    <div className="relative group/scroll">
+                      <div
+                        ref={newWorksScrollRef}
+                        className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                      >
+                        {newWorks.map((work) => (
+                          <div key={work.id} className="flex-shrink-0 w-[calc((100%-64px)/5)] min-w-[150px]">
+                            {renderWorkCard(work)}
+                          </div>
+                        ))}
+                      </div>
+                      {newWorks.length > 5 && (
+                        <>
+                          <button
+                            onClick={() => newWorksScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity z-10"
+                          >
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => newWorksScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity z-10"
+                          >
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </section>
 
                 {/* 전체 작품 */}
                 <section>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">전체 작품</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">전체 작품</h3>
+                    {works.length > 5 && (
+                      <button
+                        onClick={() => setExpandedSection(expandedSection === 'all' ? null : 'all')}
+                        className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                      >
+                        {expandedSection === 'all' ? '접기' : '더보기'}
+                      </button>
+                    )}
+                  </div>
                   {works.length === 0 ? (
                     <div className="text-center py-12">
                       <p className="text-gray-500 dark:text-gray-400 mb-4">아직 작품이 없습니다.</p>
@@ -1101,9 +1207,43 @@ export default function HomePage() {
                         첫 작품 만들기
                       </Link>
                     </div>
-                  ) : (
+                  ) : expandedSection === 'all' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                       {works.map((work) => renderWorkCard(work))}
+                    </div>
+                  ) : (
+                    <div className="relative group/scroll">
+                      <div
+                        ref={allWorksScrollRef}
+                        className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                      >
+                        {works.map((work) => (
+                          <div key={work.id} className="flex-shrink-0 w-[calc((100%-64px)/5)] min-w-[150px]">
+                            {renderWorkCard(work)}
+                          </div>
+                        ))}
+                      </div>
+                      {works.length > 5 && (
+                        <>
+                          <button
+                            onClick={() => allWorksScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity z-10"
+                          >
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => allWorksScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-8 h-8 bg-white dark:bg-gray-800 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity z-10"
+                          >
+                            <svg className="w-4 h-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </section>
