@@ -138,7 +138,7 @@ const RESPONSE_SCHEMA = {
     turns: {
       type: Type.ARRAY,
       description: '응답 턴 배열',
-      minItems: '6',
+      minItems: '8',
       items: {
         type: Type.OBJECT,
         properties: {
