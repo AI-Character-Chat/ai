@@ -174,8 +174,12 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: '등장인물의 물리적 동작 1줄',
           },
+          characterInner: {
+            type: Type.STRING,
+            description: '캐릭터의 속마음 1줄',
+          },
         },
-        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction'],
+        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction', 'characterInner'],
       },
     },
     scene: {
