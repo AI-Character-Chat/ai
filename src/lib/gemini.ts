@@ -295,6 +295,10 @@ export function buildContents(params: {
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
         const noteLines: string[] = [];
+        if (parsed.arcPhase) {
+          const phaseDesc: Record<string, string> = { '기': '도입·분위기 조성', '승': '갈등·긴장 고조', '전': '반전·클라이맥스', '결': '여운·감정 착지' };
+          noteLines.push(`[씬 단계] ${parsed.arcPhase} — ${phaseDesc[parsed.arcPhase] || ''}`);
+        }
         if (parsed.sceneBeat) {
           noteLines.push(`[씬 전개] ${parsed.sceneBeat}`);
         }
@@ -960,9 +964,15 @@ export async function generateProAnalysis(params: {
 이전 요약: ${conversationSummary}
 ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${currentTurnSummary}
 
+서사 단계 판단 기준:
+- 기(起): 새 장소·인물·상황 소개. 분위기 조성.
+- 승(承): 갈등·긴장 고조. 관계 변화. 떡밥 투하.
+- 전(轉): 반전·충격·예상 밖 전개. 클라이맥스.
+- 결(結): 여운·정리·다음 씬 암시. 감정 착지.
+
 아래 형식으로 출력:
 \`\`\`json
-{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "이 캐릭터가 다음 턴에서 취할 감정·태도·행동 방향 1줄"}, "sceneBeat": "다음 턴에서 일어날 구체적 사건·전개 1줄(장소변화/인물등장/갈등심화/반전 등)"}
+{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "이 캐릭터가 다음 턴에서 취할 감정·태도·행동 방향 1줄"}, "arcPhase": "기|승|전|결", "sceneBeat": "arcPhase에 맞는 다음 턴 전개 1줄"}
 \`\`\``;
 
   const startTime = Date.now();
