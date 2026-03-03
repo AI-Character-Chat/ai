@@ -150,10 +150,6 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: 'dialogue일 때 캐릭터 이름. narrator일 때 빈 문자열.',
           },
-          content: {
-            type: Type.STRING,
-            description: '턴 내용',
-          },
           sensory: {
             type: Type.STRING,
             description: '감각 묘사 한 문장',
@@ -161,6 +157,14 @@ const RESPONSE_SCHEMA = {
           ambience: {
             type: Type.STRING,
             description: '소리나 냄새 1줄',
+          },
+          characterAction: {
+            type: Type.STRING,
+            description: '등장인물의 물리적 동작 1줄',
+          },
+          content: {
+            type: Type.STRING,
+            description: '턴 내용',
           },
           emotion: {
             type: Type.STRING,
@@ -170,12 +174,8 @@ const RESPONSE_SCHEMA = {
             type: Type.NUMBER,
             description: '0.0~1.0',
           },
-          characterAction: {
-            type: Type.STRING,
-            description: '등장인물의 물리적 동작 1줄',
-          },
         },
-        required: ['type', 'character', 'content', 'sensory', 'ambience', 'emotion', 'emotionIntensity', 'characterAction'],
+        required: ['type', 'character', 'sensory', 'ambience', 'characterAction', 'content', 'emotion', 'emotionIntensity'],
       },
     },
     scene: {
