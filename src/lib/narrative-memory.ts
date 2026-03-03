@@ -14,6 +14,17 @@ import { generateEmbedding } from './gemini';
 // ============================================================
 
 /**
+ * 안전한 JSON 파싱 (DB에서 읽은 JSON 문자열 보호)
+ */
+function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
+  try {
+    return json ? JSON.parse(json) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * 코사인 유사도 계산
  */
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -449,9 +460,9 @@ export async function getActiveScene(sessionId: string): Promise<SceneContext | 
     sceneId: scene.id,
     location: scene.location,
     time: scene.time,
-    participants: JSON.parse(scene.participants),
-    emotionalTone: JSON.parse(scene.emotionalTone),
-    topics: JSON.parse(scene.topics),
+    participants: safeJsonParse<string[]>(scene.participants, []),
+    emotionalTone: safeJsonParse<EmotionalTone>(scene.emotionalTone, { mood: '', intensity: 0, keywords: [] }),
+    topics: safeJsonParse<string[]>(scene.topics, []),
     summary: scene.summary || undefined,
   };
 }
@@ -475,7 +486,7 @@ export async function updateScene(
     // 기존 토픽에 새 토픽 추가 (중복 제거)
     const scene = await prisma.scene.findUnique({ where: { id: sceneId } });
     if (scene) {
-      const existingTopics: string[] = JSON.parse(scene.topics);
+      const existingTopics: string[] = safeJsonParse<string[]>(scene.topics, []);
       const combinedTopics = existingTopics.concat(updates.topics);
       const newTopics = Array.from(new Set(combinedTopics));
       data.topics = JSON.stringify(newTopics);
@@ -542,9 +553,9 @@ function mapRelationshipToState(
     relationshipLabel: r.relationshipLabel || undefined,
     speechStyle: r.speechStyle,
     nicknameForUser: r.nicknameForUser || undefined,
-    knownFacts: JSON.parse(r.knownFacts),
-    sharedExperiences: JSON.parse(r.sharedExperiences),
-    emotionalHistory: JSON.parse(r.emotionalHistory || '[]'),
+    knownFacts: safeJsonParse<string[]>(r.knownFacts, []),
+    sharedExperiences: safeJsonParse<string[]>(r.sharedExperiences, []),
+    emotionalHistory: safeJsonParse(r.emotionalHistory, []),
   };
 }
 
@@ -703,14 +714,14 @@ export async function updateRelationship(
 
   // 새로 알게 된 사실 (충돌 감지 적용 — 같은 주제의 기존 fact는 최신 값으로 교체)
   if (updates.newFacts && updates.newFacts.length > 0) {
-    const existingFacts: string[] = JSON.parse(relationship.knownFacts);
+    const existingFacts: string[] = safeJsonParse<string[]>(relationship.knownFacts, []);
     const resolvedFacts = resolveFactConflicts(existingFacts, updates.newFacts);
     data.knownFacts = JSON.stringify(resolvedFacts);
   }
 
   // 공유 경험 추가
   if (updates.newExperience) {
-    const experiences: string[] = JSON.parse(relationship.sharedExperiences);
+    const experiences: string[] = safeJsonParse<string[]>(relationship.sharedExperiences, []);
     experiences.push(updates.newExperience);
     // 영구 기억: 모든 경험 보존
     data.sharedExperiences = JSON.stringify(experiences);
@@ -796,7 +807,7 @@ async function evaluateMemoryNovelty(
   if (newEmbedding.length > 0) {
     // 임베딩 기반 비교
     for (const mem of memories) {
-      const emb = JSON.parse(mem.embedding || '[]') as number[];
+      const emb = safeJsonParse<number[]>(mem.embedding, []);
       if (emb.length === 0) continue;
       const sim = cosineSimilarity(newEmbedding, emb);
       if (sim > maxSimilarity) {
@@ -947,7 +958,7 @@ export async function searchCharacterMemories(params: {
   // 임베딩 기반 정렬
   if (params.queryEmbedding?.length) {
     const scored = memories.map(m => {
-      const emb: number[] = JSON.parse(m.embedding || '[]');
+      const emb: number[] = safeJsonParse<number[]>(m.embedding, []);
       const similarity = emb.length > 0
         ? cosineSimilarity(params.queryEmbedding!, emb)
         : 0;
@@ -1060,7 +1071,7 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
 
     for (let i = 0; i < memories.length; i++) {
       if (used.has(memories[i].id)) continue;
-      const embI = JSON.parse(memories[i].embedding || '[]') as number[];
+      const embI = safeJsonParse<number[]>(memories[i].embedding, []);
       if (embI.length === 0) continue;
 
       const group = [memories[i]];
@@ -1068,7 +1079,7 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
 
       for (let j = i + 1; j < memories.length; j++) {
         if (used.has(memories[j].id)) continue;
-        const embJ = JSON.parse(memories[j].embedding || '[]') as number[];
+        const embJ = safeJsonParse<number[]>(memories[j].embedding, []);
         if (embJ.length === 0) continue;
         if (cosineSimilarity(embI, embJ) >= 0.80) {
           group.push(memories[j]);
@@ -1313,9 +1324,7 @@ export async function processConversationForMemory(params: {
           where: { userId: scope.userId, workId: scope.workId, characterId: response.characterId },
         });
         if (rel) {
-          const history = JSON.parse(rel.emotionalHistory || '[]') as Array<{
-            emotion: string; intensity: number; at: string;
-          }>;
+          const history = safeJsonParse<Array<{ emotion: string; intensity: number; at: string }>>(rel.emotionalHistory, []);
           history.push({
             emotion: response.emotion.primary,
             intensity: response.emotion.intensity,

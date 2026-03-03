@@ -173,7 +173,8 @@ export function findRelevantMessages(
 
   // 코사인 유사도 계산 + 정렬
   const scored = candidates.map(msg => {
-    const emb = JSON.parse(msg.embedding || '[]') as number[];
+    let emb: number[] = [];
+    try { emb = JSON.parse(msg.embedding || '[]') as number[]; } catch { /* 잘못된 임베딩 무시 */ }
     return { msg, similarity: cosineSimilarity(queryEmbedding, emb) };
   })
     .filter(s => s.similarity > 0.3)

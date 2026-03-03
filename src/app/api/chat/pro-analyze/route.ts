@@ -56,8 +56,12 @@ export async function POST(request: NextRequest) {
   const charNames = characters.map(c => c.name);
   const systemInstruction = `당신은 인터랙티브 소설의 서사 분석가입니다. 등장인물: ${charNames.join(', ')}. 유저: ${effectiveUserName}.`;
 
-  const presentCharacters = JSON.parse(session.presentCharacters) as string[];
-  const recentEvents = JSON.parse(session.recentEvents) as string[];
+  let presentCharacters: string[] = [];
+  let recentEvents: string[] = [];
+  try {
+    presentCharacters = JSON.parse(session.presentCharacters) as string[];
+    recentEvents = JSON.parse(session.recentEvents) as string[];
+  } catch { /* 잘못된 JSON — 빈 배열 폴백 */ }
 
   // ③ 경량 memoryContext (관계 수치 + knownFacts만, 임베딩 검색/경험/감정 제외)
   let memoryContext = '';

@@ -206,8 +206,15 @@ export async function PUT(request: NextRequest) {
           }).catch(() => {});
         }
 
-        const presentCharacters = JSON.parse(session.presentCharacters) as string[];
-        const recentEvents = JSON.parse(session.recentEvents) as string[];
+        let presentCharacters: string[];
+        let recentEvents: string[];
+        try {
+          presentCharacters = JSON.parse(session.presentCharacters) as string[];
+          recentEvents = JSON.parse(session.recentEvents) as string[];
+        } catch {
+          presentCharacters = [];
+          recentEvents = [];
+        }
 
         // [2] 컨텍스트 수집 (chat-service)
         send('status', { step: 'generating' });

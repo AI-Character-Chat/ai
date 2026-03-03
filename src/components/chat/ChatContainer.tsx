@@ -91,15 +91,21 @@ export default function ChatContainer() {
   }, [state.personas, state.session]);
 
   // ─── 세션 정규화 헬퍼 ───
-  const normalizeSession = (raw: any): ChatSessionData => ({
-    ...raw,
-    presentCharacters: Array.isArray(raw.presentCharacters)
-      ? raw.presentCharacters
-      : (typeof raw.presentCharacters === 'string' ? JSON.parse(raw.presentCharacters) : []),
-    recentEvents: Array.isArray(raw.recentEvents)
-      ? raw.recentEvents
-      : (typeof raw.recentEvents === 'string' ? JSON.parse(raw.recentEvents) : []),
-  });
+  const normalizeSession = (raw: any): ChatSessionData => {
+    let presentCharacters: string[] = [];
+    let recentEvents: string[] = [];
+    try {
+      presentCharacters = Array.isArray(raw.presentCharacters)
+        ? raw.presentCharacters
+        : (typeof raw.presentCharacters === 'string' ? JSON.parse(raw.presentCharacters) : []);
+    } catch { /* 잘못된 JSON — 빈 배열 폴백 */ }
+    try {
+      recentEvents = Array.isArray(raw.recentEvents)
+        ? raw.recentEvents
+        : (typeof raw.recentEvents === 'string' ? JSON.parse(raw.recentEvents) : []);
+    } catch { /* 잘못된 JSON — 빈 배열 폴백 */ }
+    return { ...raw, presentCharacters, recentEvents };
+  };
 
   // ─── 기존 세션 불러오기 ───
   const loadExistingSession = useCallback(async (sessionId: string, currentWork: ChatWork | null) => {
