@@ -794,6 +794,7 @@ async function evaluateMemoryNovelty(
     where: { userId: scope.userId, workId: scope.workId, characterId },
     orderBy: { createdAt: 'desc' },
     take: 200,
+    select: { id: true, embedding: true, strength: true, importance: true, mentionedCount: true, interpretation: true },
   });
 
   if (memories.length === 0) {
@@ -953,6 +954,7 @@ export async function searchCharacterMemories(params: {
     orderBy: [{ importance: 'desc' }, { createdAt: 'desc' }],
     // 임베딩 검색 시 전체 로드 후 인메모리 정렬 (최대 300개)
     take: params.queryEmbedding?.length ? 300 : (params.limit || 10),
+    select: { id: true, embedding: true, originalEvent: true, interpretation: true, importance: true, strength: true, createdAt: true },
   });
 
   // 임베딩 기반 정렬
@@ -1064,6 +1066,7 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
       where: { userId: scope.userId, workId: scope.workId, characterId, memoryType: 'episodic' },
       orderBy: { createdAt: 'desc' },
       take: 200,
+      select: { id: true, embedding: true, originalEvent: true, interpretation: true, importance: true, strength: true, mentionedCount: true, sceneId: true, keywords: true },
     });
 
     const used = new Set<string>();
