@@ -989,7 +989,7 @@ ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${current
         temperature: 0.5,
         maxOutputTokens: 4096,
         safetySettings: SAFETY_SETTINGS,
-        thinkingConfig: { thinkingBudget: 1024 },
+        thinkingConfig: { thinkingBudget: 512 },
       },
       contents: analysisPrompt,
     });
