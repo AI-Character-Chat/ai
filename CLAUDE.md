@@ -107,6 +107,7 @@ npm run db:seed      # Seed database (npx tsx prisma/seed.ts)
 | `ㅅㅌ` | `docs/work-status.md`를 읽고 현재 상황을 파악하여 요약 |
 | `ㄱㄱ` | `docs/work-status.md`를 읽고 자기 역할에 맞는 다음 할 일을 바로 진행 |
 | `ㅇㄷ` | 현재까지 작업 내용을 `docs/work-status.md`에 업데이트 |
+| `ㅂㅇ` | `docs/work-status.md`와 `docs/prompt-experiment-log.md`를 읽고 변경사항을 노션에 반영 (개발자 태스크 DB + 프롬프트 실험 기록 페이지) |
 
 ### 금지 사항 (과거 실험에서 확인됨)
 - post-history에 2개 이상 지시 금지 (어텐션 경쟁)
