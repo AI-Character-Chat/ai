@@ -116,6 +116,20 @@ npm run db:seed      # Seed database (npx tsx prisma/seed.ts)
 - SDT를 프롬프트로 해결 시도 금지 (4번 실패)
 - 품질 향상은 프롬프트가 아닌 다른 경로로 (스키마 필드, 구조 변경 등)
 
+## 세션 인수인계 규칙
+
+- **새 세션 시작 시**: 반드시 `docs/session-handoff.md`를 먼저 읽고 이전 맥락 파악
+- **세션 종료 전**: `docs/session-handoff.md`의 "이번 세션 작업 내역"에 수행 내역 기록
+- **노션 작업 시**: `session-handoff.md`의 "노션 리소스 맵"에서 ID 참조
+- **CEO 선호사항**: `session-handoff.md`의 "CEO 작업 환경 선호사항" 반드시 준수
+
+### Compact Instructions
+컨텍스트 압축 시 반드시 보존할 정보:
+- 노션 DB ID (비즈니스: collection://22577360-41c2-4b4e-a6e1-58d90b29a356, 개발자: collection://7f20d352-3dcf-447b-85e8-5092ce489b9b)
+- 노션 페이지 ID (실험기록: 3184ec0d-56d6-8194-9eac-ef6565a56364, 로드맵: 3184ec0d-56d6-81c1-aaaf-f1b10fb0f2d0)
+- CEO 선호사항: callout 기반 노션 포맷, 상세 태스크 카드 (callout+가이드+URL), 기술용어 피하기
+- 스케줄 태스크: daily-notion-sync (매일 00:00), session-handoff-update (수동)
+
 ## Conventions
 
 - Korean comments and documentation throughout the codebase
