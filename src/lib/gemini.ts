@@ -983,13 +983,13 @@ ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${current
 
   try {
     const result = await ai.models.generateContent({
-      model: MODEL_PRO,
+      model: MODEL_FLASH,
       config: {
         systemInstruction,
         temperature: 0.5,
         maxOutputTokens: 4096,
         safetySettings: SAFETY_SETTINGS,
-        thinkingConfig: { thinkingBudget: -1 },
+        thinkingConfig: { thinkingBudget: 2048 },
       },
       contents: analysisPrompt,
     });
