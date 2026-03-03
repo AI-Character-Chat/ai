@@ -334,6 +334,9 @@
 | per-turn tension 필드 ("긴장 요소 1줄") | ZERO 독점, 다캐릭터 완전 소멸 | 방향성 thinking aid는 특정 캐릭터에 편중 유발 |
 | scene-level stakes 필드 ("씬에서 걸린 것 1줄") | T1 긴장감 개선 효과 없음 | scene-level은 너무 약함, T1은 Opening 콘텐츠 문제 |
 | 관계 수치 자연어 변환 ("처음 만남") | 합니다체 퇴보 + 캐릭터 2명 소실 | 자연어가 나레이터 문체에 전이, 숫자 형태가 최적 |
+| 분석 모델 Pro→Flash 전환 | 비용 56% 절감, 기승전결 순환 실패 (승 정체) | Flash는 씬 전환 타이밍 판단 능력 부족, Pro thinking 필수 |
+| Pro thinkingBudget 제한 (-1→4096) | 비용 변화 없음 | Pro가 이미 ~1,300~2,500 thinking만 사용, 4096은 영향 없음 |
+| Pro 입력 토큰 축소 (systemInstruction 경량화 + memoryContext 축소) | 9% 절감 (미미), T3 Pro 누락 | 입력($1.25/M)은 출력($10/M)의 1/8. 입력 줄여도 효과 한계 |
 
 ### Run 24 — Pro 디렉팅 연결 + minItems 8 (sceneBeat 없음)
 - **변경**: (1) Pro의 directing을 Flash 디렉터 노트로 주입 (2) minItems 6→8
@@ -350,6 +353,84 @@
 - **비용**: $0.032/턴, TTFT 6,570ms (+733ms)
 - **비교**: Run 24 대비 씬 구조 완전 개선. 이전은 10턴 내내 "뇌손상% 상승"만 반복, 현재는 장소이동+반전+일행분리까지 발생
 - **교훈**: Pro에게 turnCount + 단계별 권장 턴 수를 주면 씬 전환 타이밍을 정확히 판단함. "승 3턴 이상→전 전환" 규칙이 핵심
+
+### Run 26 — 분석 모델 Pro→Flash 전환 (비용 최적화)
+- **변경**: `generateProAnalysis`에서 `MODEL_PRO` → `MODEL_FLASH`, `thinkingBudget: -1` → `2048`
+- **가설**: Flash가 Pro와 동일한 분석 프롬프트로 기승전결 전환을 판단할 수 있으면 비용 56% 절감
+- **결과**:
+  - **비용 56% 절감**: 턴당 $0.032(Pro) → ~$0.014(Flash) — 분석 비용 $0.025 → ~$0.007
+  - **기승전결 순환 실패**: 10턴 내내 '승' 단계에 고착 (Run 24와 동일한 패턴)
+  - 장소 이동 0~1회 (Run 25: 4회), 반전/클라이맥스 없음
+  - 단속반 추격+비상통로에서 10턴 고착, 에스컬레이션 없음
+  - 말투 10/10 유지, TTFT 5,884ms (Pro 대비 -686ms)
+- **경쟁사 비교**:
+  - ❌ 씬 구조: Run 24 수준 퇴보 (승 정체)
+  - ✅ 말투/묘사/캐릭터: Run 25와 동등 유지
+- **교훈**: Flash는 기승전결 전환 타이밍 판단이 부족. "승 3턴 이상→전 전환" 규칙을 프롬프트에 명시해도 Flash가 이를 실행하지 못함. **씬 구조 디렉팅은 Pro의 추론 능력(thinking)이 필수**. 비용 절감과 씬 품질은 트레이드오프 관계
+- **유의미**: **N** — 씬 구조 퇴보. Pro 유지 또는 격턴 실행 등 대안 필요
+
+### Run 27 — Pro 복원 + thinkingBudget 제한 (-1→4096)
+- **변경**: `generateProAnalysis`에서 `MODEL_FLASH` → `MODEL_PRO` 복원, `thinkingBudget: 2048` → `4096`
+- **가설**: Pro의 무제한 thinking이 비용의 ~68%를 차지 → 4096으로 제한하면 30~50% 절감
+- **결과**:
+  - **비용 절감 효과 없음**: 턴당 Pro $0.027 (Run 25 $0.025과 동일 수준, 오차 범위)
+  - Pro가 자연적으로 ~1,300~2,500 thinking tokens만 사용 → 4096 제한은 영향 없음
+  - 씬 품질 양호: 4캐릭터 전체 등장, 단속반 진입+탈출 전개
+  - T10에서 Pro 분석 타임아웃 1건 (Pro: N/A)
+  - TTFT 6,131ms (Run 25 6,570ms 대비 -7%)
+- **교훈**: **Pro 비용의 주요 드라이버는 thinking 양이 아닌 토큰 단가** ($10/M output+thinking). Pro는 이미 효율적으로 thinking하고 있음 (1,300~2,500 토큰). 비용 절감은 입력 토큰 축소(systemInstruction 경량화, memoryContext 축소)가 실질적 경로
+- **유의미**: **N** — 비용 효과 없음. 다음: ②systemInstruction 경량화 + ③memoryContext 축소
+
+### Run 28 — Pro 입력 토큰 축소 (②systemInstruction 경량화 + ③memoryContext 축소)
+- **변경**:
+  - ② `buildSystemInstruction(전체 프롬프트+세계관)` → 1줄 경량 프롬프트 (`"당신은 서사 분석가. 등장인물: X,Y. 유저: Z."`)
+  - ③ `generateEmbedding` API 호출 제거, `buildNarrativeContext` × N 제거, `searchCharacterMemories` × N 제거
+  - memoryContext를 관계 수치 + knownFacts만으로 축소
+- **가설**: 입력 토큰 ~1,000 축소로 ~$1.25/1K = $0.001~0.003/turn 절감 + 임베딩 API 비용 절약
+- **결과**:
+  - 턴당 Pro $0.024 (Run 27 $0.027 대비 -11%)
+  - 턴당 총합 $0.031 (Run 27 $0.034 대비 -9%)
+  - TTFT 5,872ms (Run 27 6,131ms 대비 -4%, 임베딩/DB 쿼리 제거 효과)
+  - Pro 입력 토큰: T1 3,057 → T10 3,936 (Run 27과 큰 차이 없음 — analysisPrompt 자체가 주요 비용)
+  - T3에서 Pro 분석 누락 (Pro: N/A) — 원인 미확인
+  - 기승전결: 기(2)→승(1)→전(7). 결 미도달. Pro 누락 턴 있음
+  - 말투 10/10, 4캐릭터 전체 등장, 유저 행동 잘 반영
+- **교훈**: **입력 토큰 축소로는 한계가 있음** (~9% 절감). Pro 비용의 진짜 드라이버는 output+thinking 토큰 단가($10/M). 입력($1.25/M)은 8배 저렴하므로 입력 줄여봐야 영향 미미. 장기 대화(60+ 턴)에서는 memoryContext가 커지므로 효과 더 클 수 있음.
+- **부수 효과**: Pro 분석 레이턴시 감소 (임베딩 생성 + N개 DB 쿼리 제거)
+- **유의미**: **△** — 비용 9% 절감 (미미), 레이턴시 개선 있으나 기승전결 전환 약간 퇴보
+
+### Run 29 — Pro thinkingBudget 1024 테스트
+- **변경**: `generateProAnalysis` thinkingBudget 4096 → 1024
+- **가설**: Pro의 자연 thinking 사용량(~1,300~2,500)을 1024로 제한하면 thinking 토큰 절감 → 비용 -26%
+- **결과**:
+  - 턴당 총합 $0.025 (Run 28 $0.031 대비 -18% — **거짓 양성**)
+  - 3/10 턴에서 Pro 분석 N/A (랜덤 실패)
+  - Pro 성공 턴당 비용: $0.0264 (Run 28의 $0.0267과 동일)
+  - 말투 양호, 4캐릭터, 기승전결 전 정체
+- **교훈**: **Gemini Pro는 thinkingBudget 파라미터를 무시함.** 겉보기 비용 감소는 Pro N/A 턴(3회) 때문. 성공 턴만 보면 비용 동일. Flash에서는 thinkingBudget가 작동하지만 Pro에서는 무시됨.
+- **유의미**: **N** — thinkingBudget으로 Pro 비용 제어 불가
+
+### Run 30 — Pro thinkingBudget 512 테스트
+- **변경**: `generateProAnalysis` thinkingBudget 1024 → 512
+- **가설**: 더 공격적 제한(512)으로 thinking 비용 -42% 기대
+- **결과**:
+  - 턴당 총합 $0.035 (Run 28보다 **더 비쌈**)
+  - 0/10 Pro N/A (전부 성공)
+  - Pro 성공 턴당 비용: $0.0283 (Run 28~29와 유사)
+  - **기승전결 최우수**: 기지→컨테이너→기억통로→폐쇄 지하철역 (4개 장소 이동)
+  - 말투 양호, 4캐릭터
+- **교훈**: Run 29와 동일 결론 확인. thinkingBudget 512/1024/4096/무제한 모두 Pro 비용에 영향 없음. **Pro의 thinking 사용량은 파라미터와 독립적으로 ~1,300~2,500 토큰으로 일정.**
+- **유의미**: **N** — Pro thinkingBudget 제어 불가 재확인. 4096으로 리버트
+
+### thinkingBudget 비교 정리
+
+| thinkingBudget | Run | Pro N/A | Pro 성공턴당 비용 | 총합/턴 | 비고 |
+|:-:|:-:|:-:|:-:|:-:|---|
+| 4096 | 28 | 1/10 | $0.0267 | $0.031 | 기준 |
+| 1024 | 29 | 3/10 | $0.0264 | $0.025 | N/A 때문에 낮아 보임 |
+| 512 | 30 | 0/10 | $0.0283 | $0.035 | 전부 성공, 실제 비용 동일 |
+
+> **결론**: Gemini Pro는 thinkingBudget 파라미터를 무시. ~$0.027/Pro-turn이 고정 비용. thinkingBudget 4096으로 복원.
 
 ## 유효한 접근법
 
