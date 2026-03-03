@@ -203,4 +203,7 @@
 
 | 일자 | 수정 | 건수 |
 |------|------|------|
-| 03-04 | 1차: IDOR/인가 수정 | 진행 중 |
+| 03-04 | 1차: IDOR/인가 수정 (C1,C2,H1-H3 + chat GET) | 6건 완료 |
+| 03-04 | 2차: JSON.parse 보호 (C4,C8 + narrative-memory 11곳 + pro-analyze + prompt-builder) | 15곳 완료 |
+| 03-04 | 3차: select 최적화 (C5,H11 + consolidateMemories) | 3함수 완료 |
+| 03-04 | 4차: race condition 방지 (H12 P2002 catch + H14 $transaction) | 2함수 완료 |

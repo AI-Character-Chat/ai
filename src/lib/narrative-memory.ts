@@ -589,18 +589,30 @@ export async function getOrCreateRelationship(
   }
 
   if (!relationship) {
-    // 신규 생성 (크로스세션 필드 포함)
-    relationship = await prisma.userCharacterRelationship.create({
-      data: {
-        sessionId: scope.sessionId,
-        userId: scope.userId,
-        workId: scope.workId,
-        characterId,
-        intimacyLevel: 'stranger',
-        intimacyScore: 0,
-        speechStyle: 'formal',
-      },
-    });
+    // 신규 생성 (동시 요청 시 unique 제약 위반 방어)
+    try {
+      relationship = await prisma.userCharacterRelationship.create({
+        data: {
+          sessionId: scope.sessionId,
+          userId: scope.userId,
+          workId: scope.workId,
+          characterId,
+          intimacyLevel: 'stranger',
+          intimacyScore: 0,
+          speechStyle: 'formal',
+        },
+      });
+    } catch (e: unknown) {
+      // P2002: unique constraint violation — 다른 요청이 먼저 생성한 경우
+      if (e && typeof e === 'object' && 'code' in e && e.code === 'P2002') {
+        relationship = await prisma.userCharacterRelationship.findFirst({
+          where: { userId: scope.userId, workId: scope.workId, characterId },
+        });
+        if (!relationship) throw e; // 재조회도 실패하면 원본 에러
+      } else {
+        throw e;
+      }
+    }
   }
 
   return mapRelationshipToState(relationship, characterName);
@@ -627,119 +639,122 @@ export async function updateRelationship(
     nicknameChange?: string;
   }
 ) {
-  // 크로스세션 검색 → 레거시 폴백
-  const relationship = await prisma.userCharacterRelationship.findFirst({
-    where: { userId: scope.userId, workId: scope.workId, characterId },
-  }) || await prisma.userCharacterRelationship.findUnique({
-    where: { sessionId_characterId: { sessionId: scope.sessionId, characterId } },
-  });
+  // Interactive transaction: 읽기→계산→쓰기를 원자적으로 수행 (race condition 방지)
+  await prisma.$transaction(async (tx) => {
+    // 크로스세션 검색 → 레거시 폴백
+    const relationship = await tx.userCharacterRelationship.findFirst({
+      where: { userId: scope.userId, workId: scope.workId, characterId },
+    }) || await tx.userCharacterRelationship.findUnique({
+      where: { sessionId_characterId: { sessionId: scope.sessionId, characterId } },
+    });
 
-  if (!relationship) return;
+    if (!relationship) return;
 
-  const data: Record<string, unknown> = {
-    totalTurns: { increment: 1 },
-    lastInteraction: new Date(),
-  };
+    const data: Record<string, unknown> = {
+      totalTurns: { increment: 1 },
+      lastInteraction: new Date(),
+    };
 
-  // 다축 관계 업데이트
-  const axes = [
-    { key: 'trust', delta: updates.trustDelta, current: relationship.trust },
-    { key: 'affection', delta: updates.affectionDelta, current: relationship.affection },
-    { key: 'respect', delta: updates.respectDelta, current: relationship.respect },
-    { key: 'rivalry', delta: updates.rivalryDelta, current: relationship.rivalry },
-    { key: 'familiarity', delta: updates.familiarityDelta, current: relationship.familiarity },
-  ];
+    // 다축 관계 업데이트
+    const axes = [
+      { key: 'trust', delta: updates.trustDelta, current: relationship.trust },
+      { key: 'affection', delta: updates.affectionDelta, current: relationship.affection },
+      { key: 'respect', delta: updates.respectDelta, current: relationship.respect },
+      { key: 'rivalry', delta: updates.rivalryDelta, current: relationship.rivalry },
+      { key: 'familiarity', delta: updates.familiarityDelta, current: relationship.familiarity },
+    ];
 
-  const axisValues: Record<string, number> = {};
-  for (const axis of axes) {
-    if (axis.delta) {
-      const newVal = Math.max(0, Math.min(100, axis.current + axis.delta));
-      data[axis.key] = newVal;
-      axisValues[axis.key] = newVal;
-    } else {
-      axisValues[axis.key] = axis.current;
+    const axisValues: Record<string, number> = {};
+    for (const axis of axes) {
+      if (axis.delta) {
+        const newVal = Math.max(0, Math.min(100, axis.current + axis.delta));
+        data[axis.key] = newVal;
+        axisValues[axis.key] = newVal;
+      } else {
+        axisValues[axis.key] = axis.current;
+      }
     }
-  }
 
-  // intimacyScore 자동 계산 (5축 가중 평균)
-  const newScore = Math.max(0, Math.min(100,
-    axisValues.affection * 0.35 +
-    axisValues.trust * 0.25 +
-    axisValues.familiarity * 0.25 +
-    axisValues.respect * 0.15 -
-    axisValues.rivalry * 0.1
-  ));
-  data.intimacyScore = newScore;
+    // intimacyScore 자동 계산 (5축 가중 평균)
+    const newScore = Math.max(0, Math.min(100,
+      axisValues.affection * 0.35 +
+      axisValues.trust * 0.25 +
+      axisValues.familiarity * 0.25 +
+      axisValues.respect * 0.15 -
+      axisValues.rivalry * 0.1
+    ));
+    data.intimacyScore = newScore;
 
-  // 레거시 intimacyDelta 지원 (다축이 없을 때 폴백)
-  if (updates.intimacyDelta && !updates.affectionDelta && !updates.trustDelta) {
-    data.intimacyScore = Math.max(0, Math.min(100, relationship.intimacyScore + updates.intimacyDelta));
-  }
-
-  // 친밀도 레벨 자동 업데이트
-  const finalScore = data.intimacyScore as number;
-  const newLevel = getIntimacyLevel(finalScore);
-  if (newLevel !== relationship.intimacyLevel) {
-    data.intimacyLevel = newLevel;
-
-    // 관계 변화 기록
-    if (sceneId) {
-      await prisma.relationshipChange.create({
-        data: {
-          relationshipId: relationship.id,
-          sceneId,
-          changeType: finalScore > relationship.intimacyScore ? 'intimacy_up' : 'intimacy_down',
-          previousValue: relationship.intimacyLevel,
-          newValue: newLevel,
-        },
-      });
+    // 레거시 intimacyDelta 지원 (다축이 없을 때 폴백)
+    if (updates.intimacyDelta && !updates.affectionDelta && !updates.trustDelta) {
+      data.intimacyScore = Math.max(0, Math.min(100, relationship.intimacyScore + updates.intimacyDelta));
     }
-  }
 
-  // 관계 라벨 변화
-  if (updates.newLabel) {
-    if (sceneId && relationship.relationshipLabel !== updates.newLabel) {
-      await prisma.relationshipChange.create({
-        data: {
-          relationshipId: relationship.id,
-          sceneId,
-          changeType: 'label_change',
-          previousValue: relationship.relationshipLabel,
-          newValue: updates.newLabel,
-        },
-      });
+    // 친밀도 레벨 자동 업데이트
+    const finalScore = data.intimacyScore as number;
+    const newLevel = getIntimacyLevel(finalScore);
+    if (newLevel !== relationship.intimacyLevel) {
+      data.intimacyLevel = newLevel;
+
+      // 관계 변화 기록
+      if (sceneId) {
+        await tx.relationshipChange.create({
+          data: {
+            relationshipId: relationship.id,
+            sceneId,
+            changeType: finalScore > relationship.intimacyScore ? 'intimacy_up' : 'intimacy_down',
+            previousValue: relationship.intimacyLevel,
+            newValue: newLevel,
+          },
+        });
+      }
     }
-    data.relationshipLabel = updates.newLabel;
-  }
 
-  // 새로 알게 된 사실 (충돌 감지 적용 — 같은 주제의 기존 fact는 최신 값으로 교체)
-  if (updates.newFacts && updates.newFacts.length > 0) {
-    const existingFacts: string[] = safeJsonParse<string[]>(relationship.knownFacts, []);
-    const resolvedFacts = resolveFactConflicts(existingFacts, updates.newFacts);
-    data.knownFacts = JSON.stringify(resolvedFacts);
-  }
+    // 관계 라벨 변화
+    if (updates.newLabel) {
+      if (sceneId && relationship.relationshipLabel !== updates.newLabel) {
+        await tx.relationshipChange.create({
+          data: {
+            relationshipId: relationship.id,
+            sceneId,
+            changeType: 'label_change',
+            previousValue: relationship.relationshipLabel,
+            newValue: updates.newLabel,
+          },
+        });
+      }
+      data.relationshipLabel = updates.newLabel;
+    }
 
-  // 공유 경험 추가
-  if (updates.newExperience) {
-    const experiences: string[] = safeJsonParse<string[]>(relationship.sharedExperiences, []);
-    experiences.push(updates.newExperience);
-    // 영구 기억: 모든 경험 보존
-    data.sharedExperiences = JSON.stringify(experiences);
-  }
+    // 새로 알게 된 사실 (충돌 감지 적용 — 같은 주제의 기존 fact는 최신 값으로 교체)
+    if (updates.newFacts && updates.newFacts.length > 0) {
+      const existingFacts: string[] = safeJsonParse<string[]>(relationship.knownFacts, []);
+      const resolvedFacts = resolveFactConflicts(existingFacts, updates.newFacts);
+      data.knownFacts = JSON.stringify(resolvedFacts);
+    }
 
-  // 말투 변화
-  if (updates.speechStyleChange) {
-    data.speechStyle = updates.speechStyleChange;
-  }
+    // 공유 경험 추가
+    if (updates.newExperience) {
+      const experiences: string[] = safeJsonParse<string[]>(relationship.sharedExperiences, []);
+      experiences.push(updates.newExperience);
+      // 영구 기억: 모든 경험 보존
+      data.sharedExperiences = JSON.stringify(experiences);
+    }
 
-  // 별명 변화
-  if (updates.nicknameChange) {
-    data.nicknameForUser = updates.nicknameChange;
-  }
+    // 말투 변화
+    if (updates.speechStyleChange) {
+      data.speechStyle = updates.speechStyleChange;
+    }
 
-  await prisma.userCharacterRelationship.update({
-    where: { id: relationship.id },
-    data,
+    // 별명 변화
+    if (updates.nicknameChange) {
+      data.nicknameForUser = updates.nicknameChange;
+    }
+
+    await tx.userCharacterRelationship.update({
+      where: { id: relationship.id },
+      data,
+    });
   });
 }
 
