@@ -7,9 +7,9 @@
 
 ## 현재 상태
 
-**프로덕션 코드**: Run 28 설정 (경량 systemInstruction + 축소된 memoryContext + thinkingBudget 4096)
-**마지막 실험**: Run 29~30 (thinkingBudget 1024/512 — Gemini Pro가 파라미터 무시, 효과 없음)
-**미결 사항**: Pro 비용 $0.031/턴은 수용할지, 다른 접근(격턴 Pro, Pro 폐지 등)을 시도할지 결정 필요
+**프로덕션 코드**: 나레이션 구조 개선 적용 (스키마 필드 순서 변경 + narrator-dialogue 교대 + minItems 6 복원)
+**마지막 실험**: 나레이션 품질 개선 3건 (03-03) — 스키마 필드 순서/교대 힌트/첫턴 보장
+**미결 사항**: Pro 비용 $0.031/턴 수용 여부, 나레이션 개선 효과 추가 검증 필요
 
 ---
 
@@ -93,9 +93,12 @@
 - **Pro 디렉터 프롬프트**: 관계 JSON + arcPhase + sceneBeat + directing (~250자)
 
 ### RESPONSE_SCHEMA
+- **필드 순서**: type → character → sensory → ambience → characterAction → content → emotion → emotionIntensity (thinking aid가 content 앞에 위치)
 - **thinking aid** (출력 미포함): sensory, ambience, characterAction — 제한 없음
 - **출력 사용 필드**: emotion — `'dialogue일 때 표정. narrator일 때 "neutral".'` (제한 유지 필수)
+- **turns description**: `'narrator로 시작, narrator와 dialogue 교대 배열'`
 - **구조**: turns minItems 6, plotEvent, maxOutputTokens 12288
+- **첫 턴 보장**: 비스트리밍 경로에서 첫 턴이 dialogue면 가장 가까운 narrator와 위치 교환 (코드)
 
 ### 경쟁사 대비 (Run 19 기준)
 
@@ -174,6 +177,9 @@ npx tsx scripts/test-memory-simulation.ts \
 | `docs/memory-architecture.md` | 메모리 시스템 아키텍처 |
 | `docs/image-generation-architecture.md` | 이미지 생성 아키텍처 |
 | `docs/competitor-reference.md` | 경쟁사 벤치마크 원문 |
+| `docs/competitor-sample.md` | 경쟁사(BabeChat) 실제 출력 샘플 |
+| `docs/chat-system-architecture.md` | 채팅 시스템 아키텍처 (프롬프트/스키마/메모리 전체 흐름) |
+| `docs/design-narrator-improvement.md` | 나레이션-대사 교대 구조 개선 설계 |
 | `CLAUDE.md` | 프로젝트 규칙, Agent Teams 운영 규칙 |
 
 ---
@@ -191,7 +197,10 @@ npx tsx scripts/test-memory-simulation.ts \
 | 03-03 | Phase 6: Pro 디렉팅 (Run 24~25) | 기승전결 순환 성공 |
 | 03-03 | Phase 6: 비용 최적화 (Run 26~30) | 모든 접근법 시도, $0.027/턴 하한선 확인 |
 | 03-03 | 코드 정리 태스크 정리 | T1~T3 대기, H1 보류. work-status.md 재구성 |
+| 03-03 | 나레이션 구조 개선 3건 | ① minItems 8→6 복원 ② 스키마 필드 순서 변경 (thinking aid→content) ③ turns desc 교대 힌트 + 첫턴 narrator 보장 코드. 나레이션 1~2문장→3~6문장 개선 확인 |
+| 03-03 | 채팅 시스템 아키텍처 문서 추가 | `docs/chat-system-architecture.md` 작성 |
+| 03-03 | bkit 플러그인 비활성화 | Claude 네이티브 Agent Teams와 충돌 해결. `~/.claude/settings.json`에서 bkit 비활성화 |
 
 ---
 
-> 마지막 업데이트: 2026-03-03 (work-status.md 재구성 — 태스크 목록 추가, Run 상세결과 prompt-experiment-log.md로 이관)
+> 마지막 업데이트: 2026-03-03 (나레이션 구조 개선 3건 + 아키텍처 문서 + bkit 비활성화)

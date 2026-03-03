@@ -44,17 +44,14 @@ export async function GET() {
 export async function PATCH() {
   try {
     const session = await auth();
-    const userId = session?.user?.id;
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+    const userId = session.user.id;
 
-    // 전체 공지 + 개인 알림 모두 읽음 처리
+    // 개인 알림만 읽음 처리 (전체 공지는 per-user 추적 구조 필요 — 추후 개선)
     await prisma.notification.updateMany({
-      where: {
-        OR: [
-          { userId: null },
-          ...(userId ? [{ userId }] : []),
-        ],
-        isRead: false,
-      },
+      where: { userId, isRead: false },
       data: { isRead: true },
     });
 

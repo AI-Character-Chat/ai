@@ -169,7 +169,7 @@ export async function PUT(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
   }
-  if (session.userId && session.userId !== authSession.user.id) {
+  if (!session.userId || session.userId !== authSession.user.id) {
     return NextResponse.json({ error: '이 세션에 대한 접근 권한이 없습니다.' }, { status: 403 });
   }
 
@@ -518,7 +518,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    if (session.userId && session.userId !== authSession.user.id) {
+    if (!session.userId || session.userId !== authSession.user.id) {
       return NextResponse.json({ error: '이 세션에 대한 접근 권한이 없습니다.' }, { status: 403 });
     }
 

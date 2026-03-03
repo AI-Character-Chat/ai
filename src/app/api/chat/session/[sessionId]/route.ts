@@ -55,14 +55,20 @@ export async function GET(
       );
     }
 
+    // 인증 필수
+    if (!authSession?.user?.id) {
+      return NextResponse.json(
+        { error: '로그인이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+
     // 소유권 확인 (로그인한 유저의 세션인지)
-    if (chatSession.userId && authSession?.user?.id) {
-      if (chatSession.userId !== authSession.user.id) {
-        return NextResponse.json(
-          { error: '접근 권한이 없습니다.' },
-          { status: 403 }
-        );
-      }
+    if (chatSession.userId && chatSession.userId !== authSession.user.id) {
+      return NextResponse.json(
+        { error: '접근 권한이 없습니다.' },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({

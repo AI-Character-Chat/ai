@@ -35,6 +35,17 @@ export async function GET(
       );
     }
 
+    // 비공개 작품 접근 제어
+    if (work.visibility === 'private') {
+      const session = await auth();
+      if (!session?.user?.id || work.authorId !== session.user.id) {
+        return NextResponse.json(
+          { error: '접근 권한이 없습니다.' },
+          { status: 403 }
+        );
+      }
+    }
+
     // tags와 lorebook keywords JSON 파싱
     const workWithParsedData = {
       ...work,
@@ -45,9 +56,13 @@ export async function GET(
       })),
     };
 
-    // stale-while-revalidate: CDN에서 60초 캐시 + 5분간 stale 허용
     const res = NextResponse.json(workWithParsedData);
-    res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    // 비공개 작품은 CDN 캐시 제외
+    if (work.visibility === 'private') {
+      res.headers.set('Cache-Control', 'no-store');
+    } else {
+      res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    }
     return res;
   } catch (error) {
     console.error('Error fetching work:', error);

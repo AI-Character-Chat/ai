@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
-  if (session.userId && session.userId !== authSession.user.id) {
+  if (!session.userId || session.userId !== authSession.user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
