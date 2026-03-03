@@ -953,22 +953,25 @@ export async function generateProAnalysis(params: {
   sceneState: SceneState;
   characterNames: string[];
   memoryContext?: string;
+  turnCount?: number;
 }): Promise<ProAnalysisResult> {
-  const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames, memoryContext } = params;
+  const { systemInstruction, conversationSummary, currentTurnSummary, sceneState, characterNames, memoryContext, turnCount } = params;
 
   const analysisPrompt = `이번 턴의 대화를 분석하세요.
 
 등장인물: ${characterNames.join(', ')}
 장소: ${sceneState.location}, 시간: ${sceneState.time}
+현재 턴: ${turnCount ?? '?'}턴째
 
 이전 요약: ${conversationSummary}
 ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${currentTurnSummary}
 
-서사 단계 판단 기준:
-- 기(起): 새 장소·인물·상황 소개. 분위기 조성.
-- 승(承): 갈등·긴장 고조. 관계 변화. 떡밥 투하.
-- 전(轉): 반전·충격·예상 밖 전개. 클라이맥스.
-- 결(結): 여운·정리·다음 씬 암시. 감정 착지.
+서사 단계 판단 기준 (3~5턴마다 다음 단계로 전환):
+- 기(起): 1~2턴. 새 장소·인물·상황 소개. 분위기 조성.
+- 승(承): 2~4턴. 갈등·긴장 고조. 관계 변화. 떡밥 투하.
+- 전(轉): 1~2턴. 반전·충격·예상 밖 전개. 클라이맥스.
+- 결(結): 1~2턴. 여운·정리·감정 착지. 이후 새 기(起)로 순환.
+승이 3턴 이상 지속되면 반드시 전으로 전환하세요.
 
 아래 형식으로 출력:
 \`\`\`json

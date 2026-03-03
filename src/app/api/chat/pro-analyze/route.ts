@@ -161,6 +161,7 @@ export async function POST(request: NextRequest) {
     },
     characterNames: characters.map(c => c.name),
     memoryContext,
+    turnCount: session.turnCount,
   });
 
   // DB 저장: 세션 proAnalysis + 메시지 metadata에 proAnalysisMetrics 추가
