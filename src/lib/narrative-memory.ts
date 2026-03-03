@@ -6,10 +6,8 @@
  * 다르게 해석·기억하는 다중 시점 장기 메모리 구조
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { generateEmbedding } from './gemini';
-
-const prisma = new PrismaClient();
 
 // ============================================================
 // 유틸리티

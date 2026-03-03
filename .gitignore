@@ -55,9 +55,6 @@ coverage/
 *.temp
 .env*.local
 
-# 작업 진행 상태 (세션 간 공유용, 커밋 불필요)
-docs/work-status.md
-
 # bkit 도구 상태
 .bkit/
 docs/.pdca-status.json
