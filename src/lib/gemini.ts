@@ -137,7 +137,7 @@ const RESPONSE_SCHEMA = {
   properties: {
     turns: {
       type: Type.ARRAY,
-      description: '응답 턴 배열',
+      description: 'narrator로 시작, narrator와 dialogue 교대 배열',
       minItems: '6',
       items: {
         type: Type.OBJECT,
@@ -439,6 +439,15 @@ export async function generateStoryResponse(params: {
           };
         })
         .filter((t: StoryTurn) => t.content && (t.type === 'narrator' || t.characterId));
+
+      // 첫 턴이 narrator가 아니면 가장 가까운 narrator와 위치 교환
+      if (turns.length > 1 && turns[0].type !== 'narrator') {
+        const firstNarrIdx = turns.findIndex(t => t.type === 'narrator');
+        if (firstNarrIdx > 0) {
+          const [narr] = turns.splice(firstNarrIdx, 1);
+          turns.unshift(narr);
+        }
+      }
 
       // turns가 비어있을 때 폴백
       if (turns.length === 0 && characters.length > 0) {
