@@ -137,7 +137,7 @@ const RESPONSE_SCHEMA = {
   properties: {
     turns: {
       type: Type.ARRAY,
-      description: 'narrator로 시작, narrator와 dialogue 교대 배열',
+      description: 'narrator로 시작. 캐릭터 전환 시 narrator 삽입 권장.',
       minItems: 6,
       items: {
         type: Type.OBJECT,
