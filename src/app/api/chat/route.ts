@@ -160,7 +160,14 @@ export async function PUT(request: NextRequest) {
     // 검색용: 임베딩 있는 과거 유저 메시지 (최근 100개, 선별적 검색용)
     prisma.message.findMany({
       where: { sessionId, messageType: 'user', NOT: { embedding: '[]' } },
-      include: { character: true },
+      select: {
+        id: true,
+        content: true,
+        messageType: true,
+        embedding: true,
+        createdAt: true,
+        character: { select: { name: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
@@ -366,8 +373,7 @@ export async function PUT(request: NextRequest) {
         // 이미지 생성용 데이터
         const presentCharacterProfiles = characters
           .filter(c => updatedScene.presentCharacters.some(
-            pn => pn === c.name || pn.includes(c.name) || c.name.includes(pn) ||
-              c.name.split(' ')[0] === pn || pn.split(' ')[0] === c.name.split(' ')[0]
+            pn => pn === c.name || pn.toLowerCase() === c.name.toLowerCase()
           ))
           .map(c => ({ name: c.name, profileImage: c.profileImage }));
 

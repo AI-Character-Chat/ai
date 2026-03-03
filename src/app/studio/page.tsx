@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -22,11 +22,7 @@ export default function StudioPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    fetchWorks();
-  }, []);
-
-  const fetchWorks = async () => {
+  const fetchWorks = useCallback(async () => {
     try {
       const response = await fetch('/api/works');
       const data = await response.json();
@@ -36,7 +32,11 @@ export default function StudioPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchWorks();
+  }, [fetchWorks]);
 
   const createNewWork = async () => {
     setCreating(true);

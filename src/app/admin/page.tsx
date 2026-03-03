@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -173,19 +173,7 @@ export default function AdminPage() {
     checkAdminRole();
   }, [session, status, router]);
 
-  // 데이터 로드
-  useEffect(() => {
-    if (isAdmin) {
-      if (activeTab === 'dashboard') fetchStats();
-      if (activeTab === 'banners') fetchBanners();
-      if (activeTab === 'announcements') fetchAnnouncements();
-      if (activeTab === 'users') fetchUsers();
-      if (activeTab === 'reports') fetchReports();
-      if (activeTab === 'settings') fetchSettings();
-    }
-  }, [isAdmin, activeTab]);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setStatsLoading(true);
     try {
       const response = await fetch('/api/admin/stats');
@@ -197,9 +185,9 @@ export default function AdminPage() {
     } finally {
       setStatsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchBanners = async () => {
+  const fetchBanners = useCallback(async () => {
     setBannersLoading(true);
     try {
       const response = await fetch('/api/admin/banners?admin=true');
@@ -210,9 +198,9 @@ export default function AdminPage() {
     } finally {
       setBannersLoading(false);
     }
-  };
+  }, []);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     setAnnouncementsLoading(true);
     try {
       const response = await fetch('/api/admin/announcements?admin=true');
@@ -223,9 +211,9 @@ export default function AdminPage() {
     } finally {
       setAnnouncementsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
       const response = await fetch(`/api/admin/users?page=${usersPage}&search=${userSearch}`);
@@ -237,9 +225,9 @@ export default function AdminPage() {
     } finally {
       setUsersLoading(false);
     }
-  };
+  }, [usersPage, userSearch]);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setReportsLoading(true);
     try {
       const statusParam = reportsFilter ? `&status=${reportsFilter}` : '';
@@ -252,7 +240,32 @@ export default function AdminPage() {
     } finally {
       setReportsLoading(false);
     }
-  };
+  }, [reportsPage, reportsFilter]);
+
+  const fetchSettings = useCallback(async () => {
+    setSettingsLoading(true);
+    try {
+      const response = await fetch('/api/admin/settings');
+      const data = await response.json();
+      setSiteSettings(data.settings || []);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, []);
+
+  // 데이터 로드
+  useEffect(() => {
+    if (isAdmin) {
+      if (activeTab === 'dashboard') fetchStats();
+      if (activeTab === 'banners') fetchBanners();
+      if (activeTab === 'announcements') fetchAnnouncements();
+      if (activeTab === 'users') fetchUsers();
+      if (activeTab === 'reports') fetchReports();
+      if (activeTab === 'settings') fetchSettings();
+    }
+  }, [isAdmin, activeTab, fetchStats, fetchBanners, fetchAnnouncements, fetchUsers, fetchReports, fetchSettings]);
 
   const handleUpdateReport = async (id: string, newStatus: string) => {
     try {
@@ -282,19 +295,6 @@ export default function AdminPage() {
       pending: '대기중', reviewing: '검토중', resolved: '처리완료', rejected: '반려',
     };
     return <span className={`px-2 py-1 text-xs rounded-full ${styles[status] || styles.pending}`}>{labels[status] || status}</span>;
-  };
-
-  const fetchSettings = async () => {
-    setSettingsLoading(true);
-    try {
-      const response = await fetch('/api/admin/settings');
-      const data = await response.json();
-      setSiteSettings(data.settings || []);
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
-    } finally {
-      setSettingsLoading(false);
-    }
   };
 
   const handleSaveSetting = async () => {

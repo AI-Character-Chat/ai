@@ -126,6 +126,11 @@ export default function OpeningScreen({
             </div>
 
             {/* 오프닝 선택 */}
+            {work.openings.length === 0 && (
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p className="text-sm text-yellow-700 dark:text-yellow-400">오프닝이 없습니다. 기본 설정으로 대화를 시작합니다.</p>
+              </div>
+            )}
             {work.openings.length > 1 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">시작 상황 선택</label>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -60,13 +60,25 @@ export default function MainHeader({
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
-  // 알림 가져오기
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await fetch('/api/notifications');
+      const data = await response.json();
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
+  }, []);
+
+  // 알림 가져오기 (인증된 유저만)
   useEffect(() => {
+    if (status !== 'authenticated') return;
     fetchNotifications();
     // 30초마다 알림 갱신
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [status, fetchNotifications]);
 
   // 검색 모달 열릴 때 포커스
   useEffect(() => {
@@ -97,17 +109,6 @@ export default function MainHeader({
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications');
-      const data = await response.json();
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.unreadCount || 0);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    }
-  };
 
   const markNotificationsAsRead = async () => {
     if (unreadCount === 0) return;

@@ -1,0 +1,129 @@
+# SYNK 프로젝트 세션 인수인계 문서
+
+> 마지막 업데이트: 2026-03-04
+> 이 파일은 세션이 바뀔 때마다 업데이트됩니다. 새 세션에서 이 파일을 먼저 읽으면 즉시 작업 이어갈 수 있습니다.
+
+---
+
+## 🧑‍💼 프로젝트 구조
+
+### 팀 구성
+- **CEO (나)**: 비즈니스, 노션 관리, 전략 결정
+- **CTO**: 코드 개발, 프롬프트 실험, work-status.md / prompt-experiment-log.md 업데이트 담당
+
+### 핵심 파일
+| 파일 | 용도 |
+|------|------|
+| `docs/work-status.md` | CTO가 관리하는 프로젝트 진행 현황 |
+| `docs/prompt-experiment-log.md` | CTO가 관리하는 프롬프트 실험 기록 (현재 Run 30까지) |
+| `docs/code-review-2026-03-04.md` | 전체 코드 리뷰 결과 81건 + 수정 이력 |
+| `docs/session-handoff.md` | 이 파일. 세션 간 인수인계용 |
+| `CLAUDE.md` | Claude 에이전트 작업 규칙 (팀 운영, 단축어 등) |
+
+---
+
+## 📋 노션 리소스 맵
+
+### 데이터베이스
+| 이름 | ID | 용도 |
+|------|-----|------|
+| 비즈니스 태스크 | `collection://22577360-41c2-4b4e-a6e1-58d90b29a356` | 법인설립, 도메인, 결제 등 CEO 태스크 |
+| 개발자 태스크 | `collection://7f20d352-3dcf-447b-85e8-5092ce489b9b` | 코드개선, AI프롬프트 등 CTO 태스크 |
+
+### 주요 페이지
+| 이름 | Page ID | 비고 |
+|------|---------|------|
+| 프롬프트 실험 기록 | `3184ec0d-56d6-8194-9eac-ef6565a56364` | Run 6~28, 개발자 태스크 DB 하위 |
+| SYNK 프로젝트 로드맵 | `3184ec0d-56d6-81c1-aaaf-f1b10fb0f2d0` | 전체 로드맵 |
+
+### 노션 작성 규칙
+- **테이블 X, callout 기반 시각 포맷 사용**
+- 성공: `<callout emoji="✅" color="green_background">`
+- 실패: `<callout emoji="❌" color="red_background">`
+- 주의: `<callout emoji="⚠️" color="yellow_background">`
+- 마일스톤: `<callout emoji="🎯" color="purple_background">`
+- 태스크 카드: callout 설명 + 단계별 가이드 + 관련 URL
+
+---
+
+## 🔄 자동화 현황
+
+### 스케줄 태스크
+| 이름 | 주기 | 내용 |
+|------|------|------|
+| `daily-notion-sync` | 매일 00:00 | work-status.md + prompt-experiment-log.md → 노션 동기화 |
+
+---
+
+## 📊 현재 프로젝트 상태 요약
+
+### 프롬프트 실험 (Run 28 기준)
+- **경쟁사 대비**: 5축 중 4축 동등 달성 (물리동작/감각묘사/캐릭터능동성/캐릭터수)
+- **남은 갭**: T1 긴장감 (Opening scene 구조 한계)
+- **비용**: $0.029~0.032/턴
+- **최종 설정**: sensory/ambience/characterAction thinking aid 제한 전면 제거, minItems 6, maxOutputTokens 12288
+- **비용 최적화 결론**: Pro thinkingBudget 제한(효과없음), 입력토큰 축소(9%미미) → Pro 격턴 실행이 유일한 현실적 경로
+
+### 비즈니스 태스크 (진행 중)
+- Stripe Atlas C-Corp 설립 (ITIN, EIN, 83(b) Election)
+- Cloudflare DNS + 도메인 설정
+- Mercury 뱅킹, Stripe 결제 연동
+
+### 개발자 태스크 (CTO 담당)
+- ~~코드 리뷰 1~5차~~ (완료 03-04) — Critical/High 26건 수정
+- 코드 리뷰 Medium/Low 53건 잔여
+- legacy imageGeneration 정리 (보류 — 기능 재개 시)
+- 분석 모델 비용 최적화 (Pro 격턴 실행 테스트 필요)
+
+---
+
+## ⚙️ CEO 작업 환경 선호사항
+
+1. **기술 용어 피하기** — 실험 기록 등은 쉬운 한국어로 시각적 설명
+2. **callout 기반 노션 포맷** — 테이블이 아닌 색상+이모지 callout
+3. **상세 태스크 카드** — callout 설명 + 단계별 가이드 + 액션 URL
+4. **"앞으로 계속 똑같이 작성해줘"** — 위 카드 포맷을 항상 유지
+5. **비즈니스/개발 태스크 분리** — CEO용 / CTO용 DB 분리
+6. **매일 자동 동기화** — CTO 파일 변경 → 노션 반영 (24시)
+
+---
+
+## 📝 이번 세션 작업 내역
+
+### 세션 5 (2026-03-04, CTO 작업)
+- [x] 전체 코드 리뷰 실행 (4명 Opus 병렬, 81건 발견)
+- [x] 코드 리뷰 1차: IDOR/인가 보안 취약점 6건 수정
+- [x] 코드 리뷰 2차: JSON.parse 미검증 크래시 방지 15곳
+- [x] 코드 리뷰 3차: select 최적화 (embedding 대량 로딩 방지 3함수)
+- [x] 코드 리뷰 4차: race condition 방지 (P2002 catch + $transaction)
+- [x] 코드 리뷰 5차: page.tsx 리팩토링 (2596줄→211줄, 6개 컴포넌트 추출)
+- [x] 프로덕션 배포 + API 10건 정상 동작 검증
+- [x] 문서 업데이트: work-status.md, code-review, session-handoff.md
+
+### 세션 4 (2026-03-03, 컨텍스트 이어짐)
+- [x] CTO 업데이트 확인: T3(ESLint) 완료 → 노션 반영
+- [x] `ㅂㅇ` 단축키 추가 (CLAUDE.md) — CTO 업데이트 노션 반영 원클릭
+
+### 세션 3 (2026-03-03)
+- [x] Run 27-28 데이터 노션 실험기록 페이지에 동기화
+- [x] daily-notion-sync 스케줄 태스크 생성
+- [x] 세션 인수인계 문서 작성 (이 파일)
+- [x] Cowork 최적화 기능 조사 및 적용
+- [x] Stripe Atlas 비즈니스 태스크 업데이트 (법인설립/결제연동/EIN/ToS)
+- [x] 개발자 태스크 전체 카드 상세 작성 (9개)
+- [x] 비즈니스 태스크 전체 카드 상세 작성 (4개)
+- [x] CTO 업데이트 2차 반영 (T1 uuid 완료, T2 Prisma 완료, H1 보류, Run 29-30)
+- [x] 개발자 태스크 DB에 "보류" 상태 옵션 추가
+
+### 세션 2 (2026-03-03, 이전)
+- [x] prompt-experiment-log.md → 노션 페이지 생성 (Run 6~26)
+- [x] 실험기록 HTML 대시보드 생성
+- [x] 노션 callout 기반 시각적 포맷으로 재작성
+- [x] 비즈니스/개발자 태스크 DB 분리 생성
+- [x] 5개 비즈니스 태스크 상세 카드 작성 (ITIN, EIN, 83(b), DNS, calcProCost)
+- [x] CTO 개발 태스크 6개 완료 처리
+
+### 세션 1 (2026-03-03, 최초)
+- [x] 노션 연결 및 프로젝트 로드맵 페이지 생성
+- [x] CLAUDE.md 에이전트 팀 규칙 설정
+- [x] Google Calendar 연동

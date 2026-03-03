@@ -5,6 +5,8 @@
  * 타입 안전한 dispatch로 상태 변경 추적 가능
  */
 
+import type { Persona } from '@/hooks/usePersonas';
+
 // ============================================================
 // 타입 정의 (ChatView 로컬 타입에서 추출)
 // ============================================================
@@ -52,14 +54,8 @@ export interface ChatSessionData {
   recentEvents: string[];
 }
 
-export interface Persona {
-  id: string;
-  name: string;
-  age: number | null;
-  gender: string;
-  description: string | null;
-  isDefault: boolean;
-}
+// Persona 타입은 hooks/usePersonas.ts에서 통합 관리 — re-export
+export type { Persona } from '@/hooks/usePersonas';
 
 export interface ProAnalysisMetrics {
   analysis: string;

@@ -2,15 +2,19 @@
 
 export interface Work {
   id: string;
+  authorId: string | null;
   title: string;
   description: string;
   thumbnail: string | null;
-  tags: string[];
+  tags: string[]; // DB에는 JSON 문자열로 저장 (String @default("[]"))
   targetAudience: 'all' | 'male' | 'female';
   visibility: 'public' | 'private' | 'unlisted';
   isAdult: boolean;
+  worldSetting: string;
+  relationshipConfig: string; // JSON 문자열
   createdAt: Date;
   updatedAt: Date;
+  publishedAt: Date | null;
   characters?: Character[];
   openings?: Opening[];
   lorebook?: LorebookEntry[];
@@ -64,9 +68,20 @@ export interface Opening {
 export interface ChatSession {
   id: string;
   workId: string;
+  userId: string | null;
   userName: string;
   intimacy: number;
   turnCount: number;
+  currentLocation: string;
+  currentTime: string;
+  presentCharacters: string; // JSON 문자열 (String[])
+  recentEvents: string; // JSON 문자열 (String[])
+  userProfile: string; // JSON 문자열
+  sessionSummary: string;
+  relationshipStage: string;
+  characterMemories: string; // JSON 문자열
+  userPersona: string; // JSON 문자열
+  proAnalysis: string;
   createdAt: Date;
   updatedAt: Date;
   messages?: Message[];
@@ -77,6 +92,10 @@ export interface Message {
   sessionId: string;
   characterId: string | null;
   content: string;
+  messageType: string; // "dialogue" | "narrator" | "user" | "system"
+  imageUrl: string | null;
+  metadata: string | null; // JSON 문자열
+  embedding: string; // JSON 문자열 (Float[])
   createdAt: Date;
   character?: Character | null;
 }

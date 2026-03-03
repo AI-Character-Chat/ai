@@ -19,14 +19,14 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     if (!sidebarOpen) {
       setSidebarOpen(true);
       setSidebarCollapsed(false);
     } else {
-      setSidebarCollapsed(!sidebarCollapsed);
+      setSidebarCollapsed((prev) => !prev);
     }
-  };
+  }, [sidebarOpen]);
 
   // 사이드바 새로고침 트리거
   const refreshSidebar = useCallback(() => {

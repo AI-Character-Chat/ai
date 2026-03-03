@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import PersonaModal from '@/components/PersonaModal';
 import type { ChatWork, ChatSessionData, ChatCharacter, Persona } from './useChatReducer';
+import { getCharacterColor } from './utils';
 
 interface ChatHeaderProps {
   work: ChatWork;
@@ -16,13 +17,6 @@ interface ChatHeaderProps {
   onMenuToggle: () => void;
   onPersonaSelect: (persona: Persona) => void;
   onPersonasRefresh: () => void;
-}
-
-function getCharacterColor(characterId: string | null, characters: ChatCharacter[]) {
-  if (!characterId) return 'bg-gray-200 dark:bg-gray-700';
-  const index = characters.findIndex(c => c.id === characterId);
-  const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500', 'bg-teal-500', 'bg-indigo-500'];
-  return colors[index % colors.length];
 }
 
 function getPresentCharacters(work: ChatWork, session: ChatSessionData): ChatCharacter[] {

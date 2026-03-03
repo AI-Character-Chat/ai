@@ -75,6 +75,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 비공개 작품 접근 제어
+    const work = await prisma.work.findUnique({
+      where: { id: workId },
+      select: { visibility: true, authorId: true },
+    });
+    if (!work) {
+      return NextResponse.json({ error: '작품을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (work.visibility === 'private') {
+      const session = await auth();
+      if (!session?.user?.id || work.authorId !== session.user.id) {
+        return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
+      }
+    }
+
     const characters = await prisma.character.findMany({
       where: { workId },
       orderBy: { createdAt: 'asc' },

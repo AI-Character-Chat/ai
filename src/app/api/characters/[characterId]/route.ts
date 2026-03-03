@@ -24,6 +24,14 @@ export async function GET(
       );
     }
 
+    // 비공개 작품 접근 제어
+    if (character.work.visibility === 'private') {
+      const session = await auth();
+      if (!session?.user?.id || character.work.authorId !== session.user.id) {
+        return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
+      }
+    }
+
     return NextResponse.json(character);
   } catch (error) {
     console.error('Error fetching character:', error);

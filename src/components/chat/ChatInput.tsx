@@ -23,7 +23,8 @@ export default function ChatInput({
 
   useEffect(() => {
     if (!sending && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+      const timer = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(timer);
     }
   }, [sending]);
 
@@ -68,23 +69,31 @@ export default function ChatInput({
             disabled={sending}
             className="px-3 py-2 text-lg font-bold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="상황/행동 묘사 (Ctrl+I)"
+            aria-label="상황/행동 묘사 삽입 (Ctrl+I)"
           >
             ✱
           </button>
           <textarea
             ref={inputRef}
             value={inputMessage}
-            onChange={e => onInputChange(e.target.value)}
+            onChange={e => {
+              onInputChange(e.target.value);
+              // 자동 높이 조절
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+            }}
             onKeyDown={handleKeyDown}
             placeholder="메시지를 입력하세요... (*행동묘사*로 상황을 표현할 수 있습니다)"
             rows={1}
             disabled={sending}
+            aria-label="메시지 입력"
             className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
-            style={{ maxHeight: '120px' }}
+            style={{ maxHeight: '120px', overflowY: 'auto' }}
           />
           <button
             onClick={onSend}
             disabled={sending || !inputMessage.trim()}
+            aria-label={sending ? '전송 중' : '메시지 전송'}
             className="px-4 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {sending ? (

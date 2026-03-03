@@ -2,7 +2,6 @@
 
 import {
   parseOpeningContent,
-  formatPreviewText,
   getPreviewCharacterColor,
   type PreviewTurn,
 } from '@/lib/preview-parser';
@@ -29,23 +28,6 @@ interface LorebookEntry {
   name: string;
   keywords: string[];
   content: string;
-}
-
-// ─── 텍스트 포맷 렌더러 ───
-
-function FormattedText({ text }: { text: string }) {
-  const parts = formatPreviewText(text);
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.italic ? (
-          <span key={i} className="italic text-gray-500 dark:text-gray-400">{p.text}</span>
-        ) : (
-          <span key={i}>{p.text}</span>
-        )
-      )}
-    </>
-  );
 }
 
 // ─── 오프닝 채팅 프리뷰 (탭 + 모달 공용) ───
@@ -282,7 +264,7 @@ function InfoPreview({
           {/* Character avatars */}
           {characters.length > 0 && (
             <div className="absolute bottom-1.5 right-1.5 flex -space-x-1.5">
-              {characters.slice(0, 3).map((char, i) => (
+              {characters.slice(0, 3).map((char) => (
                 <div key={char.id} className={`w-6 h-6 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden flex items-center justify-center ${getPreviewCharacterColor(char.name, characters.map(c => c.name))}`}>
                   {char.profileImage ? (
                     <img src={char.profileImage} alt={char.name} className="w-full h-full object-cover" />

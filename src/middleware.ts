@@ -58,6 +58,11 @@ function getRateLimitConfig(
     return { limit: 15, windowMs: MINUTE };
   }
 
+  // Pro 분석 - 분당 20회 (비용 높음)
+  if (pathname === '/api/chat/pro-analyze') {
+    return { limit: 20, windowMs: MINUTE };
+  }
+
   // 이미지 생성 - 분당 10회 (비용 높음)
   if (pathname.startsWith('/api/generate-image')) {
     return { limit: 10, windowMs: MINUTE };

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
 import type { ChatWork, ChatMessage, ChatCharacter, ResponseMetadata, ProAnalysisMetrics, CharacterMemoryDebugData, MemoryUpdateResult } from './useChatReducer';
+import { getCharacterColor, USD_TO_KRW } from './utils';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -17,13 +18,6 @@ interface ChatMessagesProps {
   showScrollButton: boolean;
   onScrollToBottom: () => void;
   isAdmin?: boolean;
-}
-
-function getCharacterColor(characterId: string | null, characters: ChatCharacter[]) {
-  if (!characterId) return 'bg-gray-200 dark:bg-gray-700';
-  const index = characters.findIndex(c => c.id === characterId);
-  const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500', 'bg-teal-500', 'bg-indigo-500'];
-  return colors[index % colors.length];
 }
 
 function formatMessage(text: string) {
@@ -62,7 +56,7 @@ function calcProCost(pm: ProAnalysisMetrics) {
 }
 
 function formatCost(usd: number) {
-  const krw = usd * 1460;
+  const krw = usd * USD_TO_KRW;
   if (usd < 0.001) return `$${usd.toFixed(5)} (₩${krw.toFixed(2)})`;
   return `$${usd.toFixed(4)} (₩${krw.toFixed(1)})`;
 }
@@ -368,6 +362,8 @@ function MemoryDebugPanel({ memoryDebug, memoryUpdateResults }: {
     <div className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-xs overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-label={expanded ? '메모리 디버그 패널 접기' : '메모리 디버그 패널 펼치기'}
         className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
       >
         <span className="text-gray-500 dark:text-gray-400">
@@ -657,6 +653,7 @@ export default function ChatMessages({
           onClick={onScrollToBottom}
           className="fixed bottom-24 right-6 z-40 w-10 h-10 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 rounded-full shadow-lg flex items-center justify-center hover:bg-gray-700 dark:hover:bg-gray-300 transition-all"
           title="아래로 스크롤"
+          aria-label="최신 메시지로 스크롤"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />

@@ -1,15 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-
-interface Persona {
-  id: string;
-  name: string;
-  age: number | null;
-  gender: string;
-  description: string | null;
-  isDefault: boolean;
-}
+import type { Persona } from '@/hooks/usePersonas';
 
 interface PersonaDropdownProps {
   personas: Persona[];

@@ -14,8 +14,6 @@ import {
 import {
   buildNarrativeContext,
   processConversationForMemory,
-  decayMemoryStrength,
-  pruneWeakMemories,
   consolidateMemories,
   promoteMemories,
   getActiveScene,
@@ -294,24 +292,16 @@ export async function processRemainingBackgroundTasks(params: BackgroundTaskPara
   const { sessionId, session, authUserId, workId, recentMessages } = params;
   const memoryScope: MemoryScope = { userId: authUserId, workId, sessionId };
 
-  // [A] 5턴마다: 세션 요약 + 기억 감쇠 (비동기)
+  // [A] 5턴마다: 세션 요약 (비동기)
   const newTurnCount = session.turnCount + 1;
   if (newTurnCount % 5 === 0) {
     triggerSummary(sessionId, recentMessages, session.sessionSummary || undefined)
       .catch((e) => console.error('[Summary] Trigger failed:', e));
-    decayMemoryStrength(memoryScope)
-      .catch((e) => console.error('[NarrativeMemory] Decay failed:', e));
   }
 
   // [B] 10턴마다: 기억 진화 — 통합 + 승격 (A-MEM)
   if (newTurnCount % 10 === 0) {
     consolidateMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Consolidate failed:', e));
     promoteMemories(memoryScope).catch((e) => console.error('[NarrativeMemory] Promote failed:', e));
-  }
-
-  // [C] 25턴마다: 약한 기억 정리 (비동기)
-  if (newTurnCount % 25 === 0) {
-    pruneWeakMemories(memoryScope)
-      .catch((e) => console.error('[NarrativeMemory] Prune failed:', e));
   }
 }

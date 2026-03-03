@@ -75,7 +75,6 @@ export async function GET(request: NextRequest) {
 
     if (publicOnly) {
       const tab = url.searchParams.get('tab');
-      const period = url.searchParams.get('period') as 'realtime' | 'daily' | 'weekly' | 'monthly' | null;
       const limit = parseInt(url.searchParams.get('limit') || '20');
 
       // 탭별 분기 처리

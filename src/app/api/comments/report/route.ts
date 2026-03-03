@@ -16,14 +16,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'commentId and reason are required' }, { status: 400 });
     }
 
-    // 댓글 존재 확인
-    const comment = await prisma.workComment.findUnique({
-      where: { id: commentId },
-      select: { id: true, workId: true },
-    });
+    // 댓글 존재 확인 + 중복 신고 체크를 병렬로
+    const [comment, existingReport] = await Promise.all([
+      prisma.workComment.findUnique({
+        where: { id: commentId },
+        select: { id: true, workId: true },
+      }),
+      prisma.report.findFirst({
+        where: {
+          reporterId: session.user.id,
+          targetType: 'comment',
+          targetId: commentId,
+        },
+        select: { id: true },
+      }),
+    ]);
 
     if (!comment) {
       return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+    }
+
+    if (existingReport) {
+      return NextResponse.json({ error: '이미 신고한 댓글입니다.' }, { status: 409 });
     }
 
     // 신고 생성

@@ -2,7 +2,7 @@
  * Gemini AI 통합 모듈 (v5 - Pro + Flash 혼합 + Context Caching + Narrative Memory)
  *
  * 모델 전략:
- * - 스토리 생성 (generateStoryResponse): gemini-2.5-pro (최고 품질 + thinking)
+ * - 스토리 생성 스트리밍 (generateStoryResponseStream): gemini-2.5-flash
  * - 보조 작업 (요약 등): gemini-2.5-flash (빠르고 저렴)
  *
  * 핵심:
@@ -138,7 +138,7 @@ const RESPONSE_SCHEMA = {
     turns: {
       type: Type.ARRAY,
       description: 'narrator로 시작, narrator와 dialogue 교대 배열',
-      minItems: '6',
+      minItems: 6,
       items: {
         type: Type.OBJECT,
         properties: {
@@ -342,194 +342,8 @@ export function buildContents(params: {
 // [3] 메인 스토리 응답 생성
 // ============================================================
 
-export async function generateStoryResponse(params: {
-  systemInstruction: string;
-  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
-  characters: Array<{ id: string; name: string }>;
-  sceneState: SceneState;
-}): Promise<StoryResponse> {
-  const startTime = Date.now();
-  const { systemInstruction, contents, characters, sceneState } = params;
-
-  console.log(`📤 Gemini 요청 (systemInstruction: ${systemInstruction.length}자, contents: ${JSON.stringify(contents).length}자)`);
-
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const result = await ai.models.generateContent({
-        model: MODEL_PRO,
-        config: {
-          systemInstruction,
-          temperature: 1.4,
-          topP: 0.95,
-          topK: 50,
-          maxOutputTokens: 16384,
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-          safetySettings: SAFETY_SETTINGS,
-          thinkingConfig: { thinkingBudget: -1 },
-        },
-        contents,
-      });
-
-      const text = result.text?.trim();
-
-      // finishReason 체크
-      const finishReason = (result as any).candidates?.[0]?.finishReason;
-      if (finishReason && finishReason !== 'STOP') {
-        console.warn(`⚠️ finishReason: ${finishReason} (토큰 부족 또는 필터)`);
-      }
-
-      // SAFETY 필터 차단 → 재시도
-      if (finishReason === 'SAFETY') {
-        throw new Error(`SAFETY_BLOCK (attempt ${attempt})`);
-      }
-
-      if (!text || text.length === 0) {
-        throw new Error(`EMPTY_RESPONSE (finishReason: ${finishReason || 'unknown'})`);
-      }
-
-      // JSON 파싱
-      let parsed: { turns?: Array<{ type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }>; scene?: { location: string; time: string; presentCharacters: string[]; plotEvent?: string } };
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        // MAX_TOKENS로 JSON이 잘린 경우 → 복구 시도
-        if (finishReason === 'MAX_TOKENS') {
-          console.warn('⚠️ MAX_TOKENS로 JSON 잘림, 복구 시도');
-          parsed = repairTruncatedJson(text, sceneState);
-        } else {
-          console.warn('⚠️ JSON 파싱 실패, 폴백 파서 시도');
-          parsed = parseMarkdownFallback(text, characters, sceneState);
-        }
-      }
-
-      // turns 파싱
-      const turns: StoryTurn[] = (parsed.turns || [])
-        .map((turn: { type: string; character: string; content: string; sensory?: string; emotion: string; emotionIntensity?: number }) => {
-          if (turn.type === 'narrator') {
-            const rawContent = turn.content?.trim() || '';
-            return {
-              type: 'narrator' as const,
-              characterId: '',
-              characterName: '',
-              content: rawContent,
-              emotion: { primary: 'neutral', intensity: 0.5 },
-            };
-          }
-          // dialogue
-          const char = characters.find(
-            (c) => c.name === turn.character ||
-                   c.name.includes(turn.character) ||
-                   turn.character?.includes(c.name) ||
-                   c.name.toLowerCase() === turn.character?.toLowerCase()
-          );
-          return {
-            type: 'dialogue' as const,
-            characterId: char?.id || '',
-            characterName: turn.character || '',
-            content: turn.content?.trim() || '',
-            emotion: {
-              primary: EXPRESSION_TYPES.includes(turn.emotion as typeof EXPRESSION_TYPES[number]) ? turn.emotion : 'neutral',
-              intensity: typeof turn.emotionIntensity === 'number'
-                ? Math.max(0, Math.min(1, turn.emotionIntensity))
-                : 0.5,
-            },
-          };
-        })
-        .filter((t: StoryTurn) => t.content && (t.type === 'narrator' || t.characterId));
-
-      // 첫 턴이 narrator가 아니면 가장 가까운 narrator와 위치 교환
-      if (turns.length > 1 && turns[0].type !== 'narrator') {
-        const firstNarrIdx = turns.findIndex(t => t.type === 'narrator');
-        if (firstNarrIdx > 0) {
-          const [narr] = turns.splice(firstNarrIdx, 1);
-          turns.unshift(narr);
-        }
-      }
-
-      // turns가 비어있을 때 폴백
-      if (turns.length === 0 && characters.length > 0) {
-        turns.push({
-          type: 'narrator',
-          characterId: '', characterName: '',
-          content: '잠시 정적이 흐른다.',
-          emotion: { primary: 'neutral', intensity: 0.5 },
-        });
-        turns.push({
-          type: 'dialogue',
-          characterId: characters[0].id, characterName: characters[0].name,
-          content: '*조용히 당신을 바라본다*',
-          emotion: { primary: 'neutral', intensity: 0.5 },
-        });
-      }
-
-      const elapsed = Date.now() - startTime;
-      const usage = result.usageMetadata;
-      const cachedTokens = (usage as any)?.cachedContentTokenCount || 0;
-      const promptTokens = usage?.promptTokenCount || 0;
-      const outputTokens = usage?.candidatesTokenCount || 0;
-      const thinkingTokens = (usage as any)?.thoughtsTokenCount || 0;
-      const cacheHitRate = promptTokens > 0 ? Math.round((cachedTokens / promptTokens) * 100) : 0;
-      console.log(`✅ Gemini 응답 완료 (${elapsed}ms)`);
-      console.log(`   📊 토큰: prompt=${promptTokens}, cached=${cachedTokens} (${cacheHitRate}%), output=${outputTokens}, thinking=${thinkingTokens}, total=${usage?.totalTokenCount || '?'}`);
-      if (cachedTokens > 0) console.log(`   💰 캐시 HIT! ${cachedTokens}토큰 90% 할인 적용`);
-
-      const metadata: ResponseMetadata = {
-        model: MODEL_PRO,
-        thinking: thinkingTokens > 0,
-        promptTokens,
-        outputTokens,
-        cachedTokens,
-        thinkingTokens,
-        totalTokens: usage?.totalTokenCount || 0,
-        cacheHitRate,
-        finishReason: finishReason || 'STOP',
-        geminiApiMs: elapsed,
-      };
-
-      return {
-        turns,
-        updatedScene: {
-          location: parsed.scene?.location || sceneState.location,
-          time: parsed.scene?.time || sceneState.time,
-          presentCharacters: parsed.scene?.presentCharacters || sceneState.presentCharacters,
-        },
-        plotEvent: parsed.scene?.plotEvent || '',
-        metadata,
-      };
-
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`❌ 시도 ${attempt}/${MAX_RETRIES}:`, lastError.message);
-
-      const errorMessage = lastError.message.toLowerCase();
-      if (errorMessage.includes('blocked') || errorMessage.includes('prohibited') || errorMessage.includes('safety')) {
-        console.warn(`⚠️ 콘텐츠 필터 차단 (시도 ${attempt}) - 온도 높여서 재시도`);
-        if (attempt < MAX_RETRIES) {
-          await delay(300);
-          continue; // 온도는 매 시도마다 동일하지만 재시도로 다른 토큰 샘플링
-        }
-        break;
-      }
-
-      if (attempt < MAX_RETRIES) {
-        await delay(200);
-        continue;
-      }
-      break;
-    }
-  }
-
-  console.error('🚨 모든 재시도 실패:', lastError?.message);
-
-  // 에러 원인을 그대로 전달 (디버깅용)
-  throw new Error(lastError?.message || 'AI 응답 생성 실패');
-}
-
 // ============================================================
-// [3-B] 스트리밍 스토리 응답 생성
+// [3] 스트리밍 스토리 응답 생성
 // ============================================================
 
 export type StreamEvent =
@@ -559,8 +373,6 @@ function parseSingleTurn(
 
   const char = characters.find(
     (c) => c.name === raw.character ||
-           c.name.includes(raw.character) ||
-           raw.character?.includes(c.name) ||
            c.name.toLowerCase() === raw.character?.toLowerCase()
   );
   if (!char?.id) return null;
@@ -694,13 +506,11 @@ function extractPartialTurnInfo(
     }
   }
 
-  // 캐릭터 ID 해석
+  // 캐릭터 ID 해석 — 정확 매칭 우선, 폴백으로 소문자 비교
   let characterId = '';
   if (typeMatch[1] !== 'narrator' && charName) {
     const char = characters.find(
       (c) => c.name === charName ||
-             c.name.includes(charName) ||
-             charName.includes(c.name) ||
              c.name.toLowerCase() === charName.toLowerCase()
     );
     characterId = char?.id || '';
@@ -1120,8 +930,6 @@ function parseMarkdownFallback(
 
     const char = characters.find(
       (c) => c.name === charName.trim() ||
-             c.name.includes(charName.trim()) ||
-             charName.trim().includes(c.name) ||
              c.name.toLowerCase() === charName.trim().toLowerCase()
     );
 

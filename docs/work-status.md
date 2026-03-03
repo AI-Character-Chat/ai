@@ -7,9 +7,9 @@
 
 ## 현재 상태
 
-**프로덕션 코드**: 나레이션 구조 개선 적용 (스키마 필드 순서 변경 + narrator-dialogue 교대 + minItems 6 복원)
-**마지막 실험**: 나레이션 품질 개선 3건 (03-03) — 스키마 필드 순서/교대 힌트/첫턴 보장
-**미결 사항**: Pro 비용 $0.031/턴 수용 여부, 나레이션 개선 효과 추가 검증 필요
+**프로덕션 코드**: 코드 리뷰 5차 완료 (page.tsx 리팩토링) + 나레이션 구조 개선
+**마지막 작업**: 코드 리뷰 1~5차 전부 완료 (03-04). 81건 중 Critical/High 26건 수정
+**미결 사항**: Medium/Low 53건 잔여, Pro 비용 $0.031/턴 수용 여부
 
 ---
 
@@ -19,9 +19,9 @@
 
 | # | 태스크 | 내용 | 우선순위 |
 |---|--------|------|:---:|
-| ~~T1~~ | ~~uuid 패키지 제거~~ | ~~완료 (03-03)~~ | ~~-~~ |
-| ~~T2~~ | ~~Prisma import 통일~~ | ~~완료 (03-03)~~ | ~~-~~ |
-| ~~T3~~ | ~~ESLint 초기 설정~~ | ~~완료 (03-03)~~ | ~~-~~ |
+| T4 | 코드 리뷰 Medium 수정 | 30건 (보안 8 + AI Core 7 + Memory 7 + Frontend 8+3) | 중 |
+| T5 | 코드 리뷰 Low 수정 | 23건 (AI 5 + Security 6 + Memory 3 + Frontend 9) | 낮 |
+| T6 | Pro 비용 최적화 결정 | Pro 격턴 실행 or 비용 수용 | 중 |
 
 ### 보류 (HOLD)
 
@@ -33,9 +33,14 @@
 
 | # | 태스크 | 완료일 | 비고 |
 |---|--------|:---:|------|
-| T1 | uuid 패키지 제거 | 03-03 | `uuid` + `@types/uuid` 삭제. 코드 미사용 의존성 정리 |
-| T2 | Prisma import 통일 | 03-03 | named import 11곳 → default import. `narrative-memory.ts` PrismaClient 직접 생성 → 싱글턴 import. `auth.ts`는 NextAuth 어댑터 구조상 유지 |
-| T3 | ESLint 초기 설정 | 03-03 | `eslint@8` + `eslint-config-next@14` + `@typescript-eslint`. `next/core-web-vitals` Strict. 에러 0건 |
+| T1 | uuid 패키지 제거 | 03-03 | `uuid` + `@types/uuid` 삭제 |
+| T2 | Prisma import 통일 | 03-03 | named import 11곳 → default import |
+| T3 | ESLint 초기 설정 | 03-03 | `eslint@8` + `eslint-config-next@14` + `@typescript-eslint` |
+| CR1 | 코드 리뷰 1차: IDOR/인가 | 03-04 | C1,C2,H1-H3 + chat GET — 보안 취약점 6건 수정 |
+| CR2 | 코드 리뷰 2차: JSON.parse 보호 | 03-04 | C4,C8 + narrative-memory 11곳 + pro-analyze + prompt-builder — 15곳 |
+| CR3 | 코드 리뷰 3차: select 최적화 | 03-04 | C5,H11 + consolidateMemories — embedding 대량 로딩 방지 |
+| CR4 | 코드 리뷰 4차: race condition | 03-04 | H12 P2002 catch + H14 $transaction — 동시 접속 값 오염 방지 |
+| CR5 | 코드 리뷰 5차: page.tsx 리팩토링 | 03-04 | C6,C7 — 2596줄→211줄, useState 57→7개, 6개 컴포넌트 추출 |
 
 ---
 
@@ -171,16 +176,70 @@ npx tsx scripts/test-memory-simulation.ts \
 
 ## 관련 문서
 
+### 필독 문서 (새 세션에서 반드시 읽기)
+
+| 순서 | 파일 | 용도 |
+|:---:|------|------|
+| 1 | `docs/session-handoff.md` | **세션 인수인계** — 현재 상태, 노션 ID, CEO 선호사항 |
+| 2 | `docs/work-status.md` | **작업 현황판** — 태스크 목록, 개발 트랙, 세션 기록 |
+| 3 | `CLAUDE.md` | **작업 규칙** — Agent Teams 운영, 단축어, 금지사항 |
+
+### 기능 작업 시 참고
+
 | 파일 | 내용 |
 |------|------|
-| `docs/prompt-experiment-log.md` | Run 6~30 실험 상세 (변경/결과/교훈) |
+| `docs/code-review-2026-03-04.md` | 전체 코드 리뷰 81건 (수정 이력 포함) |
+| `docs/chat-system-architecture.md` | 채팅 시스템 아키텍처 (프롬프트/스키마/메모리 전체 흐름) |
 | `docs/memory-architecture.md` | 메모리 시스템 아키텍처 |
+| `docs/prompt-experiment-log.md` | Run 6~30 실험 상세 (변경/결과/교훈) |
+
+### 참고 (필요 시)
+
+| 파일 | 내용 |
+|------|------|
 | `docs/image-generation-architecture.md` | 이미지 생성 아키텍처 |
 | `docs/competitor-reference.md` | 경쟁사 벤치마크 원문 |
 | `docs/competitor-sample.md` | 경쟁사(BabeChat) 실제 출력 샘플 |
-| `docs/chat-system-architecture.md` | 채팅 시스템 아키텍처 (프롬프트/스키마/메모리 전체 흐름) |
 | `docs/design-narrator-improvement.md` | 나레이션-대사 교대 구조 개선 설계 |
-| `CLAUDE.md` | 프로젝트 규칙, Agent Teams 운영 규칙 |
+
+---
+
+## 팀 운영 가이드
+
+### 팀을 쓰는 경우 vs 안 쓰는 경우
+
+| 상황 | 방식 | 이유 |
+|------|------|------|
+| 코드 리뷰 / 대규모 수정 | Agent Teams 4명 | 도메인별 병렬 작업 |
+| 리팩토링 / 디버깅 | Agent Teams 3~4명 | 설계+구현+검증 분리 |
+| 프롬프트 실험 | **단독** | 1변경 1테스트 원칙 |
+| 단일 파일 수정 / 문서 | **단독** | 오버헤드만 발생 |
+
+### 우리 팀: quality-improvement
+
+| 이름 | 모델 | 도메인 | 파일 |
+|------|------|--------|------|
+| **마루** (CTO/리더) | Opus | 설계+조율 | 코드 수정 안 함 |
+| **루미** 🔥 | Opus | AI/Chat + API | `gemini.ts`, `prompt-builder.ts`, `api/**`, `middleware.ts` |
+| **다람** 🐿️ | Opus | Memory | `narrative-memory.ts`, `prisma*.ts`, `schema.prisma`, `types/index.ts` |
+| **나래** 🦋 | Opus | Frontend | `components/**`, `**/page.tsx`, `contexts/**` |
+| **바로** ✅ | Sonnet | QA | 읽기 전용. tsc, build, API 테스트 |
+
+### 메모 위치 (주의사항은 여기에 기록)
+
+| 뭘 기록하나 | 어디에 |
+|-------------|--------|
+| 작업 완료/태스크 현황 | `docs/work-status.md` 태스크 목록 |
+| 발견한 버그/주의사항 | `docs/code-review-2026-03-04.md` 수정 이력 |
+| 다음 세션 인수인계 | `docs/session-handoff.md` |
+| 팀 규칙/도메인 경계 | `CLAUDE.md` Agent Teams 섹션 |
+
+### 빠른 재시작 (새 세션에서)
+```
+1. docs/work-status.md 읽기 → 미완료 태스크 확인
+2. TeamCreate → TaskCreate → Task로 루미/다람/나래/바로 spawn
+3. 각 팀원에게: 이름 + 도메인 + 수정금지 파일 + 보고 지시
+```
 
 ---
 
@@ -199,8 +258,14 @@ npx tsx scripts/test-memory-simulation.ts \
 | 03-03 | 코드 정리 태스크 정리 | T1~T3 대기, H1 보류. work-status.md 재구성 |
 | 03-03 | 나레이션 구조 개선 3건 | ① minItems 8→6 복원 ② 스키마 필드 순서 변경 (thinking aid→content) ③ turns desc 교대 힌트 + 첫턴 narrator 보장 코드. 나레이션 1~2문장→3~6문장 개선 확인 |
 | 03-03 | 채팅 시스템 아키텍처 문서 추가 | `docs/chat-system-architecture.md` 작성 |
-| 03-03 | bkit 플러그인 비활성화 | Claude 네이티브 Agent Teams와 충돌 해결. `~/.claude/settings.json`에서 bkit 비활성화 |
+| 03-03 | bkit 플러그인 비활성화 | Claude 네이티브 Agent Teams와 충돌 해결 |
+| 03-04 | 전체 코드 리뷰 (4명 Opus 병렬) | 81건 발견 (Critical 8 + High 20 + Medium 30 + Low 23) |
+| 03-04 | 코드 리뷰 1차: IDOR/인가 수정 | C1,C2,H1-H3 + chat GET — 6건 보안 취약점 수정 |
+| 03-04 | 코드 리뷰 2차: JSON.parse 보호 | 15곳 try-catch 추가 — 런타임 크래시 방지 |
+| 03-04 | 코드 리뷰 3차: select 최적화 | 3함수 embedding 대량 로딩 방지 — 매 턴 ~400KB 절약 |
+| 03-04 | 코드 리뷰 4차: race condition | P2002 catch + $transaction — 동시 접속 값 오염 방지 |
+| 03-04 | 코드 리뷰 5차: page.tsx 리팩토링 | 2596줄→211줄, 6개 컴포넌트 추출. 프로덕션 배포+API 10건 검증 |
 
 ---
 
-> 마지막 업데이트: 2026-03-03 (나레이션 구조 개선 3건 + 아키텍처 문서 + bkit 비활성화)
+> 마지막 업데이트: 2026-03-04 (코드 리뷰 1~5차 전체 완료 + 프로덕션 배포 검증)

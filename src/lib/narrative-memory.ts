@@ -1007,57 +1007,6 @@ export async function searchCharacterMemories(params: {
   }));
 }
 
-/**
- * 기억 언급 시 업데이트
- */
-export async function markMemoryMentioned(memoryId: string) {
-  await prisma.characterMemory.update({
-    where: { id: memoryId },
-    data: {
-      mentionedCount: { increment: 1 },
-      lastMentioned: new Date(),
-      // 언급할수록 기억 강도 유지 (시간 감소 방지)
-      strength: 1.0,
-    },
-  });
-}
-
-/**
- * 기억 강도 자연 감소 (Emotion-Weighted Memory Decay)
- *
- * Ebbinghaus 곡선 + 감정 강도 반영:
- * - 기본 감쇠: episodic 0.95, semantic 0.98, emotional 0.97
- * - 감정 보정: emotionalResponse.intensity가 높을수록 감쇠 느림 (x0.4 가중)
- * - 중요도 보정: importance가 높을수록 감쇠 느림 (x0.3 가중)
- * - 최대 factor: 0.995 (아무리 중요해도 미세하게는 감쇠)
- * - strength가 0.1 이하이면 감소하지 않음 (최소값 보장)
- *
- * 예시 (episodic, base=0.95):
- *   감정 없음, importance=0.5 → factor 0.9575 (일반 감쇠)
- *   감정 0.8,  importance=0.5 → factor 0.9735 (느린 감쇠)
- *   감정 1.0,  importance=0.8 → factor 0.982  (아주 느린 감쇠)
- */
-export async function decayMemoryStrength(scope: MemoryScope) {
-  // 영구 기억: decay 비활성화 — 모든 기억의 강도를 유지
-  return;
-}
-
-/**
- * 약한 기억 정리 (Pruning)
- *
- * 1. strength가 임계값 이하이고 한번도 언급되지 않은 기억 삭제
- * 2. 세션당 최대 기억 수 초과 시 중요도/강도 낮은 것부터 삭제
- */
-export async function pruneWeakMemories(
-  scope: MemoryScope,
-  options: {
-    minStrength?: number;
-    maxPerScope?: number;
-  } = {}
-): Promise<number> {
-  // 영구 기억: 삭제 비활성화 — 모든 기억을 DB에 보존
-  return 0;
-}
 
 // ============================================================
 // 기억 진화 (A-MEM: Memory Evolution)
@@ -1066,6 +1015,8 @@ export async function pruneWeakMemories(
 /**
  * 유사 기억 통합 (Consolidation)
  * 동일 캐릭터의 유사 episodic 기억 그룹을 하나의 semantic 기억으로 병합
+ *
+ * 최적화: 임베딩을 Map으로 미리 파싱하여 중복 JSON.parse 제거
  */
 export async function consolidateMemories(scope: MemoryScope): Promise<number> {
   const characters = await prisma.characterMemory.findMany({
@@ -1084,21 +1035,28 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
       select: { id: true, embedding: true, originalEvent: true, interpretation: true, importance: true, strength: true, mentionedCount: true, sceneId: true, keywords: true },
     });
 
+    // 임베딩을 Map으로 미리 파싱 (중복 JSON.parse 방지)
+    const embeddingMap = new Map<string, number[]>();
+    for (const m of memories) {
+      const emb = safeJsonParse<number[]>(m.embedding, []);
+      if (emb.length > 0) embeddingMap.set(m.id, emb);
+    }
+
     const used = new Set<string>();
     const groups: (typeof memories)[] = [];
 
     for (let i = 0; i < memories.length; i++) {
       if (used.has(memories[i].id)) continue;
-      const embI = safeJsonParse<number[]>(memories[i].embedding, []);
-      if (embI.length === 0) continue;
+      const embI = embeddingMap.get(memories[i].id);
+      if (!embI) continue;
 
       const group = [memories[i]];
       used.add(memories[i].id);
 
       for (let j = i + 1; j < memories.length; j++) {
         if (used.has(memories[j].id)) continue;
-        const embJ = safeJsonParse<number[]>(memories[j].embedding, []);
-        if (embJ.length === 0) continue;
+        const embJ = embeddingMap.get(memories[j].id);
+        if (!embJ) continue;
         if (cosineSimilarity(embI, embJ) >= 0.80) {
           group.push(memories[j]);
           used.add(memories[j].id);
@@ -1164,19 +1122,6 @@ export async function promoteMemories(scope: MemoryScope): Promise<number> {
 
   if (result.count > 0) {
     console.log(`[MemoryEvolution] Promoted ${result.count} memories to semantic`);
-  }
-  return result.count;
-}
-
-/**
- * 만료된 이미지 캐시 정리
- */
-export async function cleanExpiredImageCache(): Promise<number> {
-  const result = await prisma.generatedImageCache.deleteMany({
-    where: { expiresAt: { lt: new Date() } },
-  });
-  if (result.count > 0) {
-    console.log(`[ImageCache] Cleaned ${result.count} expired entries`);
   }
   return result.count;
 }
@@ -1259,20 +1204,6 @@ function generateNarrativePrompt(
   if (memories.length > 0) parts.push(`기억: ${memories.map(m => m.interpretation).join('; ')}`);
   if (relationship.sharedExperiences.length > 0) parts.push(`경험: ${relationship.sharedExperiences.slice(-30).join('; ')}`);
   return parts.join('\n');
-}
-
-/**
- * 친밀도 레벨 번역
- */
-function translateIntimacyLevel(level: string): string {
-  const translations: Record<string, string> = {
-    stranger: '처음 만난 사이',
-    acquaintance: '아는 사이',
-    friend: '친구',
-    close_friend: '절친한 친구',
-    intimate: '특별한 사이',
-  };
-  return translations[level] || level;
 }
 
 // ============================================================
@@ -1420,13 +1351,8 @@ export default {
   // 기억 관리
   saveCharacterMemory,
   searchCharacterMemories,
-  markMemoryMentioned,
-  pruneWeakMemories,
   consolidateMemories,
   promoteMemories,
-
-  // 캐시 관리
-  cleanExpiredImageCache,
 
   // 컨텍스트 생성
   buildNarrativeContext,

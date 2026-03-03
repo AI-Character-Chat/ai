@@ -676,7 +676,7 @@ export default function ChatContainer() {
         onScroll={handleScroll}
         showScrollButton={showScrollButton}
         onScrollToBottom={scrollToBottom}
-        isAdmin={(authSession?.user as any)?.role === 'admin'}
+        isAdmin={authSession?.user?.role === 'admin'}
       />
 
       <ChatInput

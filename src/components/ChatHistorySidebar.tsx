@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -29,19 +29,13 @@ interface ChatSession {
 }
 
 export default function ChatHistorySidebar() {
-  const { data: session, status } = useSession();
-  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sidebarRefreshKey } = useLayout();
+  const { status } = useSession();
+  const { sidebarOpen, sidebarCollapsed, setSidebarCollapsed, sidebarRefreshKey } = useLayout();
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [chatHistoryOpen, setChatHistoryOpen] = useState(true);
 
-  useEffect(() => {
-    if (status === 'authenticated' && sidebarOpen) {
-      fetchChatSessions();
-    }
-  }, [status, sidebarOpen, sidebarRefreshKey]);
-
-  const fetchChatSessions = async () => {
+  const fetchChatSessions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch('/api/user/sessions');
@@ -52,7 +46,13 @@ export default function ChatHistorySidebar() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (status === 'authenticated' && sidebarOpen) {
+      fetchChatSessions();
+    }
+  }, [status, sidebarOpen, sidebarRefreshKey, fetchChatSessions]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -165,6 +165,8 @@ export default function ChatHistorySidebar() {
           <div className="border-t border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setChatHistoryOpen(!chatHistoryOpen)}
+              aria-expanded={chatHistoryOpen}
+              aria-controls="chat-history-list"
               className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
@@ -186,7 +188,7 @@ export default function ChatHistorySidebar() {
 
           {/* 채팅 목록 (접기/펴기) */}
           {chatHistoryOpen && (
-            <div>
+            <div id="chat-history-list">
               {status === 'unauthenticated' ? (
                 <div className="p-4 text-center">
                   <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">

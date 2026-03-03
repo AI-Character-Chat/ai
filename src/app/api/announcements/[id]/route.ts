@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
 
 // 공지사항 상세 조회
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -16,6 +17,22 @@ export async function GET(
         { error: '공지사항을 찾을 수 없습니다.' },
         { status: 404 }
       );
+    }
+
+    // 비활성 공지사항은 관리자만 조회 가능
+    if (!announcement.isActive) {
+      const session = await auth();
+      if (session?.user?.id) {
+        const user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { role: true },
+        });
+        if (user?.role !== 'admin') {
+          return NextResponse.json({ error: '공지사항을 찾을 수 없습니다.' }, { status: 404 });
+        }
+      } else {
+        return NextResponse.json({ error: '공지사항을 찾을 수 없습니다.' }, { status: 404 });
+      }
     }
 
     return NextResponse.json(announcement);

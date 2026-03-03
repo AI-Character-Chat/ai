@@ -207,3 +207,4 @@
 | 03-04 | 2차: JSON.parse 보호 (C4,C8 + narrative-memory 11곳 + pro-analyze + prompt-builder) | 15곳 완료 |
 | 03-04 | 3차: select 최적화 (C5,H11 + consolidateMemories) | 3함수 완료 |
 | 03-04 | 4차: race condition 방지 (H12 P2002 catch + H14 $transaction) | 2함수 완료 |
+| 03-04 | 5차: page.tsx 리팩토링 (C6 모놀리식 + C7 useEffect 의존성) | 2596줄→211줄, 6개 파일 추출. useState 57→7, useEffect 11→2 |
