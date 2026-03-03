@@ -794,7 +794,7 @@ ${memoryContext ? `유저 정보: ${memoryContext}\n` : ''}이번 턴: ${current
 
 아래 형식으로 출력:
 \`\`\`json
-{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "다음 턴 감정·태도·행동 방향 — 다른 캐릭터의 발언·행동에 대한 리액션 포함"}, "arcPhase": "기|승|전|결", "sceneBeat": "arcPhase에 맞는 다음 턴 전개 1줄"}
+{"relationshipDeltas": {"캐릭터이름": {"trust": 0, "affection": 0, "respect": 0, "rivalry": 0, "familiarity": 0.5}}, "directing": {"캐릭터이름": "이 캐릭터가 다음 턴에서 취할 감정·태도·행동 방향 1줄"}, "arcPhase": "기|승|전|결", "sceneBeat": "arcPhase에 맞는 다음 턴 전개 1줄"}
 \`\`\``;
 
   const startTime = Date.now();

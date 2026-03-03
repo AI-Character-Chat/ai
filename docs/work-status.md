@@ -7,9 +7,9 @@
 
 ## 현재 상태
 
-**프로덕션 코드**: 코드 리뷰 5차 완료 (page.tsx 리팩토링) + 나레이션 구조 개선
-**마지막 작업**: 코드 리뷰 1~5차 전부 완료 (03-04). 81건 중 Critical/High 26건 수정
-**미결 사항**: Medium/Low 53건 잔여, Pro 비용 $0.031/턴 수용 여부
+**프로덕션 코드**: Run 31 (turns desc 유연화) 적용 — 캐릭터 상호작용 6/10→8~9/10 개선 확인
+**마지막 작업**: Q2 Pro 디렉터 상호작용 지시 테스트 완료 → 추가 효과 미미, Q2 리버트 고려 (03-04)
+**미결 사항**: Q2 리버트 결정, Q3(자연 대화 기억력 테스트 진행 중), Medium/Low 53건 잔여
 
 ---
 
@@ -19,6 +19,9 @@
 
 | # | 태스크 | 내용 | 우선순위 |
 |---|--------|------|:---:|
+| Q2-결정 | Run 32 결과 기반 Q2 리버트 여부 결정 | Q2 추가 효과 미미 + Pro N/A 20% → 리버트 권장. CEO 확인 후 진행 | **높** |
+| Q2.5 | reactTo thinking aid 테스트 (Run 33) | RESPONSE_SCHEMA에 reactTo 필드 추가 → Q1과 독립 비교 | 높 |
+| Q3 | 자연 대화 기억력 테스트 실행 | test-natural-conversation.ts 60턴+150턴 실행 → 기존 대비 비교 | 높 |
 | T4 | 코드 리뷰 Medium 수정 | 30건 (보안 8 + AI Core 7 + Memory 7 + Frontend 8+3) | 중 |
 | T5 | 코드 리뷰 Low 수정 | 23건 (AI 5 + Security 6 + Memory 3 + Frontend 9) | 낮 |
 | T6 | Pro 비용 최적화 결정 | Pro 격턴 실행 or 비용 수용 | 중 |
@@ -33,6 +36,11 @@
 
 | # | 태스크 | 완료일 | 비고 |
 |---|--------|:---:|------|
+| Q2 | Pro 디렉터 상호작용 지시 (Run 32) | 03-04 | Q1 위에 추가 효과 미미. Pro N/A 2/10. 리버트 권장 |
+| Q1 | turns desc 교대 규칙 유연화 (Run 31) | 03-04 | 엄격→유연 교대. 캐릭터 상호작용 6/10→8~9/10 개선. 비용 $0.037/턴 |
+| QA1 | 경쟁사 대화 구조 분석 | 03-04 | 5축 비교, 핵심 갭=캐릭터 상호작용(6/10 vs 9/10). 개선 방향 5개 도출 |
+| QA2 | 자연 대화 기억력 테스트 스크립트 | 03-04 | AI 유저 역할 + 5단계 Phase + AI 자동 판정. `scripts/test-natural-conversation.ts` |
+| QA3 | 메모리 안정성 점검 | 03-04 | 4함수 전부 안정. 선택적 개선: similarity threshold 0.3 |
 | T1 | uuid 패키지 제거 | 03-03 | `uuid` + `@types/uuid` 삭제 |
 | T2 | Prisma import 통일 | 03-03 | named import 11곳 → default import |
 | T3 | ESLint 초기 설정 | 03-03 | `eslint@8` + `eslint-config-next@14` + `@typescript-eslint` |
@@ -101,20 +109,20 @@
 - **필드 순서**: type → character → sensory → ambience → characterAction → content → emotion → emotionIntensity (thinking aid가 content 앞에 위치)
 - **thinking aid** (출력 미포함): sensory, ambience, characterAction — 제한 없음
 - **출력 사용 필드**: emotion — `'dialogue일 때 표정. narrator일 때 "neutral".'` (제한 유지 필수)
-- **turns description**: `'narrator로 시작, narrator와 dialogue 교대 배열'`
+- **turns description**: `'narrator로 시작. 캐릭터 전환 시 narrator 삽입 권장.'` (Run 31에서 유연화)
 - **구조**: turns minItems 6, plotEvent, maxOutputTokens 12288
 - **첫 턴 보장**: 비스트리밍 경로에서 첫 턴이 dialogue면 가장 가까운 narrator와 위치 교환 (코드)
 
-### 경쟁사 대비 (Run 19 기준)
+### 경쟁사 대비 (최신 구조 분석, 03-04)
 
-| 축 | 등급 |
-|----|------|
-| 물리적 동작 | ★★★★ |
-| 감각묘사(다채널) | ★★★★ |
-| 캐릭터 능동성 | ★★★★ |
-| 캐릭터 수 | ★★★★+ (T2부터 4캐릭터) |
-| T1 긴장감 | ★★★☆ (Opening 구조 한계) |
-| 씬 구조(기승전결) | ★★★★★ (Pro 디렉팅) |
+| 축 | 경쟁사 | SYNK | 상태 | 개선 방향 |
+|----|--------|------|------|-----------|
+| 말투 일관성 | 10/10 | 10/10 | 동등 | - |
+| 감각묘사 | 9/10 | 8/10 | 근접 | sensory/ambience thinking aid |
+| 물리적 동작 | 9/10 | **8/10** | 근접 | Run 31 turns desc 유연화로 개선 |
+| **캐릭터 상호작용** | 9/10 | **8~9/10** | **근접~동등** | Run 31 turns desc 유연화로 대폭 개선 (매 턴 4~6회 상호참조) |
+| T1 긴장감 | 9/10 | **7/10** | 근접 | Opening 가이드라인 + 상호작용 개선 효과 |
+| 씬 구조(기승전결) | - | ★★★★★ | SYNK 우위 | Pro 디렉팅 |
 
 ---
 
@@ -162,11 +170,17 @@ npx tsx scripts/test-quality-comparison.ts \
   --base-url=https://synk-character-chat.vercel.app \
   --cookie="__Secure-authjs.session-token=b1507ba0-5a32-4d2b-9cc6-5b923ec8ab69"
 
-# 메모리 회상 테스트 (60/150턴)
+# 메모리 회상 테스트 (60/150턴, 기존 대본형)
 npx tsx scripts/test-memory-simulation.ts \
   --scenario=default --turns=60 \
   --base-url=https://synk-character-chat.vercel.app \
   --cookie="__Secure-authjs.session-token=..."
+
+# 자연 대화 기억력 테스트 (AI가 유저 역할, 대본 없음)
+npx tsx scripts/test-natural-conversation.ts \
+  --base-url=https://synk-character-chat.vercel.app \
+  --cookie="__Secure-authjs.session-token=..." \
+  --gemini-key=AIza... --turns=60
 ```
 
 > ⚠️ 배포 확인 필수: 코드 push 후 Vercel 배포 완료를 확인한 뒤 테스트
@@ -191,13 +205,15 @@ npx tsx scripts/test-memory-simulation.ts \
 | `docs/code-review-2026-03-04.md` | 전체 코드 리뷰 81건 (수정 이력 포함) |
 | `docs/chat-system-architecture.md` | 채팅 시스템 아키텍처 (프롬프트/스키마/메모리 전체 흐름) |
 | `docs/memory-architecture.md` | 메모리 시스템 아키텍처 |
-| `docs/prompt-experiment-log.md` | Run 6~30 실험 상세 (변경/결과/교훈) |
+| `docs/prompt-experiment-log.md` | Run 6~32 실험 상세 (변경/결과/교훈) |
 
 ### 참고 (필요 시)
 
 | 파일 | 내용 |
 |------|------|
 | `docs/image-generation-architecture.md` | 이미지 생성 아키텍처 |
+| `docs/competitor-analysis-2026-03-04.md` | **경쟁사 구조 분석** — 5축 비교 + 개선 방향 5개 |
+| `docs/competitor-comparison-test.md` | 경쟁사 vs SYNK 비교 테스트 시나리오 (10턴) |
 | `docs/competitor-reference.md` | 경쟁사 벤치마크 원문 |
 | `docs/competitor-sample.md` | 경쟁사(BabeChat) 실제 출력 샘플 |
 | `docs/design-narrator-improvement.md` | 나레이션-대사 교대 구조 개선 설계 |
@@ -206,39 +222,37 @@ npx tsx scripts/test-memory-simulation.ts \
 
 ## 팀 운영 가이드
 
-### 팀을 쓰는 경우 vs 안 쓰는 경우
-
-| 상황 | 방식 | 이유 |
-|------|------|------|
-| 코드 리뷰 / 대규모 수정 | Agent Teams 4명 | 도메인별 병렬 작업 |
-| 리팩토링 / 디버깅 | Agent Teams 3~4명 | 설계+구현+검증 분리 |
-| 프롬프트 실험 | **단독** | 1변경 1테스트 원칙 |
-| 단일 파일 수정 / 문서 | **단독** | 오버헤드만 발생 |
+### 핵심 원칙: 항상 팀 단위 작업 (CEO 지시)
+- **모든 작업은 팀을 구성하여 병렬로 진행한다**
+- 단순 버그 1줄 수정 같은 극히 사소한 건만 예외
+- 설계/구현/테스트 역할 명확히 분리하여 병렬 효율 극대화
 
 ### 우리 팀: quality-improvement
 
-| 이름 | 모델 | 도메인 | 파일 |
-|------|------|--------|------|
-| **마루** (CTO/리더) | Opus | 설계+조율 | 코드 수정 안 함 |
-| **루미** 🔥 | Opus | AI/Chat + API | `gemini.ts`, `prompt-builder.ts`, `api/**`, `middleware.ts` |
-| **다람** 🐿️ | Opus | Memory | `narrative-memory.ts`, `prisma*.ts`, `schema.prisma`, `types/index.ts` |
-| **나래** 🦋 | Opus | Frontend | `components/**`, `**/page.tsx`, `contexts/**` |
-| **바로** ✅ | Sonnet | QA | 읽기 전용. tsc, build, API 테스트 |
+| 이름 | 모델 | 역할 | 소유 파일 (상세: CLAUDE.md 참조) |
+|------|------|------|----------------------------------|
+| 🏔️ **마루** (CTO) | Opus | 설계+조율 | `docs/*`, `CLAUDE.md` — 코드 수정 안 함 |
+| 🔥 **루미** | Opus | AI+백엔드+보안 | `src/lib/gemini.ts`, `prompt-builder.ts`, `chat-service.ts`, `auth.ts`, `imageGeneration.ts`, `preview-parser.ts`, `logger.ts`, `src/middleware.ts`, `src/app/api/**` (25개 라우트) |
+| 🐿️ **다람** | Opus | 메모리+DB+타입 | `src/lib/narrative-memory.ts`, `prisma.ts`, `prismaErrorHandler.ts`, `prisma/schema.prisma`, `prisma/seed.ts`, `src/types/*` |
+| 🦋 **나래** | Opus | 프론트+접근성 | `src/app/**/page.tsx` (12개), `src/components/**` (25개), `src/contexts/**`, `src/hooks/**` |
+| ✅ **바로** | Sonnet | QA 검증 전용 | 모든 파일 읽기 가능. **Edit/Write 금지** |
 
-### 메모 위치 (주의사항은 여기에 기록)
+### 공유 파일 + 충돌 방지 규칙
 
-| 뭘 기록하나 | 어디에 |
-|-------------|--------|
-| 작업 완료/태스크 현황 | `docs/work-status.md` 태스크 목록 |
-| 발견한 버그/주의사항 | `docs/code-review-2026-03-04.md` 수정 이력 |
-| 다음 세션 인수인계 | `docs/session-handoff.md` |
-| 팀 규칙/도메인 경계 | `CLAUDE.md` Agent Teams 섹션 |
+| 공유 파일 | 주 소유자 | 규칙 |
+|-----------|-----------|------|
+| `src/types/index.ts` | 다람 | 나래도 수정 가능하나 **수정 전 상대방에게 메시지 필수** |
+| `src/app/api/chat/route.ts` | 루미 | 메모리 관련 수정 시 다람에게 확인 |
+| `src/components/chat/ChatContainer.tsx` | 나래 | API 호출 로직 변경 시 루미에게 확인 |
+
+**경계 위반 금지**: 자기 목록에 없는 파일 수정 필요 시 → 마루에게 메시지 → 해당 소유자에게 전달. 직접 수정 절대 금지 (이전 사고: 다람이 루미 도메인 침범 → StoryResponse 삭제)
 
 ### 빠른 재시작 (새 세션에서)
 ```
 1. docs/work-status.md 읽기 → 미완료 태스크 확인
 2. TeamCreate → TaskCreate → Task로 루미/다람/나래/바로 spawn
-3. 각 팀원에게: 이름 + 도메인 + 수정금지 파일 + 보고 지시
+3. 각 팀원 prompt에 반드시 포함: 이름 + 소유 파일 목록 + 수정금지 범위 + 보고 지시
+4. 공유 파일(types/index.ts) 수정 태스크는 동시 2명 배분 금지
 ```
 
 ---
@@ -265,7 +279,12 @@ npx tsx scripts/test-memory-simulation.ts \
 | 03-04 | 코드 리뷰 3차: select 최적화 | 3함수 embedding 대량 로딩 방지 — 매 턴 ~400KB 절약 |
 | 03-04 | 코드 리뷰 4차: race condition | P2002 catch + $transaction — 동시 접속 값 오염 방지 |
 | 03-04 | 코드 리뷰 5차: page.tsx 리팩토링 | 2596줄→211줄, 6개 컴포넌트 추출. 프로덕션 배포+API 10건 검증 |
+| 03-04 | 경쟁사 대화 구조 분석 | 5축 비교. 핵심 갭=캐릭터 상호작용(6/10). 개선 방향 5개 (Pro 디렉터, reactTo, Opening 가이드 등) |
+| 03-04 | 자연 대화 기억력 테스트 스크립트 | AI 유저 역할 + 5단계 Phase + AI 자동 판정. `test-natural-conversation.ts` |
+| 03-04 | 메모리 안정성 점검 | 4함수 전부 안정 (search, novelty, context, relationship). 선택: threshold 0.3 |
+| 03-04 | **Q1: turns desc 유연화 (Run 31)** | desc 1줄 변경 → 캐릭터 상호작용 6/10→8~9/10 대폭 개선! 매 턴 4~6회 상호참조. 비용 $0.037/턴 |
+| 03-04 | **Q2: Pro 디렉터 상호작용 지시 (Run 32)** | directing desc에 "리액션 포함" 추가. Q1 위에 추가 효과 미미, Pro N/A 2/10(20%). 리버트 권장 |
 
 ---
 
-> 마지막 업데이트: 2026-03-04 (코드 리뷰 1~5차 전체 완료 + 프로덕션 배포 검증)
+> 마지막 업데이트: 2026-03-04 (Run 32 Q2 테스트 완료 — 추가 효과 미미, Q1만으로 충분)
