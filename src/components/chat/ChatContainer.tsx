@@ -386,7 +386,7 @@ export default function ChatContainer() {
       let buffer = '';
       let userMessageReplaced = false;
       // SSE 처리 중 메시지를 누적하기 위한 로컬 배열 (dispatch 사이 시차 문제 방지)
-      let localNewMessages: ChatMessage[] = [];
+      const localNewMessages: ChatMessage[] = [];
       let lastAiMessageId = '';
       // 토큰 단위 스트리밍: 현재 스트리밍 중인 메시지의 임시 ID
       let currentStreamingTempId: string | null = null;

@@ -21,7 +21,7 @@
 |---|--------|------|:---:|
 | ~~T1~~ | ~~uuid 패키지 제거~~ | ~~완료 (03-03)~~ | ~~-~~ |
 | ~~T2~~ | ~~Prisma import 통일~~ | ~~완료 (03-03)~~ | ~~-~~ |
-| T3 | ESLint 초기 설정 | 프로젝트에 ESLint 설정 파일 부재. Next.js 내장 lint만 동작 중. 필요 시 `.eslintrc.json` 생성 + 기본 규칙 설정 | 낮음 |
+| ~~T3~~ | ~~ESLint 초기 설정~~ | ~~완료 (03-03)~~ | ~~-~~ |
 
 ### 보류 (HOLD)
 
@@ -35,6 +35,7 @@
 |---|--------|:---:|------|
 | T1 | uuid 패키지 제거 | 03-03 | `uuid` + `@types/uuid` 삭제. 코드 미사용 의존성 정리 |
 | T2 | Prisma import 통일 | 03-03 | named import 11곳 → default import. `narrative-memory.ts` PrismaClient 직접 생성 → 싱글턴 import. `auth.ts`는 NextAuth 어댑터 구조상 유지 |
+| T3 | ESLint 초기 설정 | 03-03 | `eslint@8` + `eslint-config-next@14` + `@typescript-eslint`. `next/core-web-vitals` Strict. 에러 0건 |
 
 ---
 
