@@ -162,6 +162,10 @@ const RESPONSE_SCHEMA = {
             type: Type.STRING,
             description: '등장인물의 물리적 동작 1줄',
           },
+          reactTo: {
+            type: Type.STRING,
+            description: '이 턴이 반응하는 대상의 직전 행동/발언 1줄',
+          },
           content: {
             type: Type.STRING,
             description: '턴 내용',
@@ -175,7 +179,7 @@ const RESPONSE_SCHEMA = {
             description: '0.0~1.0',
           },
         },
-        required: ['type', 'character', 'sensory', 'ambience', 'characterAction', 'content', 'emotion', 'emotionIntensity'],
+        required: ['type', 'character', 'sensory', 'ambience', 'characterAction', 'reactTo', 'content', 'emotion', 'emotionIntensity'],
       },
     },
     scene: {
