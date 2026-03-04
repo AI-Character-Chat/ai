@@ -46,6 +46,7 @@ export default function ProfileEditModal({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">프로필 수정</h2>
           <button
             onClick={onClose}
+            aria-label="프로필 수정 닫기"
             className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

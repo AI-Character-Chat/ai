@@ -38,6 +38,15 @@ export default function WorkDetailModal({
   const [followLoading, setFollowLoading] = useState(false);
   const [recentSession, setRecentSession] = useState<{ id: string; workId: string } | null>(null);
 
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   // 작품 변경 시 상태 초기화 및 데이터 로드
   useEffect(() => {
     setLikeCount(work._count.likes);
@@ -163,6 +172,9 @@ export default function WorkDetailModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="work-detail-title"
         className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -170,13 +182,14 @@ export default function WorkDetailModal({
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <button
             onClick={onClose}
+            aria-label="모달 닫기"
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">작품 상세</h2>
+          <h2 id="work-detail-title" className="text-lg font-semibold text-gray-900 dark:text-white">작품 상세</h2>
           <div className="w-10" />
         </div>
 
@@ -232,6 +245,8 @@ export default function WorkDetailModal({
                       <button
                         onClick={(e) => { e.stopPropagation(); handleFollowToggle(); }}
                         disabled={followLoading}
+                        aria-label={isFollowingAuthor ? `${work.author?.name} 팔로우 취소` : `${work.author?.name} 팔로우`}
+                        aria-pressed={isFollowingAuthor}
                         className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex-shrink-0 ${
                           isFollowingAuthor
                             ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
@@ -254,6 +269,8 @@ export default function WorkDetailModal({
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{work.title}</h1>
                 <button
                   onClick={handleLikeToggle}
+                  aria-label={isLiked ? '좋아요 취소' : '좋아요'}
+                  aria-pressed={isLiked}
                   className={`p-2 transition-colors ${isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
                 >
                   <svg className="w-6 h-6" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -534,6 +551,7 @@ export default function WorkDetailModal({
                         container.scrollBy({ left: 300, behavior: 'smooth' });
                       }
                     }}
+                    aria-label="다음 작품 보기"
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 dark:bg-gray-800/90 rounded-full shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 transition-colors opacity-0 group-hover/carousel:opacity-100"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -46,6 +46,7 @@ export default function SearchModal({
             {searchQuery && (
               <button
                 onClick={() => onQueryChange('')}
+                aria-label="검색어 초기화"
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
