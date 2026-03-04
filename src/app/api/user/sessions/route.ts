@@ -35,9 +35,10 @@ export async function GET(request: NextRequest) {
       whereClause.workId = workId;
     }
 
-    // 유저의 채팅 세션 조회 (기본 30개 제한 — 무제한 조회 방지)
+    // 유저의 채팅 세션 조회 (기본 30개, 최대 100개 제한)
     const DEFAULT_LIMIT = 30;
-    const takeCount = limit ? parseInt(limit) : DEFAULT_LIMIT;
+    const MAX_LIMIT = 100;
+    const takeCount = Math.min(limit ? parseInt(limit) || DEFAULT_LIMIT : DEFAULT_LIMIT, MAX_LIMIT);
 
     const chatSessions = await prisma.chatSession.findMany({
       where: whereClause,

@@ -34,10 +34,10 @@ import { replaceVariables } from './prompt-builder';
 // ============================================================
 
 if (!process.env.GEMINI_API_KEY) {
-  console.error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
+  throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const MODEL_PRO = 'gemini-2.5-pro';    // 스토리 생성 (최고 품질)
 const MODEL_FLASH = 'gemini-2.5-flash'; // 보조 작업 (요약 등)
@@ -87,16 +87,6 @@ export interface ResponseMetadata {
   geminiApiMs: number;
 }
 
-export interface StoryResponse {
-  turns: StoryTurn[];
-  updatedScene: {
-    location: string;
-    time: string;
-    presentCharacters: string[];
-  };
-  plotEvent: string;
-  metadata: ResponseMetadata;
-}
 
 // ============================================================
 // 재시도 설정

@@ -29,6 +29,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 확장자-MIME 일치 검증
+    const mimeToExtensions: Record<string, string[]> = {
+      'image/jpeg': ['jpg', 'jpeg'],
+      'image/png': ['png'],
+      'image/gif': ['gif'],
+      'image/webp': ['webp'],
+    };
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
+    const validExtensions = mimeToExtensions[file.type] || [];
+    if (!validExtensions.includes(fileExtension)) {
+      return NextResponse.json(
+        { error: '파일 확장자와 실제 파일 형식이 일치하지 않습니다.' },
+        { status: 400 }
+      );
+    }
+
     // 파일 크기 검증 (5MB 제한)
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {

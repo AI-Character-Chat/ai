@@ -99,10 +99,10 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    // 오프닝 메시지는 세션 ID가 필요하므로 별도 (하지만 응답 대기 안 함)
-    prisma.message.create({
+    // 오프닝 메시지 저장 (세션 생성 직후 — 실패 시 세션만 존재하게 되므로 await)
+    await prisma.message.create({
       data: { sessionId: session.id, characterId: null, content: opening.content, messageType: 'system' },
-    }).catch(e => console.error('Opening message save error:', e));
+    });
 
     return NextResponse.json({
       session: {

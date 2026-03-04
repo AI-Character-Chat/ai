@@ -1045,6 +1045,7 @@ export async function consolidateMemories(scope: MemoryScope): Promise<number> {
     const used = new Set<string>();
     const groups: (typeof memories)[] = [];
 
+    // TODO: O(n^2) 유사도 비교 — n<=200이므로 현재 문제없음. n이 커지면 LSH/ANN 검토
     for (let i = 0; i < memories.length; i++) {
       if (used.has(memories[i].id)) continue;
       const embI = embeddingMap.get(memories[i].id);
