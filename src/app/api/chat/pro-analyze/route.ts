@@ -45,6 +45,40 @@ export async function POST(request: NextRequest) {
 
   const characters = session.work.characters;
 
+  // 격턴 실행: T1은 항상 실행 (기승전결 초기화), 이후 짝수 턴만 실행, 홀수 턴은 캐시 재사용
+  const currentTurn = session.turnCount;
+  const shouldRunPro = currentTurn <= 1 || currentTurn % 2 === 0;
+
+  if (!shouldRunPro) {
+    // 홀수 턴: 이전 Pro 분석 결과를 캐시에서 반환 (Pro API 호출 안 함)
+    const skippedResult = {
+      analysis: session.proAnalysis || '',
+      timeMs: 0,
+      promptTokens: 0,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      totalTokens: 0,
+    };
+
+    const skippedMetrics = { ...skippedResult, status: 'skipped' as const };
+
+    // 메시지 metadata에 skipped 상태 기록
+    if (messageId) {
+      prisma.message.findUnique({ where: { id: messageId }, select: { metadata: true } })
+        .then(msg => {
+          const existing = msg?.metadata ? JSON.parse(msg.metadata) : {};
+          return prisma.message.update({
+            where: { id: messageId },
+            data: { metadata: JSON.stringify({ ...existing, proAnalysisMetrics: skippedMetrics }) },
+          });
+        })
+        .catch(e => console.error('[ProAnalysis] skipped metadata save failed:', e));
+    }
+
+    console.log(`[ProAnalysis] 격턴 스킵 (턴 ${currentTurn}, 홀수)`);
+    return NextResponse.json(skippedResult);
+  }
+
   // 유저 이름 결정
   let effectiveUserName = session.userName;
   try {
@@ -89,7 +123,8 @@ export async function POST(request: NextRequest) {
     console.error('[ProAnalysis] 메모리 컨텍스트 로드 실패:', e instanceof Error ? e.message : String(e));
   }
 
-  // Pro 분석 실행
+  // Pro 분석 실행 (짝수 턴 또는 T1)
+  console.log(`[ProAnalysis] 실행 (턴 ${currentTurn})`);
   const result = await generateProAnalysis({
     systemInstruction,
     conversationSummary: session.sessionSummary || '(첫 대화)',
