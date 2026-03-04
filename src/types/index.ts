@@ -61,6 +61,9 @@ export interface Opening {
   content: string;
   isDefault: boolean;
   order: number;
+  initialLocation: string;
+  initialTime: string;
+  initialCharacters: string; // JSON 문자열 (String[])
   createdAt: Date;
   updatedAt: Date;
 }

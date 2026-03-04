@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 
 interface ChatInputProps {
   inputMessage: string;
@@ -20,6 +20,7 @@ export default function ChatInput({
   onSend,
 }: ChatInputProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!sending && inputRef.current) {
@@ -27,6 +28,13 @@ export default function ChatInput({
       return () => clearTimeout(timer);
     }
   }, [sending]);
+
+  // 컴포넌트 언마운트 시 남은 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    };
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -39,24 +47,26 @@ export default function ChatInput({
     }
   };
 
-  const handleActionDescriptionClick = () => {
+  const handleActionDescriptionClick = useCallback(() => {
     if (!inputRef.current) return;
     const textarea = inputRef.current;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const text = inputMessage;
 
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+
     if (start !== end) {
       const selectedText = text.substring(start, end);
       const newText = text.substring(0, start) + '*' + selectedText + '*' + text.substring(end);
       onInputChange(newText);
-      setTimeout(() => { textarea.focus(); textarea.setSelectionRange(end + 2, end + 2); }, 0);
+      actionTimerRef.current = setTimeout(() => { textarea.focus(); textarea.setSelectionRange(end + 2, end + 2); }, 0);
     } else {
       const newText = text.substring(0, start) + '**' + text.substring(end);
       onInputChange(newText);
-      setTimeout(() => { textarea.focus(); textarea.setSelectionRange(start + 1, start + 1); }, 0);
+      actionTimerRef.current = setTimeout(() => { textarea.focus(); textarea.setSelectionRange(start + 1, start + 1); }, 0);
     }
-  };
+  }, [inputMessage, onInputChange]);
 
   const sidebarMargin = sidebarOpen && !sidebarCollapsed ? 'lg:ml-80' : sidebarOpen && sidebarCollapsed ? 'lg:ml-16' : '';
 

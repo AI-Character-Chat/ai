@@ -98,18 +98,6 @@ export default function MainHeader({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 검색 실행 (디바운스)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery.trim()) {
-        searchWorks(searchQuery);
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
   const markNotificationsAsRead = async () => {
     if (unreadCount === 0) return;
     try {
@@ -121,7 +109,7 @@ export default function MainHeader({
     }
   };
 
-  const searchWorks = async (query: string) => {
+  const searchWorks = useCallback(async (query: string) => {
     try {
       const response = await fetch(`/api/works?search=${encodeURIComponent(query)}`);
       const data = await response.json();
@@ -129,7 +117,19 @@ export default function MainHeader({
     } catch (error) {
       console.error('Search failed:', error);
     }
-  };
+  }, []);
+
+  // 검색 실행 (디바운스)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.trim()) {
+        searchWorks(searchQuery);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchWorks]);
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
@@ -311,6 +311,10 @@ export default function MainHeader({
         <div
           className="fixed inset-0 bg-black/70 z-[60] flex items-start justify-center pt-20"
           onClick={() => setSearchOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="작품 검색"
+          onKeyDown={(e) => { if (e.key === 'Escape') setSearchOpen(false); }}
         >
           <div
             className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl"
@@ -334,6 +338,7 @@ export default function MainHeader({
                   <button
                     onClick={() => setSearchQuery('')}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label="검색어 지우기"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -392,6 +397,10 @@ export default function MainHeader({
         <div
           className="fixed inset-0 bg-black/50 z-[60]"
           onClick={() => setNotificationOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="알림"
+          onKeyDown={(e) => { if (e.key === 'Escape') setNotificationOpen(false); }}
         >
           <div
             className="fixed right-0 top-0 h-full w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl flex flex-col"
@@ -403,6 +412,7 @@ export default function MainHeader({
               <button
                 onClick={() => setNotificationOpen(false)}
                 className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                aria-label="알림 닫기"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

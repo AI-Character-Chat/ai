@@ -106,6 +106,7 @@ export function middleware(request: NextRequest) {
   }
 
   // IP 기반 키 생성
+  // Vercel 환경에서는 x-forwarded-for를 플랫폼이 직접 설정하므로 클라이언트 스푸핑 위험 낮음
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||

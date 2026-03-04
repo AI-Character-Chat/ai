@@ -539,6 +539,8 @@ export async function* generateStoryResponseStream(params: {
 
   console.log(`📤 Gemini 스트리밍 요청 (systemInstruction: ${systemInstruction.length}자)`);
 
+  // temperature 1.2: 창작 스토리 다양성 극대화 (Pro 분석의 0.5와 의도적 차이)
+  // thinkingBudget 512: 1024 이상은 minimal prompt에서 규칙 무시 유발 (ablation 확인)
   const stream = await ai.models.generateContentStream({
     model: MODEL_FLASH,
     config: {

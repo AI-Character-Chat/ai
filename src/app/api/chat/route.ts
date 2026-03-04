@@ -151,7 +151,16 @@ export async function PUT(request: NextRequest) {
       include: {
         work: { include: { characters: true, lorebook: true } },
         messages: {
-          include: { character: true },
+          select: {
+            id: true,
+            content: true,
+            messageType: true,
+            createdAt: true,
+            characterId: true,
+            sessionId: true,
+            character: { select: { name: true } },
+            // embedding 제외: 최근 30개 메시지는 표시/포맷팅용이며 임베딩 검색 불필요
+          },
           orderBy: { createdAt: 'desc' },
           take: 30,
         },
@@ -465,7 +474,8 @@ export async function PUT(request: NextRequest) {
         controller.close();
 
         // ========== 스트림 종료 후 fire-and-forget 비동기 처리 ==========
-
+        // Vercel Serverless: controller.close() 이후에도 함수 실행은 잠시 유지됨
+        // 완전한 보장이 필요하면 Vercel waitUntil (Edge) 사용 검토, 현재는 경량 작업이므로 충분
         processRemainingBackgroundTasks({
           sessionId,
           session: {
